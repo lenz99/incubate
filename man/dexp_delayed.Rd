@@ -4,7 +4,7 @@
 \alias{dexp_delayed}
 \title{Density of delayed exponential distribution.}
 \usage{
-dexp_delayed(x, delay, rate, ...)
+dexp_delayed(x, delay, rate = 1, ...)
 }
 \description{
 Density of delayed exponential distribution.

@@ -4,7 +4,7 @@
 \alias{dweib_delayed}
 \title{Density of delayed Weibull distribution}
 \usage{
-dweib_delayed(x, delay, shape, scale, ...)
+dweib_delayed(x, delay, shape, scale = 1, ...)
 }
 \description{
 Density of delayed Weibull distribution
