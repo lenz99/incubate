@@ -1,6 +1,7 @@
 Package: incubate
 Title: Parametric Time-To-Event Analysis With Variable Incubation Phases
-Version: 0.0.1
+Version: 0.0.2
+Date: 2021-06-04
 Authors@R: 
     person(given = "Matthias",
            family = "Kuhn",
@@ -19,10 +20,8 @@ Imports:
     ggplot2 (>= 3.3),
     glue (>= 1.4),
     MASS,
-    multcomp,
     purrr (>= 0.3),
     rlang (>= 0.4),
-    statmod,
     tibble
 Suggests:
     cowplot,
