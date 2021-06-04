@@ -1,0 +1,32 @@
+Package: incubate
+Title: Parametric Time-To-Event Analysis With Variable Incubation Phases
+Version: 0.0.1
+Authors@R: 
+    person(given = "Matthias",
+           family = "Kuhn",
+           role = c("aut", "cre"),
+           email = "matthias.kuhn@tu-dresden.de",
+           comment = c(ORCID = "0000-0003-2868-5155"))
+Description: Parametric event time analysis where groups have different incubation periods where hazard is different.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+Imports:
+    dplyr (>= 1.0),
+    future (>= 1.21),
+    future.apply (>= 1.6),
+    ggplot2 (>= 3.3),
+    glue (>= 1.4),
+    MASS,
+    multcomp,
+    purrr (>= 0.3),
+    rlang (>= 0.4),
+    statmod,
+    tibble
+Suggests:
+    cowplot,
+    knitr,
+    testthat (>= 3.0.0)
+RoxygenNote: 7.1.1
+Config/testthat/edition: 3
