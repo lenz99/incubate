@@ -7,16 +7,7 @@
 <!-- badges: end -->
 
 Parametric time-to-event analysis where groups show an incubation period
-where hazard is different.
-
-## Installation
-
-You can install the released version of incubate from
-[CRAN](https://CRAN.R-project.org) with:
-
-``` r
-install.packages("incubate")
-```
+with different hazard.
 
 ## Example
 
@@ -47,16 +38,17 @@ plot(delay_test)
 
 ## Installation
 
-You can install the `sscn` package from
-[Gitlab](https://gitlab.com/imb-dev/incubate) with:
+The `incubate` package is hosted publicly at
+[Gitlab](https://gitlab.com/imb-dev/incubate). To install its latest
+version use from within an R-session:
 
 ``` r
 remotes::install_gitlab("imb-dev/incubate")
 ```
 
 To install a specific version, add the version tag after the name,
-separated by a `@`, e.g. to install `incubate` in version `v0.0.1` use
+separated by a `@`, e.g. to install `incubate` in version `v0.0.2` use
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate@v0.0.1")
+remotes::install_gitlab("imb-dev/incubate@v0.0.2")
 ```
