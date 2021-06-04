@@ -3,6 +3,9 @@
 
 library(dplyr)
 library(purrr)
+library(future)
+library(future.apply)
+library(future.callr)
 
 test_that("Fit delayed Exponentials", {
   # from a call to 9 + rexp(13, rate = 0.5)
@@ -56,8 +59,6 @@ test_that("Fit delayed Exponentials", {
 
 test_that("Test difference in delay for two exponential fits", {
 
-  library(future)
-  library(future.callr)
   future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 1L))
 
   set.seed(12345)
@@ -98,11 +99,10 @@ test_that("Test difference in delay for two exponential fits", {
   future::plan(sequential)
 })
 
+
+
 test_that("Test difference in delay when H0 is true (no difference in delay)", {
-  library(purrr)
-  library(future)
-  library(future.apply)
-  library(future.callr)
+
   plan(future.callr::callr, workers = parallelly::availableCores(omit = 1L))
 
   set.seed(20210506)
