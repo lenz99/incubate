@@ -32,8 +32,17 @@ y <- c(27.5840741573813, 10.2312779319737, 17.7072776498797, 17.3926557596297,
 
 
 fit0 <- delay_model(x = x, y = y, distribution = distribution, bind = param)
+fit0 <- delay_model(x = x - 10, y = y - 10, distribution = distribution, bind = param)
 fit1 <- delay_model(x = x, y = y, distribution = distribution)
-te_diff <- test_delay_diff(x = x, y = y, distribution = "exp", param = "delay", R = 600)
+# this currently works (incubate, 2021-06-04)
+te_diff <- NULL
+te_diff <- test_delay_diff(x = x, y = y, distribution = "exp", param = "delay", R = 100)
+# problematic are small delays or large delays
+te_diff <- test_delay_diff(x = x - 10, y = y - 10, distribution = "exp", param = "delay", R = 100)
+te_diff <- test_delay_diff(x = x + 100, y = y + 100, distribution = "exp", param = "delay", R = 100)
+#XXX find out why?!
 
 plot(fit0)
 plot(fit1)
+
+plot(te_diff)

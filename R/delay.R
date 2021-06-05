@@ -129,7 +129,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   # }
   if (distribution == 'exponential') {
     # upper bound for *D*elay
-    upD.x <- max(min(x)-1L/length(x), min(x)*.9999)
+    upD.x <- max(1e-6, min(x)-1L/length(x), min(x)*.9999)
     if (twoGr){
 
       par_start <- if (is.null(bind)) {
