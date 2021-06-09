@@ -346,9 +346,11 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
   try(expr = {optObj <- purrr::exec(stats::optim, !!! optim_args)},
       silent = TRUE)
 
-  # do a 2nd attempt of optim in case it did not converge in the 1st place
-  if ( ! is.null(optObj) && isTRUE(optObj$convergence > 0L) ){
-    if (verbose >= 2) message("No convergence during curve fit. Re-try with better parameter scaling.")
+  if (is.null(optObj)){
+    if (verbose >= 1) warning("MSE-optimization failed during delay fit!")
+  } else if ( isTRUE(optObj$convergence > 0L) ){
+    # do a 2nd attempt of optim in case it did not converge in the 1st place
+    if (verbose >= 2) message("No proper convergence during 1st optimization in delay fit. Re-try with different parameter scaling.")
 
     stopifnot( "control"  %in% names(optim_args),
                "parscale" %in% names(optim_args$control) )
@@ -363,26 +365,27 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
         purrr::assign_in(where = "par", value = newpar) %>%
         purrr::assign_in(where = c("control", "parscale"), value = newparscale)
 
+
       try(expr = {optObj <- purrr::exec(stats::optim, !!! optim_args)},
           silent = TRUE)
 
       #XXX should we update the optim_args: start values when we used the default optim_args?
-      if ( optObj$convergence > 0L && verbose >= 1 ) warning("No proper convergence after re-try.")
-    }## fi
-  }## fi
+      if ( isTRUE(optObj$convergence > 0L && verbose >= 1) ) warning("No proper convergence after re-try.")
+    }## fi rescaling for 2nd attempt
+  }## fi 2nd attempt necessary?
 
   optObj
 }
 
-#' Fit a delayed Exponential or Weibull model to a given sample.
+#' Fit a delayed Exponential or Weibull model to one or two given sample(s).
 #'
 #' Maximum product spacing is used to fit the parameters.
 #' Numerical optimization is done by `stats::optim`.
-#' @param x numeric. observations
+#' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
-#' @return `mps_fit` object that contains the information of the delayed model fit. Or `NULL` if too few observations.
+#' @return `mps_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
 delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL, verbose = 0) {
   if (is.list(x) && length(x) == 2L){

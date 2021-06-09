@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay.R
 \name{delay_model}
 \alias{delay_model}
-\title{Fit a delayed Exponential or Weibull model to a given sample.}
+\title{Fit a delayed Exponential or Weibull model to one or two given sample(s).}
 \usage{
 delay_model(
   x,
@@ -13,7 +13,7 @@ delay_model(
 )
 }
 \arguments{
-\item{x}{numeric. observations}
+\item{x}{numeric. observations of 1st group. Can also be a list of data from two groups.}
 
 \item{y}{numeric. observations from 2nd group}
 
@@ -22,7 +22,7 @@ delay_model(
 \item{verbose}{integer. level of verboseness. Default 0 is quiet.}
 }
 \value{
-\code{mps_fit} object that contains the information of the delayed model fit. Or \code{NULL} if too few observations.
+\code{mps_fit} object that contains the information of the delayed model fit. Or \code{NULL} if optimization failed (e.g. too few observations).
 }
 \description{
 Maximum product spacing is used to fit the parameters.
