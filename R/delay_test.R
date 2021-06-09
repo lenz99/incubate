@@ -300,7 +300,7 @@ ssc_delay_sim_power <- function(distribution = c("exponential", "weibull"), para
                                           P_val <- NA_real_
                                           try(expr = { P_val <- test_delay_diff(x = dat_ctrl, y =dat_trtm,
                                                                                 distribution = distribution, param = param, R = R) %>%
-                                            purrr::chuck("P", "boot") },
+                                            purrr::pluck("P", "boot", .default = NA_real_) },
                                             silent = TRUE)
                                           P_val
                                         }, future.seed = TRUE)
