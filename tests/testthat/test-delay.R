@@ -141,7 +141,7 @@ test_that("Fit delayed Weibull", {
     0.269, 0.740, 0.418, 0.412, 0.494,
     0.416, 0.338, 0.392, 0.484, 0.265
   )
-  fd_maxFl <- sscn::delay_model(maxFloodLvl, distribution = "weib")
+  fd_maxFl <- incubate::delay_model(maxFloodLvl, distribution = "weib")
   coef_maxFl <- coef(fd_maxFl)
 
   expect_identical(fd_maxFl$convergence, expected = 0L)
@@ -160,7 +160,7 @@ test_that("Fit delayed Weibull", {
     11500, 12700, 15300, 18300, 20400
   )
 
-  fd_poll <- sscn::delay_model(pollution, distribution = "wei")
+  fd_poll <- incubate::delay_model(pollution, distribution = "wei")
   objFun_poll <- fd_poll$objFun
   coef_poll <- coef(fd_poll)
 
@@ -170,7 +170,7 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef_poll, expected = c(delay=1085, shape=0.95, scale=6562), tolerance = .001)
 
   # fit in two groups
-  fd_wb2 <- sscn::delay_model(x = maxFloodLvl, y = pollution, distribution = "weib")
+  fd_wb2 <- incubate::delay_model(x = maxFloodLvl, y = pollution, distribution = "weib")
   coef_wb2 <- coef(fd_wb2)
 
   expect_identical(fd_wb2[["convergence"]], expected = 0L)
@@ -185,7 +185,7 @@ test_that("Fit delayed Weibull", {
   # fit in two groups with binding
   set.seed(20210430)
   rweib <- getDist("weib", type = "ran")
-  fd_wb2b <- sscn::delay_model(x = rweib(n=37, delay = 7, shape = .8, scale = 3),
+  fd_wb2b <- incubate::delay_model(x = rweib(n=37, delay = 7, shape = .8, scale = 3),
                                y = rweib(n=51, delay = 5, shape = 1.2, scale = 1.5),
                                distribution = "weib", bind = "delay")
 
