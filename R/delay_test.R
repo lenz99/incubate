@@ -243,7 +243,7 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
 #' Given an effect size and a sample size `n` it simulates the power.
 #' The higher number of power simulation rounds the more densely the space of data according to the specified model is sampled.
 #'
-#' @param eff list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for each of the two groups. Control group is given first.
+#' @param eff list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for each of the two groups.
 #' @param param character. Parameter name for which to simulate the power.
 #' @param n integer. Number of observations per group for the power simulation. Can be two different numbers, control group and then treatment group.
 #' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80 percent.
@@ -252,7 +252,7 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
 #' @export
 ssc_delay_sim_power <- function(distribution = c("exponential", "weibull"), param = "delay",
                                 eff = stop("Provide parameters for each group (reference group first) that reflect the effect!"),
-                                n, sig.level = 0.05, nPowerSim = 16e2, R = 4e2){
+                                n, sig.level = 0.05, nPowerSim = 16e2, R = 2e2){
 
   distribution <- match.arg(distribution)
   ranFun <- getDist(distribution, type = "r")

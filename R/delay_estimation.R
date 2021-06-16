@@ -11,8 +11,9 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   twoGr <- ! is.null(y)
   stopifnot( is.numeric(x), length(x) > 0L, ! twoGr || is.numeric(y) && length(y) > 0L )
   stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1L )
-  # enforce that bind respects the canonical order of dist-parameters
-  oNames <- getDist(distribution, type = "param", twoGroup = FALSE, bind = NULL)
+
+  # intersect enforces the canonical order of dist-parameters in bind!
+  oNames <- getDist(distribution, type = "param", twoGroup = FALSE, bind = NULL) #standard ('original') names
   bind <- intersect(oNames, bind)
 
   ind_neg_x <- which(x < 0L)
@@ -53,7 +54,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   optim_args <- NULL
 
-  #XXX par_start with twoGr & bind: only qucik*dirty solution
+  #XXX par_start with twoGr & bind: only quick*dirty solution
   #+ see function getPar_weib below or come up with something like:
   # getStartVals <- function(twoGr, bind){
   #   if (distribution == 'exponential')
@@ -119,8 +120,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     getPar_weib <- function(obs){
       # contract: obs is sorted!
       # take out extreme values for robustness (against possible outliers)
-      #+ when at least 10 observations
-      xx <- obs[floor(length(obs)*.09):ceiling(length(obs)*.91)] #assume sorted data
+      #+ when at least 20 observations
+      xx <- obs[max(1L, floor(length(obs)*.02)):ceiling(length(obs)*.95)] #assume sorted data
       start_y <- log(-log(1-(seq_along(xx)-.3)/(length(xx)+.4)))
       # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
       start_shape <- cor(log(xx), start_y) * sd(start_y) / sd(log(xx))
@@ -134,7 +135,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     }
 
     par0_x <- getPar_weib(x)
-    if (twoGr){
+
+    if (twoGr) {
       par0_y <- getPar_weib(y)
       start0_x <- par0_x[["start"]]
       start0_y <- par0_y[["start"]]
@@ -172,7 +174,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
                          control = list(parscale = pmin(1e7, pmax(1e-7, par_start))),
                          lower = purrr::set_names(par0_x[["lower"]], par_names),
                          upper = purrr::set_names(par0_x[["upper"]], par_names) )
-    }
+    } # single group
   } # weibull
 
   # extract the parameters for the specified group
@@ -188,7 +190,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     # contract: bind is intersected and has right order
     # contract: bind comes first in par
     c(parL.gr, parL[bind])[oNames]
-  }
+  } #getPars
 
   #' negative maximum spacing estimation objective function.
   #' Estimate parameters by minimizing this function.
