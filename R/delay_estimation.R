@@ -204,7 +204,6 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     stopifnot( length(par_names) == length(pars) )
     pars <- purrr::set_names(pars, par_names)
 
-
     pars.x <- getPars(pars, group = "x", twoGr = twoGr, oNames = oNames, bind = bind)
 
     # contract: x is sorted!
@@ -215,9 +214,12 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
     # use densFun for ties
     ind_zx <- which(cumDiffs.x == 0L)
-    if (length(ind_zx))
+    if (length(ind_zx)){
+      #ind_zx[which(ind_zx == 1L)] <- 2L #at least 2 to avoid idx 0 later when using x[ind_zx - 1]
+      ind_zx[which(ind_zx > length(x))] <- length(x) # cap at length(x), then we use ind_zx to directly address x
       cumDiffs.x[ind_zx] <- purrr::exec(getDist(distribution, type = "dens"),
-                                        !!! c(list(x = x[pmax(ind_zx-1L, 1L)]), pars.x))
+                                        !!! c(list(x = x[ind_zx]), pars.x))
+    }
 
     # respect the machine's numerical lower limit
     cumDiffs.x[cumDiffs.x < .Machine$double.xmin] <- .Machine$double.xmin
@@ -232,9 +234,11 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
       # use densFun for ties
       ind_zy <- which(cumDiffs.y == 0L)
-      if (length(ind_zy))
+      if (length(ind_zy)){
+        ind_zy[which(ind_zy > length(y))] <- length(y) # cap at length(y), then we use ind_zy to directly address y
         cumDiffs.y[ind_zy] <- purrr::exec(getDist(distribution, type = "dens"),
-                                          !!! c(list(x = y[pmax(ind_zy-1L, 1L)]), pars.y))
+                                          !!! c(list(x = y[ind_zy]), pars.y))
+      }
 
       # respect the machine's numerical lower limit
       cumDiffs.y[cumDiffs.y < .Machine$double.xmin] <- .Machine$double.xmin
@@ -258,7 +262,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 }
 
 
-#' Parameter fitting through numerical optimization.
+#' Parameter fitting according to MSE through numerical optimization.
 #'
 #' The objective function carries the given data in its environment.
 #' `stats::optim` does the optimization.
