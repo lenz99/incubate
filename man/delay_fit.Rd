@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{delay_fit}
 \alias{delay_fit}
-\title{Parameter fitting through numerical optimization.}
+\title{Parameter fitting according to MSE through numerical optimization.}
 \usage{
 delay_fit(objFun, optim_args = NULL, verbose = 0)
 }

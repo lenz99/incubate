@@ -9,6 +9,9 @@
 \arguments{
 \item{group}{character string to request the canonical parameter for one group}
 }
+\value{
+named coefficient vector
+}
 \description{
 Coefficients of a delay-model fit.
 }

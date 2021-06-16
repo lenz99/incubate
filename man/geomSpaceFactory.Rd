@@ -20,9 +20,7 @@ geomSpaceFactory(
 
 \item{bind}{character(1). parameter names that are bind together (i.e. equated) between both groups}
 
-\item{par}{parameter vector.
-XXX Here, all parameters are being optimized.
-+Make this more flexible: allow to set parameters to given fixed values}
+\item{pars}{parameter vector.}
 }
 \value{
 objective function

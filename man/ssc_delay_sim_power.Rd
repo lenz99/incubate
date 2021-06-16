@@ -12,13 +12,13 @@ ssc_delay_sim_power(
   n,
   sig.level = 0.05,
   nPowerSim = 1600,
-  R = 400
+  R = 200
 )
 }
 \arguments{
 \item{param}{character. Parameter name for which to simulate the power.}
 
-\item{eff}{list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for each of the two groups. Control group is given first.}
+\item{eff}{list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for each of the two groups.}
 
 \item{n}{integer. Number of observations per group for the power simulation. Can be two different numbers, control group and then treatment group.}
 

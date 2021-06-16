@@ -1,4 +1,23 @@
 
+#' Extract the parameters for the specified group.
+#' This is an internal helper function
+#' used in `coef.mps_fit` and in the factory method `geomSpaceFactory` below
+#' @param par named parameters (as simple vector or as list both works)
+getPars <- function(par, group = "x", twoGr, oNames, bind) {
+  if ( ! twoGr || is.null(group) ) return(par)
+
+  stopifnot( is.character(group), nzchar(group) )
+
+  # extract all group parameters and restore original name (e.g. remove ".x")
+  par.gr <- purrr::set_names(par[grepl(pattern = paste0(".", group), x = names(par), fixed = TRUE)],
+                              nm = setdiff(oNames, bind))
+
+  # restore original order
+  # contract: bind is intersected and has right order
+  # contract: bind comes first in par
+  c(par.gr, par[bind])[oNames]
+}
+
 #' Factory method for negative maximum spacing estimation objective function.
 #'
 #' Negative or infinite values are discarded.
@@ -40,7 +59,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     # drop NA and ±Inf & sort
     y <- sort(y[is.finite(y)])
 
-    if (!length(y)) {
+    if ( !length(y) ) {
       warning("No valid data in y! Only non-negative and finite real values are valid.")
       return(invisible(NULL))
     }
@@ -177,73 +196,56 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     } # single group
   } # weibull
 
-  # extract the parameters for the specified group
-  # cf coef.mps_fit (below)
-  # directly uses twoGr, oNames, bind from the factory
-  getPars <- function(parL, group = "x") {
-    if (! twoGr) return(parL)
-
-    # extract all group parameters and restore original name (e.g. remove ".x")
-    parL.gr <- purrr::set_names(parL[grepl(pattern = paste0(".", group), x = names(parL), fixed = TRUE)],
-                                nm = setdiff(oNames, bind))
-
-    # contract: bind is intersected and has right order
-    # contract: bind comes first in par
-    c(parL.gr, parL[bind])[oNames]
-  } #getPars
 
   #' negative maximum spacing estimation objective function.
   #' Estimate parameters by minimizing this function.
-  #' @param par parameter vector.
-  #' XXX Here, all parameters are being optimized.
-  #' +Make this more flexible: allow to set parameters to given fixed values
-  negMSE <- function(par){
-    stopifnot( length(par_names) == length(par) )
-    parL <- purrr::set_names(as.list(par), par_names)
+  #' @param pars parameter vector.
+  negMSE <- function(pars){
+    stopifnot( length(par_names) == length(pars) )
+    pars <- purrr::set_names(pars, par_names)
+
+
+    pars.x <- getPars(pars, group = "x", twoGr = twoGr, oNames = oNames, bind = bind)
 
     # contract: x is sorted!
     cumDiffs.x <- diff(c(0L,
                          purrr::exec(getDist(distribution, type = "cdf"),
-                                     !!! c(list(q=x), getPars(parL, group = "x"))),
+                                     !!! c(list(q=x), pars.x)),
                          1L))
-
-    #XXX Does «mini» uniform distribution within rounding margin work as well for ties?
-    #+ this would be easier for automatic differentiation (AD) and we would not need densFun at all!?
 
     # use densFun for ties
     ind_zx <- which(cumDiffs.x == 0L)
     if (length(ind_zx))
       cumDiffs.x[ind_zx] <- purrr::exec(getDist(distribution, type = "dens"),
-                                        !!! c(list(x = x[pmax(ind_zx-1L, 1L)]), getPars(parL, group = "x")))
+                                        !!! c(list(x = x[pmax(ind_zx-1L, 1L)]), pars.x))
 
     # respect the machine's numerical lower limit
     cumDiffs.x[cumDiffs.x < .Machine$double.xmin] <- .Machine$double.xmin
 
-    if (twoGr){
+    if ( twoGr ){
+      pars.y <- getPars(pars, group = "y", twoGr = twoGr, oNames = oNames, bind = bind)
       # contract: y is sorted!
       cumDiffs.y <- diff(c(0L,
                            purrr::exec(getDist(distribution, type = "cdf"),
-                                       !!! c(list(q=y), getPars(parL, group = "y"))),
+                                       !!! c(list(q=y), pars.y)),
                            1L))
-
-      #XXX Does «mini» uniform distribution within rounding margin work as well for ties?
-      #+ this would be easier for automatic differentiation (AD) and we would not need densFun at all!?
 
       # use densFun for ties
       ind_zy <- which(cumDiffs.y == 0L)
       if (length(ind_zy))
-        cumDiffs.y[ind_zy] <- purrr::exec(getDist(distribution, type = "dens"), !!! c(list(x = y[pmax(ind_zy-1L, 1L)]),
-                                                                                      getPars(parL, group = "y")))
+        cumDiffs.y[ind_zy] <- purrr::exec(getDist(distribution, type = "dens"),
+                                          !!! c(list(x = y[pmax(ind_zy-1L, 1L)]), pars.y))
 
       # respect the machine's numerical lower limit
       cumDiffs.y[cumDiffs.y < .Machine$double.xmin] <- .Machine$double.xmin
     }
 
-    #XXX for twoGr:
+    #QQQ for twoGr:
     #+does it make a difference to first merge x and y and then do the cumDiffs, log and mean
-    - if (twoGr) weighted.mean(c(mean(log(cumDiffs.x)), mean(log(cumDiffs.y))),
-                               w = c(length(x), length(y))) else
-                                 mean(log(cumDiffs.x))
+    - if (! twoGr) mean(log(cumDiffs.x)) else
+      weighted.mean(c(mean(log(cumDiffs.x)), mean(log(cumDiffs.y))),
+                    w = c(length(x), length(y)))
+
   }
 
   # add "optim_args" & distribution as attributes to the objective function
@@ -361,25 +363,18 @@ print.mps_fit <- function(x){
 
 #' Coefficients of a delay-model fit.
 #' @param group character string to request the canonical parameter for one group
+#' @return named coefficient vector
 #' @export
 coef.mps_fit <- function(object, group = NULL){
 
   #stopifnot( inherits(object, "mps_fit") )
-  par <- object[["par"]]
 
-  if (! object[["twoGroup"]] || is.null(group)) par else {
+  # original parameter names of distribution
+  oNames <- getDist(object[["distribution"]], type = "param", twoGroup = FALSE, bind = NULL)
+  # contract: bind was intersected with parameter names and, hence, has right order
+  bind <- object[["bind"]]
 
-    # original parameter names of distribution
-    oNames <- getDist(object[["distribution"]], type = "param", twoGroup = FALSE, bind = NULL)
-    # contract: bind was intersected with parameter names and, hence, has right order
-    bind <- object[["bind"]]
-    # extract all group parameters and restore original name (e.g. remove ".x")
-    par.gr <- purrr::set_names(par[grepl(pattern = paste0(".", group), x = names(par), fixed = TRUE)],
-                               nm = setdiff(oNames, bind))
-
-    # restore original order
-    c(par.gr, par[bind])[oNames]
-  }
+  getPars(object[["par"]], group = group, twoGr = object[["twoGroup"]], oNames = oNames, bind = bind)
 }
 
 #' @export
