@@ -67,135 +67,162 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   distribution <- match.arg(distribution)
 
-  par_start <- NULL
   par_names <- getDist(distribution = distribution, type = "param",
                        twoGroup = twoGr, bind = bind)
 
   optim_args <- NULL
 
-  #XXX par_start with twoGr & bind: only quick*dirty solution
-  #+ see function getPar_weib below or come up with something like:
-  # getStartVals <- function(twoGr, bind){
-  #   if (distribution == 'exponential')
-  # }
-  if (distribution == 'exponential') {
-    # upper bound for *D*elay
-    upD.x <- max(1e-6, min(x)-1L/length(x), min(x)*.9999)
-    if (twoGr){
 
-      par_start <- if (is.null(bind)) {
-        c(max(0L, min(x)-2L/length(x)), 1L/mean(x - min(x) + 2L/length(x)),
-          max(0L, min(y)-2L/length(y)), 1L/mean(y - min(y) + 2L/length(y)))
-      } else if (identical(bind, 'delay')) {
-        c(max(0L, min(min(x)-2L/length(x), min(y)-2L/length(y))),
-          1L/mean(x - min(x) + 2L/length(x)),
-          1L/mean(y - min(y) + 2L/length(y)))
-      } else if (identical(bind, 'rate')) {
-        c((1L/mean(x - min(x) + 2L/length(x)) + 1L/mean(y - min(y) + 2L/length(y)))/2L,
-          max(0L, min(x)-2L/length(x)), max(0L, min(y)-2L/length(y)))
-      } else {
-        stopifnot( identical(bind, c("delay", "rate")) )
-        c( max(0L, min(c(x, y))-2L/(length(x)+length(y))),
-           1L/mean(c(x, y) - min(c(x, y)) + 2L/(length(x)+length(y))) )
+
+  # get parameter setting for a group of observations
+  # @return list with par, lower and upper information per parameter
+  getParSetting.gr <- function(obs){
+    # contract: obs is sorted!
+
+    LOW_MIN <- 1e-9
+
+    switch (EXPR = distribution,
+            exponential = {
+
+              list(
+                par = c(max(LOW_MIN, min(obs)-2L/length(obs)), 1L/mean(obs - min(obs) + 2L/length(obs))),
+                lower = purrr::set_names(c(0L, LOW_MIN), oNames),
+                upper = purrr::set_names(c(max(LOW_MIN, min(obs)-1L/length(obs), min(obs)*.9999), +Inf), oNames)
+              )
+
+            },
+            weibull = {
+              # start values from 'Weibull plot'
+              #+using the empirical distribution function
+              ## in MASS::fitdistr they simplify:
+              # lx <- log(x)
+              # m <- mean(lx)
+              # v <- var(lx)
+              # shape <- 1.2/sqrt(v)
+              # scale <- exp(m + 0.572/shape)
+              # take out extreme values for robustness (against possible outliers)
+              #+ when at least 20 observations
+              obs_f <- obs[max(1L, floor(length(obs)*.02)):ceiling(length(obs)*.95)] #assume sorted data
+              start_y <- log(-log(1-(seq_along(obs_f)-.3)/(length(obs_f)+.4)))
+              # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
+              start_shape <- cor(log(obs_f), start_y) * sd(start_y) / sd(log(obs_f))
+              start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
+
+              list(
+                par = c(max(LOW_MIN, min(obs) - 2L/length(obs)), start_shape, start_scale),
+                lower = purrr::set_names(c(0L, LOW_MIN, LOW_MIN), oNames),
+                upper = purrr::set_names(c(max(LOW_MIN, min(obs)-1L/length(obs), min(obs)*.9999), +Inf, +Inf), oNames)
+              )},
+            stop("Unknown distribution provided!")
+    )
+  }
+
+
+  par0_x <- getParSetting.gr(x)
+
+  optim_args <-
+    if (! twoGr) {
+      append(par0_x, list(method = "L-BFGS-B",
+                          # QQQ something like exp(trunc(log(par))) where par is the start parameters
+                          control = list(parscale = pmin.int(1e7, pmax.int(1e-7, par0_x[["par"]]))) )
+      )
+
+    } else {
+      stopifnot( twoGr )
+
+      # all parameters are bound: treat x and y as a single group
+      if ( length(bind) == length(oNames) ) {
+        par0_xy <- getParSetting.gr(c(x,y))
+        append(par0_xy,
+               list(method = "L-BFGS-B",
+                    control = list(parscale = pmin.int(1e7, pmax.int(1e-7, par0_xy[["par"]]))) )
+        )
+
+      } else { #twoGr, not all params bound!
+
+        par0_y <- getParSetting.gr(y)
+
+        start2 <- lower2 <- upper2 <- NULL
+
+        start_x <- par0_x[["par"]]
+        start_y <- par0_y[["par"]]
+        lower_x <- par0_x[["lower"]]
+        lower_y <- par0_y[["lower"]]
+        upper_x <- par0_x[["upper"]]
+        upper_y <- par0_y[["upper"]]
+
+
+        #XXX check here if we need min or max for lower/upper?! Think.
+        #XXX actually, only delay needs special attention, rest is simple! Can we simplify the code?!
+        if (distribution == 'exponential') {
+
+          start2 <- if (is.null(bind)) c(start_x, start_y) else
+            if (identical(bind, 'delay')) c(min(start_x[1L], start_y[1L]), start_x[-1L], start_y[-1L]) else
+              if (identical(bind, 'rate')) c((start_x[2L] + start_y[2L])/2L, start_x[-2L], start_y[-2L])
+
+          lower2 <- if (is.null(bind)) c(lower_x, lower_y) else
+            if (identical(bind, 'delay')) c(max(lower_x[1L], lower_y[1L]), lower_x[-1L], lower_y[-1L]) else
+              if (identical(bind, 'rate')) c(min(lower_x[2L], lower_y[2L]), lower_x[-2L], lower_y[-2L])
+
+          upper2 <- if (is.null(bind)) c(upper_x, upper_y) else
+            if (identical(bind, 'delay')) c(min(upper_x[1L], upper_y[1L]), upper_x[-1L], upper_y[-1L]) else
+              if (identical(bind, 'rate')) c(min(upper_x[2L], upper_y[2L]), upper_x[-2L], upper_y[-2L])
+
+
+        } else {
+          stopifnot( distribution == 'weibull' )
+
+          start2 <- if (is.null(bind)) c(start_x, start_y) else
+            if (identical(bind, 'delay')) c(min(start_x[1L], start_y[1L]), start_x[-1L], start_y[-1L]) else
+              if (identical(bind, 'shape')) c('XXX') else
+                stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
+
+          lower2 <- if (is.null(bind)) c(lower_x, lower_y) else
+            if (identical(bind, 'delay')) c(max(lower_x[1L], lower_y[1L]), lower_x[-1L], lower_y[-1L]) else
+              stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
+
+          upper2 <- if (is.null(bind)) c(upper_x, upper_y) else
+            if (identical(bind, 'delay')) c(min(upper_x[1L], upper_y[1L]), upper_x[-1L], upper_y[-1L]) else
+              stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
+
+        } # weibull
+
+        list(par = start2,
+             method = "L-BFGS-B",
+             # QQQ something like exp(trunc(log(par))) where par is the start parameters
+             control = list(parscale = pmin.int(1e7, pmax.int(1e-7, start2))),
+             lower = purrr::set_names(lower2, par_names),
+             upper = purrr::set_names(upper2, par_names)
+        )
       }
+    } # twoGrp
 
-      myLower <- if (is.null(bind)) c(0L, 1e-9, 0L, 1e-9) else if (identical(bind, 'delay')) c(0L, 1e-9, 1e-9) else
-        if (identical(bind, 'rate')) c(1e-9, 0L, 0L) else c(0L, 1e-9)
 
-      upD.y <- max(min(y)-1L/length(y), min(y)*.9999)
-      myUpper <- if (is.null(bind)) c(upD.x, +Inf, upD.y, +Inf) else
-        if (identical(bind, 'delay')) c(min(upD.x, upD.y), +Inf, +Inf) else
-          if (identical(bind, 'rate')) c(+Inf, upD.x, upD.y) else c(min(upD.x, upD.y), +Inf)
 
-      optim_args <- list(par = par_start,
-                         method = "L-BFGS-B",
-                         # QQQ something like exp(trunc(log(par))) where par is the start parameters
-                         control = list(parscale = pmin(1e7, pmax(1e-7, par_start))),
-                         lower = purrr::set_names(myLower, par_names),
-                         upper = purrr::set_names(myUpper, par_names))
+  # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
+  getCumDiffs <- function(data, pars, group){
+    pars.gr <- getPars(pars, group = group, twoGr = twoGr, oNames = oNames, bind = bind)
 
-    } else { # single group
-      par_start <- c(max(0L, min(x)-2L/length(x)), 1L/mean(x - min(x) + 2L/length(x)))
-      optim_args <- list(par = par_start,
-                         method = "L-BFGS-B",
-                         # QQQ something like exp(trunc(log(par))) where par is the start parameters
-                         control = list(parscale = pmin(1e7, pmax(1e-7, par_start))),
-                         lower = purrr::set_names(c(0L, 1e-9), par_names),
-                         upper = purrr::set_names(c(upD.x, +Inf), par_names)
-      )
-    }
+    # contract: x is sorted!
+    cumDiffs <- diff(c(0L,
+                       purrr::exec(getDist(distribution, type = "cdf"),
+                                   !!! c(list(q=data), pars.gr)),
+                       1L))
 
-  } else {
-    stopifnot( distribution == 'weibull' )
+    # use densFun for ties
+    ind_z <- which(cumDiffs == 0L)
+    if ( length(ind_z) ){
+      #ind_z[which(ind_z == 1L)] <- 2L #at least 2 to avoid idx 0 later when using x[ind_zx - 1]
+      ind_z[which(ind_z > length(data))] <- length(data) # cap at length of data, then we use ind_z to directly address data
+      cumDiffs[ind_z] <- purrr::exec(getDist(distribution, type = "dens"),
+                                        !!! c(list(x = x[ind_z]), pars.gr))
+    } #fi
 
-    # start values from 'Weibull plot'
-    #+using the empirical distribution function
-    ## in MASS::fitdistr they simplify:
-    # lx <- log(x)
-    # m <- mean(lx)
-    # v <- var(lx)
-    # shape <- 1.2/sqrt(v)
-    # scale <- exp(m + 0.572/shape)
-    getPar_weib <- function(obs){
-      # contract: obs is sorted!
-      # take out extreme values for robustness (against possible outliers)
-      #+ when at least 20 observations
-      xx <- obs[max(1L, floor(length(obs)*.02)):ceiling(length(obs)*.95)] #assume sorted data
-      start_y <- log(-log(1-(seq_along(xx)-.3)/(length(xx)+.4)))
-      # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
-      start_shape <- cor(log(xx), start_y) * sd(start_y) / sd(log(xx))
-      start_scale <- exp(mean(log(xx) - mean(start_y) / start_shape))
+    # respect the machine's numerical lower limit
+    cumDiffs[which(cumDiffs < .Machine$double.xmin)] <- .Machine$double.xmin
 
-      list(
-        start = c(max(0L, min(obs) - 2L/length(obs)), start_shape, start_scale),
-        lower = c(0L, 1e-9, 1e-9),
-        upper = c(max(min(obs)-1L/length(obs), min(obs)*.9999), +Inf, +Inf)
-      )
-    }
-
-    par0_x <- getPar_weib(x)
-
-    if (twoGr) {
-      par0_y <- getPar_weib(y)
-      start0_x <- par0_x[["start"]]
-      start0_y <- par0_y[["start"]]
-
-      par_start <- if (is.null(bind)) c(start0_x, start0_y) else
-        if (identical(bind, 'delay')) c(min(start0_x[1L], start0_y[1L]), start0_x[-1L], start0_y[-1L]) else
-          stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
-
-      lower_x <- par0_x[["lower"]]
-      lower_y <- par0_y[["lower"]]
-      myLower <- if (is.null(bind)) c(lower_x, lower_y) else
-        if (identical(bind, 'delay')) c(min(lower_x[1L], lower_y[1L]), lower_x[-1L], lower_y[-1L]) else
-          stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
-
-      upper_x <- par0_x[["upper"]]
-      upper_y <- par0_y[["upper"]]
-      myUpper <- if (is.null(bind)) c(upper_x, upper_y) else
-        if (identical(bind, 'delay')) c(max(upper_x[1L], upper_y[1L]), upper_x[-1L], upper_y[-1L]) else
-          stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
-
-      optim_args <- list(par = par_start,
-                         method = "L-BFGS-B",
-                         # QQQ something like exp(trunc(log(par))) where par is the start parameters
-                         control = list(parscale = pmin(1e7, pmax(1e-7, par_start))),
-                         lower = purrr::set_names(myLower, par_names),
-                         upper = purrr::set_names(myUpper, par_names)
-      )
-
-    } else {  # single group
-
-      par_start <- par0_x[["start"]]
-      optim_args <- list(par = par_start,
-                         method = "L-BFGS-B",
-                         # QQQ something like exp(trunc(log(par))) where par is the start parameters
-                         control = list(parscale = pmin(1e7, pmax(1e-7, par_start))),
-                         lower = purrr::set_names(par0_x[["lower"]], par_names),
-                         upper = purrr::set_names(par0_x[["upper"]], par_names) )
-    } # single group
-  } # weibull
-
+    log(cumDiffs)
+  }
 
   #' negative maximum spacing estimation objective function.
   #' Estimate parameters by minimizing this function.
@@ -204,50 +231,10 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     stopifnot( length(par_names) == length(pars) )
     pars <- purrr::set_names(pars, par_names)
 
-    pars.x <- getPars(pars, group = "x", twoGr = twoGr, oNames = oNames, bind = bind)
-
-    # contract: x is sorted!
-    cumDiffs.x <- diff(c(0L,
-                         purrr::exec(getDist(distribution, type = "cdf"),
-                                     !!! c(list(q=x), pars.x)),
-                         1L))
-
-    # use densFun for ties
-    ind_zx <- which(cumDiffs.x == 0L)
-    if (length(ind_zx)){
-      #ind_zx[which(ind_zx == 1L)] <- 2L #at least 2 to avoid idx 0 later when using x[ind_zx - 1]
-      ind_zx[which(ind_zx > length(x))] <- length(x) # cap at length(x), then we use ind_zx to directly address x
-      cumDiffs.x[ind_zx] <- purrr::exec(getDist(distribution, type = "dens"),
-                                        !!! c(list(x = x[ind_zx]), pars.x))
-    }
-
-    # respect the machine's numerical lower limit
-    cumDiffs.x[cumDiffs.x < .Machine$double.xmin] <- .Machine$double.xmin
-
-    if ( twoGr ){
-      pars.y <- getPars(pars, group = "y", twoGr = twoGr, oNames = oNames, bind = bind)
-      # contract: y is sorted!
-      cumDiffs.y <- diff(c(0L,
-                           purrr::exec(getDist(distribution, type = "cdf"),
-                                       !!! c(list(q=y), pars.y)),
-                           1L))
-
-      # use densFun for ties
-      ind_zy <- which(cumDiffs.y == 0L)
-      if (length(ind_zy)){
-        ind_zy[which(ind_zy > length(y))] <- length(y) # cap at length(y), then we use ind_zy to directly address y
-        cumDiffs.y[ind_zy] <- purrr::exec(getDist(distribution, type = "dens"),
-                                          !!! c(list(x = y[ind_zy]), pars.y))
-      }
-
-      # respect the machine's numerical lower limit
-      cumDiffs.y[cumDiffs.y < .Machine$double.xmin] <- .Machine$double.xmin
-    }
-
     #QQQ for twoGr:
     #+does it make a difference to first merge x and y and then do the cumDiffs, log and mean
-    - if (! twoGr) mean(log(cumDiffs.x)) else
-      weighted.mean(c(mean(log(cumDiffs.x)), mean(log(cumDiffs.y))),
+    - if (! twoGr) mean(getCumDiffs(x, pars, group = "x")) else
+      weighted.mean(c(mean(getCumDiffs(x, pars, group = "x")), mean(getCumDiffs(y, pars, group = "y"))),
                     w = c(length(x), length(y)))
 
   }
