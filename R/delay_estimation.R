@@ -70,62 +70,70 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   par_names <- getDist(distribution = distribution, type = "param",
                        twoGroup = twoGr, bind = bind)
 
-  optim_args <- NULL
 
 
-
-  # get parameter setting for a group of observations
-  # @return list with par, lower and upper information per parameter
+  # get start values for a group of observations
+  # @return list with par and upper limit for delay
   getParSetting.gr <- function(obs){
     # contract: obs is sorted!
 
-    LOW_MIN <- 1e-9
+    DELAY_MIN <- 1e-7
 
-    switch (EXPR = distribution,
-            exponential = {
+    parV <- switch (EXPR = distribution,
+                    exponential = c(max(DELAY_MIN, min(obs)-2L/length(obs)), 1L/mean(obs - min(obs) + 2L/length(obs))),
+                    weibull = {
+                      # start values from 'Weibull plot'
+                      #+using the empirical distribution function
+                      ## in MASS::fitdistr they simplify:
+                      # lx <- log(x)
+                      # m <- mean(lx)
+                      # v <- var(lx)
+                      # shape <- 1.2/sqrt(v)
+                      # scale <- exp(m + 0.572/shape)
+                      # take out extreme values for robustness (against possible outliers)
+                      #+ when at least 20 observations
+                      obs_f <- obs[max(1L, floor(length(obs)*.02)):ceiling(length(obs)*.95)] #assume sorted data
+                      start_y <- log(-log(1-(seq_along(obs_f)-.3)/(length(obs_f)+.4)))
+                      # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
+                      start_shape <- cor(log(obs_f), start_y) * sd(start_y) / sd(log(obs_f))
+                      start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
 
-              list(
-                par = c(max(LOW_MIN, min(obs)-2L/length(obs)), 1L/mean(obs - min(obs) + 2L/length(obs))),
-                lower = purrr::set_names(c(0L, LOW_MIN), oNames),
-                upper = purrr::set_names(c(max(LOW_MIN, min(obs)-1L/length(obs), min(obs)*.9999), +Inf), oNames)
-              )
 
-            },
-            weibull = {
-              # start values from 'Weibull plot'
-              #+using the empirical distribution function
-              ## in MASS::fitdistr they simplify:
-              # lx <- log(x)
-              # m <- mean(lx)
-              # v <- var(lx)
-              # shape <- 1.2/sqrt(v)
-              # scale <- exp(m + 0.572/shape)
-              # take out extreme values for robustness (against possible outliers)
-              #+ when at least 20 observations
-              obs_f <- obs[max(1L, floor(length(obs)*.02)):ceiling(length(obs)*.95)] #assume sorted data
-              start_y <- log(-log(1-(seq_along(obs_f)-.3)/(length(obs_f)+.4)))
-              # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
-              start_shape <- cor(log(obs_f), start_y) * sd(start_y) / sd(log(obs_f))
-              start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
+                      c(max(DELAY_MIN, min(obs) - 2L/length(obs)), start_shape, start_scale)
+                    },
+                    stop("Unknown distribution provided!")
+    )
 
-              list(
-                par = c(max(LOW_MIN, min(obs) - 2L/length(obs)), start_shape, start_scale),
-                lower = purrr::set_names(c(0L, LOW_MIN, LOW_MIN), oNames),
-                upper = purrr::set_names(c(max(LOW_MIN, min(obs)-1L/length(obs), min(obs)*.9999), +Inf, +Inf), oNames)
-              )},
-            stop("Unknown distribution provided!")
+    list(
+      par = parV,
+      delay_upper = max(DELAY_MIN, min(obs)-1L/length(obs), min(obs)*.9999)
     )
   }
 
 
   par0_x <- getParSetting.gr(x)
 
-  optim_args <-
+  lowerVec <- upperVec <- purrr::set_names(rep(NA_real_, length(par_names)),
+                                           nm = par_names)
+
+  BOUNDS <- list(delay = c(lower = 0, upper = NA_real_),
+                 rate = c(lower = 0, upper = +Inf),
+                 shape = c(lower = 0, upper = +Inf),
+                 scale = c(lower = 0, upper = +Inf))
+
+  # alas, purrr::iwalk did not work for me here
+  for (na in names(BOUNDS)) {
+    idx <- startsWith(par_names, prefix = na)
+    if (any(idx)) {
+      lowerVec[idx] <- purrr::chuck(BOUNDS, na, 'lower')
+      upperVec[idx] <- purrr::chuck(BOUNDS, na, 'upper')
+    } #fi
+  } #rof
+
+  parV <-
     if (! twoGr) {
-      append(par0_x, list(method = "L-BFGS-B",
-                          # QQQ something like exp(trunc(log(par))) where par is the start parameters
-                          control = list(parscale = pmin.int(1e7, pmax.int(1e-7, par0_x[["par"]]))) )
-      )
+      upperVec['delay'] <- par0_x[['delay_upper']]
+      par0_x[['par']]
 
     } else {
       stopifnot( twoGr )
@@ -133,71 +141,78 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       # all parameters are bound: treat x and y as a single group
       if ( length(bind) == length(oNames) ) {
         par0_xy <- getParSetting.gr(c(x,y))
-        append(par0_xy,
-               list(method = "L-BFGS-B",
-                    control = list(parscale = pmin.int(1e7, pmax.int(1e-7, par0_xy[["par"]]))) )
-        )
+
+        upperVec['delay'] <- par0_xy[['delay_upper']]
+        par0_xy[['par']]
+
 
       } else { #twoGr, not all params bound!
 
         par0_y <- getParSetting.gr(y)
 
-        start2 <- lower2 <- upper2 <- NULL
+        start_x <- par0_x[['par']]
+        start_y <- par0_y[['par']]
 
-        start_x <- par0_x[["par"]]
-        start_y <- par0_y[["par"]]
-        lower_x <- par0_x[["lower"]]
-        lower_y <- par0_y[["lower"]]
-        upper_x <- par0_x[["upper"]]
-        upper_y <- par0_y[["upper"]]
+        # set upper bound for delay parameter(s)!
+        if ('delay' %in% bind) {
+          upperVec['delay'] <- min(par0_x[['delay_upper']], par0_y[['delay_upper']])
+        } else {
+          upperVec['delay.x'] <- par0_x[['delay_upper']]
+          upperVec['delay.y'] <- par0_y[['delay_upper']]
+        }
 
-
-        #XXX check here if we need min or max for lower/upper?! Think.
-        #XXX actually, only delay needs special attention, rest is simple! Can we simplify the code?!
         if (distribution == 'exponential') {
 
-          start2 <- if (is.null(bind)) c(start_x, start_y) else
-            if (identical(bind, 'delay')) c(min(start_x[1L], start_y[1L]), start_x[-1L], start_y[-1L]) else
-              if (identical(bind, 'rate')) c((start_x[2L] + start_y[2L])/2L, start_x[-2L], start_y[-2L])
-
-          lower2 <- if (is.null(bind)) c(lower_x, lower_y) else
-            if (identical(bind, 'delay')) c(max(lower_x[1L], lower_y[1L]), lower_x[-1L], lower_y[-1L]) else
-              if (identical(bind, 'rate')) c(min(lower_x[2L], lower_y[2L]), lower_x[-2L], lower_y[-2L])
-
-          upper2 <- if (is.null(bind)) c(upper_x, upper_y) else
-            if (identical(bind, 'delay')) c(min(upper_x[1L], upper_y[1L]), upper_x[-1L], upper_y[-1L]) else
-              if (identical(bind, 'rate')) c(min(upper_x[2L], upper_y[2L]), upper_x[-2L], upper_y[-2L])
+          if (is.null(bind)) c(start_x, start_y) else
+            if (identical(bind, 'delay')) c(min(start_x[[1L]], start_y[[1L]]), start_x[-1L], start_y[-1L]) else
+              # harmonic mean of rates (go towards higher variability setting)
+              if (identical(bind, 'rate')) c(2L * start_x[[2L]] * start_y[[2L]] / (start_x[[2L]] + start_y[[2L]]), start_x[-2L], start_y[-2L])
 
 
         } else {
           stopifnot( distribution == 'weibull' )
 
-          start2 <- if (is.null(bind)) c(start_x, start_y) else
-            if (identical(bind, 'delay')) c(min(start_x[1L], start_y[1L]), start_x[-1L], start_y[-1L]) else
-              if (identical(bind, 'shape')) c('XXX') else
-                stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
-
-          lower2 <- if (is.null(bind)) c(lower_x, lower_y) else
-            if (identical(bind, 'delay')) c(max(lower_x[1L], lower_y[1L]), lower_x[-1L], lower_y[-1L]) else
-              stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
-
-          upper2 <- if (is.null(bind)) c(upper_x, upper_y) else
-            if (identical(bind, 'delay')) c(min(upper_x[1L], upper_y[1L]), upper_x[-1L], upper_y[-1L]) else
-              stop("Currently, for Weibull only bind=NULL and bind='delay' are supported!")
+          switch( EXPR = paste(bind, collapse = '+'),
+                  delay = {
+                    c(min(start_x[[1L]], start_y[[1L]]), start_x[-1L], start_y[-1L])
+                  },
+                  shape = {
+                    # geometric mean of shapes
+                    c(sqrt(start_x[[2L]] * start_y[[2L]]), start_x[-2L], start_y[-2L])
+                  },
+                  scale = {
+                    # arithmetic mean of scales (corresponds to harmonic mean of rates)
+                    c((start_x[[3L]] + start_y[[3L]])/2L, start_x[-3L], start_y[-3L])
+                  },
+                  `delay+shape` = {
+                    c(min(start_x[[1L]], start_y[[1L]]), sqrt(start_x[[2L]] * start_y[[2L]]), start_x[[3]], start_y[[3]])
+                  },
+                  `delay+scale` = {
+                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[3L]] + start_y[[3L]])/2L, start_x[[2]], start_y[[2]])
+                  },
+                  `shape+scale` = {
+                    c(sqrt(start_x[[2L]] * start_y[[2L]]), (start_x[[3L]] + start_y[[3L]])/2L, start_x[[1L]], start_y[[1L]])
+                  },
+                  # default: bind=NULL
+                  {
+                    stopifnot( is.null(bind) )
+                    c(start_x, start_y)
+                  })
 
         } # weibull
-
-        list(par = start2,
-             method = "L-BFGS-B",
-             # QQQ something like exp(trunc(log(par))) where par is the start parameters
-             control = list(parscale = pmin.int(1e7, pmax.int(1e-7, start2))),
-             lower = purrr::set_names(lower2, par_names),
-             upper = purrr::set_names(upper2, par_names)
-        )
       }
     } # twoGrp
 
+  stopifnot( ! any(is.na(upperVec), is.na(lowerVec)) )
 
+  optim_args <- list(
+    par = parV,
+    lower = lowerVec,
+    upper = upperVec,
+    method = "L-BFGS-B",
+    # QQQ something like exp(trunc(log(par))) where par is the start parameters
+    control = list(parscale = pmin.int(1e7, pmax.int(1e-7, parV)))
+  )
 
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
   getCumDiffs <- function(data, pars, group){
