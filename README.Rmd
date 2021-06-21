@@ -10,6 +10,7 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.path = "man/figures/README-",
+  fig.align = "center",
   out.width = "100%"
 )
 
@@ -28,7 +29,7 @@ Parametric time-to-event analysis where groups show an incubation period with di
 
 With `incubate`, you can statistically compare the survival experience of two groups with respect to delay and other parameters.
 
-```{r example}
+```{r example, out.width='60%'}
 library(incubate)
 
 # simulate data from exponential distribution with delay
@@ -40,13 +41,14 @@ fm <- delay_model(x, y)
 
 plot(fm)
 
+# test on difference in delay, using only R=50 bootstrap draws
 delay_test <- test_delay_diff(x, y, R = 50)
 plot(delay_test)
 ```
 
 ## Parallel computation
 
-To switch on parallel computation, e.g. for bootstrap parameter tests or power simulations, simply set up a suitable computation plan via the `future`-package <https://cran.r-project.org/web/packages/future/>.
+To switch on parallel computation, e.g. for bootstrap parameter tests or power simulations, simply set up a suitable computation plan via the Future-API.
 For instance, do the following to activate four R-sessions in the background of your local computer for computer-intensive tasks in `incubate`:
 
 ```{r future_setup, echo=TRUE, eval=FALSE}
@@ -54,7 +56,10 @@ library(future)
 plan(multisession, workers = 4)
 ```
 
-At the end, it is best practice to release the parallel connections when you are done with the heavy computing:
+That's it. You do *not* have to change any function calls. `incubate` is `future`-aware.
+Consult the [`future`-package on CRAN](https://cran.r-project.org/web/packages/future/) for more information about futures and about supported computation plans in R.
+
+When you are done with the heavy computing, it is best practice to release the parallel connections:  
 ```{r future_teardown, echo=-1, eval=FALSE}
 library(future)
 plan(sequential)
