@@ -30,6 +30,12 @@ plot(fm)
 <img src="man/figures/README-example-1.png" width="60%" style="display: block; margin: auto;" />
 
 ``` r
+# confidence interval for delay-parameters
+confint(fm, parm = c('delay.x', 'delay.y'))
+#>            2.5%  97.5%
+#> delay.x 0.90021 1.1490
+#> delay.y 1.08503 1.8678
+
 # test on difference in delay, using only R=50 bootstrap draws
 delay_test <- test_delay_diff(x, y, R = 50)
 plot(delay_test)

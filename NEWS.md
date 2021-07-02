@@ -1,5 +1,5 @@
-# incubate 0.0.4.999
-* ?
+# incubate 0.0.5
+* add confidence intervals (based on basic bootstrap) for model parameters
 
 # incubate 0.0.4
 * Weibull: `bind=` is implemented for all possible parameter combinations

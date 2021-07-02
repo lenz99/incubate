@@ -116,17 +116,18 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   lowerVec <- upperVec <- purrr::set_names(rep(NA_real_, length(par_names)),
                                            nm = par_names)
 
-  BOUNDS <- list(delay = c(lower = 0, upper = NA_real_),
-                 rate = c(lower = 0, upper = +Inf),
-                 shape = c(lower = 0, upper = +Inf),
-                 scale = c(lower = 0, upper = +Inf))
+  PAR_BOUNDS <- list(delay = c(lower = 0, upper = NA_real_),
+                     rate = c(lower = 0, upper = +Inf),
+                     shape = c(lower = 0, upper = +Inf),
+                     scale = c(lower = 0, upper = +Inf))
+
 
   # alas, purrr::iwalk did not work for me here
-  for (na in names(BOUNDS)) {
+  for (na in names(PAR_BOUNDS)) {
     idx <- startsWith(par_names, prefix = na)
     if (any(idx)) {
-      lowerVec[idx] <- purrr::chuck(BOUNDS, na, 'lower')
-      upperVec[idx] <- purrr::chuck(BOUNDS, na, 'upper')
+      lowerVec[idx] <- purrr::chuck(PAR_BOUNDS, na, 'lower')
+      upperVec[idx] <- purrr::chuck(PAR_BOUNDS, na, 'upper')
     } #fi
   } #rof
 
@@ -329,7 +330,8 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @return `mps_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
 delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL, verbose = 0) {
-  if (is.list(x) && length(x) == 2L){
+  if (is.list(x)){
+    stopifnot( length(x) == 2L )
     y <- x[[2L]]
     x <- x[[1L]]
   }
@@ -439,3 +441,100 @@ plot.mps_fit <- function(x, y, title, subtitle, ...){
     ggplot2::scale_y_reverse()
 }
 
+#' Simulate Data from Fitted Model
+#' @param object MPS-fit object
+#' @param nsim number of simulations
+#' @param seed currently unused! XXX
+#' @return list of simulated data
+#' @export
+simulate.mps_fit <- function(object, nsim = 1, seed = NULL, ...){
+  stopifnot( inherits(object, 'mps_fit'))
+
+  ranFun <- getDist(object$distribution, type = "r")
+  nObs <- if (isTRUE(object$twoGroup)) lengths(object$data) else length(object$data)
+
+  # arguments to the random function generation
+  ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
+  ranFunArgsY <- if (isTRUE(object$twoGroup)) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
+
+  simExpr <- if (isTRUE(object$twoGroup))
+    expression(list(x=rlang::exec(ranFun, !!! ranFunArgsX),
+                    y=rlang::exec(ranFun, !!! ranFunArgsY))) else
+                      expression(rlang::exec(ranFun, !!! ranFunArgsX))
+
+  if (nsim > 1000L){
+    future.apply::future_replicate(n = nsim, expr = eval(simExpr), simplify = FALSE, future.seed = TRUE)
+  } else {
+    replicate(n = nsim, expr = eval(simExpr), simplify = FALSE)
+  }
+}
+
+
+#' Confidence intervals for parameters of MPS-model fits.
+#'
+#' Basic bootstrap confidence limits are generated. At least R=1000 bootstrap replications are recommended.
+#' @param R bootstrap replications
+#' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
+#' @export
+confint.mps_fit <- function(object, parm, level = 0.95, R = 99L, ...){
+  stopifnot( inherits(object, 'mps_fit'))
+
+  stopifnot( is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
+  cf <- coef(object)
+  pnames <- names(cf)
+  stopifnot( is.numeric(cf), is.character(pnames) )
+
+  if (missing(parm)) parm <- pnames else
+    if (is.numeric(parm)) parm <- pnames[parm]
+  parm <- intersect(pnames, parm)
+
+  if (is.null(parm) || ! length(parm) || any(! nzchar(parm)) ){
+    warning('Invalid parameter name given in argument parm=')
+    return(invisible(NULL))
+  }
+
+  stopifnot( is.character(parm), length(parm) >= 1L )
+
+  a <- (1L - level) / 2L
+  a <- c(a, 1L - a)
+
+
+  # basic bootstrap confidence limits
+
+  # get bootstrap distribution of coefficients in data from fitted model
+
+  # for performance reasons, we 'inline' the simulate code into future_vapply, cf test_delay_diff
+  ranFun <- getDist(object$distribution, type = "r")
+  nObs <- if (isTRUE(object$twoGroup)) lengths(object$data) else length(object$data)
+
+  # arguments to the random function generation
+  ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
+  ranFunArgsY <- if (isTRUE(object$twoGroup)) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
+
+  coefMat <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(length(cf)),
+                                         FUN = function(dummy){
+                                           x <- rlang::exec(ranFun, !!! ranFunArgsX)
+                                           y <- if (isTRUE(object$twoGroup)) rlang::exec(ranFun, !!! ranFunArgsY)
+
+                                           coef(delay_model(x=x, y=y, distribution = object$distribution, bind = object$bind))
+                                         }, future.seed = TRUE)
+
+  # more clear and shorter but less efficient!
+  # coefMat <- object %>%
+  #   simulate(nsim = R) %>%
+  #   future.apply::future_vapply(FUN.VALUE = double(length(cf)),
+  #                               FUN = function(da){
+  #                                 coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
+  #                               })
+
+  # cf Davison, p28
+  ci <- 2L * cf - t(apply(coefMat, 1L, quantile, probs = rev(a), na.rm = TRUE))
+  colnames(ci) <- rev(colnames(ci))
+
+  # enforce parameter bounds also for CI
+  # all parameters are non-negative!
+  ci[which(ci<0L)] <- 0L
+
+
+  ci[parm, , drop = FALSE]
+}
