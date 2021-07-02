@@ -28,17 +28,17 @@ list with the results of the test. Element P contains the different P-values, fo
 }
 \description{
 It is in fact a model comparison between a null model where the parameters are enforced to be equal and an unconstrained full model.
-As test statistic we use the difference in best (=lowest) objective function value (\code{val_0} - \code{val_1}).
+As test statistic we use twice the difference in best (=lowest) objective function value, i.e. 2 * (\code{val_0} - \code{val_1}).
 This is reminiscent of a likelihood ratio test statistic albeit the objective function is not a negative log-likelihood
 but the negative of the maximum product spacing metric.
 }
 \details{
 High values of this difference speak against the null-model (i.e. high \code{val_0} indicates bad fit under 0-model and low values of \code{val_1} indicate a good fit under the more general model1.
-The test is implemented as a parametric bootstrap test, i.e.
+The test is implemented as a parametric bootstrap test, i.e. we
 \enumerate{
-\item we take given null-model fit as ground truth
-\item we regenerate data according to this model.
-\item we recalculate the test statistic
-\item we appraise the observed test statistic in light of the generated distribution under H0
+\item take given null-model fit as ground truth
+\item regenerate data according to this model.
+\item recalculate the test statistic
+\item appraise the observed test statistic in light of the generated distribution under H0
 }
 }

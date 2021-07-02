@@ -41,6 +41,9 @@ fm <- delay_model(x, y)
 
 plot(fm)
 
+# confidence interval for delay-parameters
+confint(fm, parm = c('delay.x', 'delay.y'))
+
 # test on difference in delay, using only R=50 bootstrap draws
 delay_test <- test_delay_diff(x, y, R = 50)
 plot(delay_test)

@@ -3,17 +3,17 @@
 #' Test the difference for delay model parameter(s) between two uncorrelated groups.
 #'
 #' It is in fact a model comparison between a null model where the parameters are enforced to be equal and an unconstrained full model.
-#' As test statistic we use the difference in best (=lowest) objective function value (`val_0` - `val_1`).
+#' As test statistic we use twice the difference in best (=lowest) objective function value, i.e. 2 * (`val_0` - `val_1`).
 #' This is reminiscent of a likelihood ratio test statistic albeit the objective function is not a negative log-likelihood
 #' but the negative of the maximum product spacing metric.
 #'
 #' High values of this difference speak against the null-model (i.e. high `val_0` indicates bad fit under 0-model and low values of `val_1` indicate a good fit under the more general model1.
-#' The test is implemented as a parametric bootstrap test, i.e.
+#' The test is implemented as a parametric bootstrap test, i.e. we
 #'
-#' 1. we take given null-model fit as ground truth
-#' 2. we regenerate data according to this model.
-#' 3. we recalculate the test statistic
-#' 4. we appraise the observed test statistic in light of the generated distribution under H0
+#' 1. take given null-model fit as ground truth
+#' 2. regenerate data according to this model.
+#' 3. recalculate the test statistic
+#' 4. appraise the observed test statistic in light of the generated distribution under H0
 #'
 #'
 #' @param x data from reference/control group.
@@ -33,8 +33,8 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
   # Test statistic calculated from the given data and the model specification.
   #
   # The test statistic takes non-negative values.
-  # Higher values of the test statistic speak in favour of H1:
-  # @return list containing value of test statistic and null model fir
+  # High values of the test statistic speak in favour of H1:
+  # @return list containing value of test statistic and null model fit
   testStat <- function(x, y) {
     #fit0 <- fit1 <- NULL
     fit0 <- delay_model(x = x, y = y, distribution = distribution, bind = param) #}, silent = TRUE)
@@ -155,7 +155,7 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
   ranFunArgsX <- c(list(n=length(x)), coef(fit0, group = "x"))
   ranFunArgsY <- c(list(n=length(y)), coef(fit0, group = "y"))
 
-  t0_dist <- future.apply::future_vapply(X = seq(R), FUN.VALUE = double(1L),
+  t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(1L),
                                          FUN = function(dummy){
 
                                            # generate new data according to given fitted null-model
@@ -213,9 +213,10 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
 
   teststat <- x[["testDist"]]
 
-  if (missing(title)) title <- glue::glue("Distribution of test statistic under H0 for parameter {dQuote(x$param)}")
-  if (missing(subtitle)) subtitle <- glue::glue("Sampling distribution, based on {length(teststat)} parametric bootstrap drawings. ",
-                                                "Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
+  if (missing(title)) title <- glue::glue('Distribution of test statistic under H0 for parameter {dQuote(x$param)}')
+  if (missing(subtitle)) subtitle <- glue::glue('Sampling distribution, based on {length(teststat)} parametric bootstrap drawings. ',
+                                                'Bootstrap P-value = {format.pval(x$P$boot, eps = 1e-3)}')
+                                                #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
 
 
   p <- dplyr::tibble(teststat = teststat) %>%
