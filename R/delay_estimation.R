@@ -3,6 +3,7 @@
 #' This is an internal helper function
 #' used in `coef.mps_fit` and in the factory method `geomSpaceFactory` below
 #' @param par named parameters (as simple vector or as list both works)
+#' @return parameter vector for the relevant group
 getPars <- function(par, group = "x", twoGr, oNames, bind) {
   if ( ! twoGr || is.null(group) ) return(par)
 
@@ -77,11 +78,11 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   getParSetting.gr <- function(obs){
     # contract: obs is sorted!
 
-    DELAY_MIN <- 1e-7
+    DELAY_MIN <- 1e-9
 
     parV <- switch (EXPR = distribution,
-                    exponential = c( max(DELAY_MIN, min(obs)-2L/length(obs)),
-                                     1L/mean(obs - min(obs) + 2L/length(obs)) ),
+                    exponential = c( max(DELAY_MIN, min(obs) - 2/length(obs)),
+                                     mean(obs - min(obs) + 2/length(obs))**-1L ),
                     weibull = {
                       # start values from 'Weibull plot'
                       #+using the empirical distribution function
@@ -100,7 +101,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
                       start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
 
 
-                      c( max(DELAY_MIN, min(obs) - 2L/length(obs)),
+                      c( max(DELAY_MIN, min(obs) - 2/length(obs)),
                          start_shape,
                          start_scale )
                     },
@@ -109,9 +110,10 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
     list(
       par = parV,
-      delay_upper = max(DELAY_MIN, min(obs)-1L/length(obs), min(obs)*.9999)
+      delay_upper = max(DELAY_MIN, min(obs) - .1/length(obs), min(obs)*.99999)
     )
-  }
+  }# getParSetting.gr
+
 
 
   par0_x <- getParSetting.gr(x)
@@ -204,7 +206,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
                   })
 
         } # weibull
-      }
+      } #twoGr, not all params bound!
     } # twoGrp
 
   stopifnot( ! any(is.na(upperVec), is.na(lowerVec)) )
