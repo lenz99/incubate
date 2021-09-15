@@ -9,7 +9,8 @@ test_delay_diff(
   y,
   distribution = c("exponential", "weibull"),
   param = "delay",
-  R = 400
+  R = 400,
+  ...
 )
 }
 \arguments{

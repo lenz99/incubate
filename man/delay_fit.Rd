@@ -14,9 +14,9 @@ delay_fit(objFun, optim_args = NULL, verbose = 0)
 \item{verbose}{integer that indicates the level of verboseness. Default 0 is quiet.}
 }
 \value{
-optimization object or \code{NULL} in case of errors during optimization
+optimization object including a named parameter vector or \code{NULL} in case of errors during optimization
 }
 \description{
-The objective function carries the given data in its environment.
-\code{stats::optim} does the optimization.
+The objective function carries the given data in its environment and it is to be minimized.
+R's standard routine \code{stats::optim} does the optimization, using numerical derivatives.
 }

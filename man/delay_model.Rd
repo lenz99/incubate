@@ -9,6 +9,7 @@ delay_model(
   y = NULL,
   distribution = c("exponential", "weibull"),
   bind = NULL,
+  optim_args = NULL,
   verbose = 0
 )
 }
@@ -18,6 +19,8 @@ delay_model(
 \item{y}{numeric. observations from 2nd group}
 
 \item{bind}{character. parameter names that are bind together in 2-group situation.}
+
+\item{optim_args}{list. optimization arguments to use. Use \code{NULL} to use the data-dependent default values.}
 
 \item{verbose}{integer. level of verboseness. Default 0 is quiet.}
 }

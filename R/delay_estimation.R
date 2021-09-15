@@ -37,7 +37,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   ind_neg_x <- which(x < 0L)
   if (length(ind_neg_x)){
-    warning("Negative values in data of x! These are dropped.")
+    warning("Negative values in data of x! These are dropped.", call. = FALSE)
     x <- x[-ind_neg_x]
   }
 
@@ -45,14 +45,14 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   x <- sort(x[is.finite(x)])
 
   if (!length(x)) {
-    warning("No valid data in x! Only non-negative and finite real values are valid.")
+    warning("No valid data in x! Only non-negative and finite real values are valid.", call. = FALSE)
     return(invisible(NULL))
   }
 
   if ( twoGr ){
     ind_neg_y <- which(y < 0L)
     if (length(ind_neg_y)){
-      warning("Negative values in data of y! These are dropped.")
+      warning("Negative values in data of y! These are dropped.", call. = FALSE)
       y <- y[-ind_neg_y]
     }
 
@@ -60,7 +60,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     y <- sort(y[is.finite(y)])
 
     if ( !length(y) ) {
-      warning("No valid data in y! Only non-negative and finite real values are valid.")
+      warning("No valid data in y! Only non-negative and finite real values are valid.", call. = FALSE)
       return(invisible(NULL))
     }
   } #fi twoGr
@@ -80,7 +80,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     DELAY_MIN <- 1e-7
 
     parV <- switch (EXPR = distribution,
-                    exponential = c(max(DELAY_MIN, min(obs)-2L/length(obs)), 1L/mean(obs - min(obs) + 2L/length(obs))),
+                    exponential = c( max(DELAY_MIN, min(obs)-2L/length(obs)),
+                                     1L/mean(obs - min(obs) + 2L/length(obs)) ),
                     weibull = {
                       # start values from 'Weibull plot'
                       #+using the empirical distribution function
@@ -99,9 +100,11 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
                       start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
 
 
-                      c(max(DELAY_MIN, min(obs) - 2L/length(obs)), start_shape, start_scale)
+                      c( max(DELAY_MIN, min(obs) - 2L/length(obs)),
+                         start_shape,
+                         start_scale )
                     },
-                    stop("Unknown distribution provided!")
+                    stop("Unknown distribution provided!", call. = FALSE)
     )
 
     list(
@@ -247,8 +250,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     stopifnot( length(par_names) == length(pars) )
     pars <- purrr::set_names(pars, par_names)
 
-    #QQQ for twoGr:
-    #+does it make a difference to first merge x and y and then do the cumDiffs, log and mean
+    #QQQ for twoGr: does it make a difference to first merge x and y and then do the cumDiffs, log and mean
     - if (! twoGr) mean(getCumDiffs(x, pars, group = "x")) else
       weighted.mean(c(mean(getCumDiffs(x, pars, group = "x")), mean(getCumDiffs(y, pars, group = "y"))),
                     w = c(length(x), length(y)))
@@ -259,6 +261,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   attr(negMSE, which = "optim_args") <- c(list(fn = negMSE), optim_args) #optim_args
   attr(negMSE, which = "distribution") <- distribution
   attr(negMSE, which = "twoGroup") <- twoGr
+  # when bind is NULL there will be no attributed named 'bind'
   attr(negMSE, which = "bind") <- bind
 
   negMSE
@@ -267,12 +270,12 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
 #' Parameter fitting according to MSE through numerical optimization.
 #'
-#' The objective function carries the given data in its environment.
-#' `stats::optim` does the optimization.
+#' The objective function carries the given data in its environment and it is to be minimized.
+#' R's standard routine `stats::optim` does the optimization, using numerical derivatives.
 #' @param objFun objective function
 #' @param optim_args list of own arguments for optimization. If `NULL` it uses the default optim arguments associated to the objective function.
 #' @param verbose integer that indicates the level of verboseness. Default 0 is quiet.
-#' @return optimization object or `NULL` in case of errors during optimization
+#' @return optimization object including a named parameter vector or `NULL` in case of errors during optimization
 delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
   if (is.null(objFun)) return(invisible(NULL))
@@ -289,32 +292,39 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       silent = TRUE)
 
   if (is.null(optObj)){
-    if (verbose >= 1) warning("MSE-optimization failed during delay fit!")
+    if (verbose >= 1) warning("MSE-optimization failed during delay fit!", call. = FALSE)
   } else if ( isTRUE(optObj$convergence > 0L) ){
-    # do a 2nd attempt of optim in case it did not converge in the 1st place
+    # do a 2nd attempt of optim in case it did not converge in the first place
     if (verbose >= 2) message("No proper convergence during 1st optimization in delay fit. Re-try with different parameter scaling.")
 
     stopifnot( "control"  %in% names(optim_args),
                "parscale" %in% names(optim_args$control) )
 
     # Use parameter values of non-converged fit as new start values (and adapt parscale accordingly)?
-    #+We assume that for objFun smaller is better (minimization problem)
+    #+The objFun is to be minimized,  smaller is better!
     if ( isTRUE(is.numeric(optObj$par) && all(is.finite(optObj$par)) && optObj$value < objFun(optim_args$par)) ){
-      newpar <- optObj$par
-      newparscale <- pmin(pmax(newpar, 1e-8), 1e+8)
-
-      optim_args <- optim_args %>%
-        purrr::assign_in(where = "par", value = newpar) %>%
-        purrr::assign_in(where = c("control", "parscale"), value = newparscale)
+      optim_args[['par']] <- optObj$par  # purrr::assign_in(where = "par", value = optObj$par)
+      newparsc <- abs(optim_args[['par']])
+      newparsc[which(newparsc < 1e-7)] <- 1e-7
+      newparsc[which(newparsc > 1e8)] <- 1e8
+      optim_args[['control']][['parscale']] <- newparsc
 
 
       try(expr = {optObj <- purrr::exec(stats::optim, !!! optim_args)},
           silent = TRUE)
 
       #XXX should we update the optim_args: start values when we used the default optim_args?
-      if ( isTRUE(optObj$convergence > 0L && verbose >= 1) ) warning("No proper convergence after re-try.")
+      if ( isTRUE(optObj$convergence > 0L && verbose >= 1) ) warning("No proper convergence after re-try.", call. = FALSE)
     }## fi rescaling for 2nd attempt
   }## fi 2nd attempt necessary?
+
+  # set names to parameter vector
+  if (! is.null(optObj)){
+    optObj$par <- purrr::set_names(optObj$par,
+                                   nm = getDist(distribution, type = "param",
+                                                twoGroup = attr(objFun, which = "twoGroup", exact = TRUE),
+                                                bind = attr(objFun, which = "bind", exact = TRUE)))
+  }
 
   optObj
 }
@@ -326,10 +336,13 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param bind character. parameter names that are bind together in 2-group situation.
+#' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `mps_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL, verbose = 0) {
+delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL, optim_args=NULL, verbose = 0) {
+
+  # unpack x if it is a list of two vectors
   if (is.list(x)){
     stopifnot( length(x) == 2L )
     y <- x[[2L]]
@@ -340,12 +353,9 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
   distribution <- match.arg(distribution)
   objFun <- geomSpaceFactory(x = x, y = y, distribution = distribution, bind = bind)
 
-  optObj <- delay_fit(objFun, verbose = verbose)
+  optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
 
   if (is.null(optObj)) return(invisible(NULL))
-
-  parV <- purrr::set_names(optObj$par, nm = getDist(distribution, type = "param",
-                                                    twoGroup = twoGr, bind = bind))
 
   structure(
     list(
@@ -354,8 +364,8 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
       twoGroup = twoGr,
       bind = bind,
       objFun = objFun,
-      par = parV,
-      val = objFun(parV),
+      par = optObj$par,
+      val = optObj$value, ##objFun(optObj$par),
       convergence = optObj$convergence
     ), class = "mps_fit")
 }
@@ -390,6 +400,30 @@ summary.mps_fit <- function(object, ...){
   print(object)
 }
 
+#' Refit a MPS-fit with specified optimization arguments.
+#' If more things need to be changed use `delay_model`.
+#' @export
+update.mps_fit <- function(object, optim_args, verbose = 0, ...){
+
+  objFun <- object[['objFun']]
+
+  ## fit model with given optim_args
+  optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
+
+  if (is.null(optObj)) return(invisible(NULL))
+
+  structure(
+    list(
+      data = object[['data']],
+      distribution = object[['distribution']],
+      twoGroup = object[['twoGroup']],
+      bind = object[['bind']],
+      objFun = objFun,
+      par = optObj$par,
+      val = optObj$value, ##objFun(optObj$par),
+      convergence = optObj$convergence
+    ), class = "mps_fit")
+}
 
 #' @export
 plot.mps_fit <- function(x, y, title, subtitle, ...){

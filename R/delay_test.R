@@ -23,7 +23,7 @@
 #' @param R numeric[1]. Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
-test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400) {
+test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400, ...) {
   distribution <- match.arg(distribution)
   par_names <- getDist(distribution = distribution, type = "param")
   stopifnot( is.numeric(x), length(x) > length(par_names), is.numeric(y), length(y) > length(par_names) )
@@ -37,24 +37,47 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
   # @return list containing value of test statistic and null model fit
   testStat <- function(x, y) {
     #fit0 <- fit1 <- NULL
-    fit0 <- delay_model(x = x, y = y, distribution = distribution, bind = param) #}, silent = TRUE)
-    fit1 <- delay_model(x = x, y = y, distribution = distribution) #}, silent = TRUE)
+    fit0 <- delay_model(x = x, y = y, distribution = distribution, bind = param, ...)
+    fit1 <- delay_model(x = x, y = y, distribution = distribution, ...)
+
+    if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
 
     # XXX do I need to check convergence of re-fits?
     # keep also fits with error-code 52: in my tests all those fits *looked* actually OK..
 
-    if (is.null(fit0) || is.null(fit1)) invisible(NULL) else
-      # higher values of T speak in favour of H1:
-      #   1. fit0 has high value (=bad fit)
-      #   2. fit1 has low value (=good fit)
-      list(val = 2L * (fit0[["val"]] - fit1[["val"]]),
-           fit0 = fit0)
+    # if more restricted model fit0 yields better fit (=lower criterion) than more general fit1
+    #+we are in trouble, possibly due to non-convergence, e.g. convergence code 52
+    if ( fit0[['val']] < fit1[['val']] ){
+      warning('Restricted model with better fit than unrestricted model.', call. = FALSE)
+      # re-run fit1 with start values based on fitted parameters of reduced model fit0
+      fit1oa <- attr(fit1[['objFun']], 'optim_args', exact = TRUE)
+      stopifnot( is.list(fit1oa), 'par' %in% names(fit1oa) )
+
+      pn1 <- names(fit1[['par']])
+      for (na0 in names(fit0[['par']])) fit1oa[['par']][startsWith(pn1, prefix = na0)] <- coef(fit0)[[na0]]
+
+      newparsc <- abs(fit1oa[['par']])
+      newparsc[which(newparsc < 1e-7)] <- 1e-7
+      newparsc[which(newparsc > 1e8)] <- 1e8
+      fit1oa[['control']][['parscale']] <- newparsc
+
+      fit1 <- update(fit1, optim_args = fit1oa, ...)
+
+      if (is.null(fit1) || fit0[['val']] < fit1[['val']]) return(invisible(NULL))
+    }
+
+
+    # higher values of T speak in favour of H1:
+    #   1. fit0 has high value (=bad fit)
+    #   2. fit1 has low value (=good fit)
+    list(val = 2L * (fit0[["val"]] - fit1[["val"]]),
+         fit0 = fit0)
   }
 
   # observed test statistic
   ts_obs <- testStat(x, y)
   if (is.null(ts_obs)){
-    stop("Delay model failed for restricted null-model or free full model")
+    stop("Delay model failed for restricted null-model or free full model", call. = FALSE)
   }
   fit0 <- ts_obs[["fit0"]]
 
@@ -174,9 +197,11 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
                                          }, future.seed = TRUE)
 
   t0_dist <- t0_dist[is.finite(t0_dist)]
-  chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
+  chisq_df_hat <- NULL
+  try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
                                       start = list(df = length(param)),
-                                      method = "Brent", lower = .001, upper = 401))
+                                      method = "Brent", lower = .001, upper = 401))},
+      silent = TRUE)
 
   P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
 
@@ -228,10 +253,12 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
     dplyr::pull(y) %>%
     {ceiling(max(. + .1, . * 1.01))}
 
-  p + ggplot2::geom_vline(xintercept = x[["t_obs"]], linetype = "dashed", colour = "grey") +
-    ggplot2::geom_function(inherit.aes = FALSE,
+  if (! is.null(x[['chisq_df_hat']]) && is.numeric(x[['chisq_df_hat']])) p <- p + ggplot2::geom_function(inherit.aes = FALSE,
                            fun = stats::dchisq, args = list(df = x[['chisq_df_hat']]),
-                           col = "red", linetype = "dotted") +
+                           col = "red", linetype = "dotted")
+
+  p +
+    ggplot2::geom_vline(xintercept = x[["t_obs"]], linetype = "dashed", colour = "grey") +
     ggplot2::coord_cartesian(ylim = c(0L, ymax)) +
     ggplot2::labs(x = "Test statistic",
                   title = title, subtitle = subtitle)
