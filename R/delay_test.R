@@ -26,7 +26,7 @@
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400,
-                            ties = c('density', 'equidist', 'random'), verbose = 0) {
+                            ties = c('equidist', 'density', 'random'), verbose = 0) {
   STRICT <- TRUE #keep only conv=0 model fits?
   distribution <- match.arg(distribution)
   ties <- match.arg(ties)

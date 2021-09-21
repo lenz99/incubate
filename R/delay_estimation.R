@@ -29,7 +29,7 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
 #' @param ties character. How to handle ties within data of a group.
 #' @return objective function
 geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL,
-                             ties=c('density', 'equidist', 'random'), verbose = 0L) {
+                             ties=c('equidist', 'density', 'random'), verbose = 0L) {
 
   # setup ----
   twoGr <- ! is.null(y)
@@ -430,7 +430,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @return `mps_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
 delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL,
-                        ties=c('density', 'equidist', 'random'), optim_args=NULL, verbose = 0) {
+                        ties=c('equidist', 'density', 'random'), optim_args=NULL, verbose = 0) {
 
   # unpack x if it is a list of two vectors
   if (is.list(x)){
