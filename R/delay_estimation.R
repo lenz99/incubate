@@ -110,7 +110,6 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       # rounding radius can't be wider than smallest observed diff.
       # plogis to mitigate the effect of sample size: the larger the sample the more we can «trust» the observed minimal diff
       # obs[1L] = min(obs) = diff of minimal obs with 0
-      #QQQ what is rounding precision of measurement? add this inside the min-function
       rr <- .5 * min(stats::plogis(q = length(obs), scale = 11) * diffobs[which(diffobs > 0L)],
                      # rounding precision here
                      roundOffPrecision,
@@ -127,8 +126,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
         stopifnot( sd(obs[obsInd]) == 0L ) #check: tie-group
         obs[obsInd] <- obs[obsInd] + if (ties == 'random') sort(runif(n = length(obsInd), min = -rr, max = +rr)) else
           #QQQ Cheng (1989) on Moran test statistic proposes to have equidist on CDF-transformed values.
-          #+ They use the ties = 'dens' approach for estimation of parameters for Moran's statistic
-          seq.int(from = -rr, to = +rr, length.out = length(obsInd))
+          #+They first use the ties = 'dens' approach for estimation of parameters for Moran's statistic
+          seq.int(from = -rr, to = +rr, length.out = length(obsInd)) #evenly spread
         startInd <- endInd <- endInd+1L
         if ( startInd > length(tiesDiffInd) ) break
       }
