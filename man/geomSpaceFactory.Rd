@@ -8,7 +8,9 @@ geomSpaceFactory(
   x,
   y = NULL,
   distribution = c("exponential", "weibull"),
-  bind = NULL
+  bind = NULL,
+  ties = c("density", "equidist", "random"),
+  verbose = 0L
 )
 }
 \arguments{
@@ -19,6 +21,8 @@ geomSpaceFactory(
 \item{distribution}{character(1). delayed distribution family}
 
 \item{bind}{character(1). parameter names that are bind together (i.e. equated) between both groups}
+
+\item{ties}{character. How to handle ties within data of a group.}
 
 \item{pars}{parameter vector.}
 }

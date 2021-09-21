@@ -11,6 +11,9 @@ getPars(par, group = "x", twoGr, oNames, bind)
 \arguments{
 \item{par}{named parameters (as simple vector or as list both works)}
 }
+\value{
+parameter vector for the relevant group
+}
 \description{
 Extract the parameters for the specified group.
 This is an internal helper function
