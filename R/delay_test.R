@@ -21,10 +21,13 @@
 #' @param distribution character[1]. Name of the parametric delay distribution to use.
 #' @param param character[1]. Parameter to test difference for. Default value is `'delay'`.
 #' @param R numeric[1]. Number of bootstrap samples to evaluate the distribution of the test statistic.
+#' @param ties character. How to handle ties in data vector of a group?
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
-test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400, ...) {
+test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400,
+                            ties = c('density', 'equidist', 'random')) {
   distribution <- match.arg(distribution)
+  ties <- match.arg(ties)
   par_names <- getDist(distribution = distribution, type = "param")
   stopifnot( is.numeric(x), length(x) > length(par_names), is.numeric(y), length(y) > length(par_names) )
   stopifnot( is.numeric(R), length(R) == 1L, R >= 1L )
@@ -37,8 +40,8 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
   # @return list containing value of test statistic and null model fit
   testStat <- function(x, y) {
     #fit0 <- fit1 <- NULL
-    fit0 <- delay_model(x = x, y = y, distribution = distribution, bind = param, ...)
-    fit1 <- delay_model(x = x, y = y, distribution = distribution, ...)
+    fit0 <- delay_model(x = x, y = y, distribution = distribution, bind = param, ties = ties)
+    fit1 <- delay_model(x = x, y = y, distribution = distribution, ties = ties)
 
     if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
 
@@ -61,7 +64,7 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
       newparsc[which(newparsc > 1e8)] <- 1e8
       fit1oa[['control']][['parscale']] <- newparsc
 
-      fit1 <- update(fit1, optim_args = fit1oa, ...)
+      fit1 <- update(fit1, optim_args = fit1oa)
 
       if (is.null(fit1) || fit0[['val']] < fit1[['val']]) return(invisible(NULL))
     }

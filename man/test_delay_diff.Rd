@@ -10,7 +10,7 @@ test_delay_diff(
   distribution = c("exponential", "weibull"),
   param = "delay",
   R = 400,
-  ...
+  ties = c("density", "equidist", "random")
 )
 }
 \arguments{
@@ -23,6 +23,8 @@ test_delay_diff(
 \item{param}{character\link{1}. Parameter to test difference for. Default value is \code{'delay'}.}
 
 \item{R}{numeric\link{1}. Number of bootstrap samples to evaluate the distribution of the test statistic.}
+
+\item{ties}{character. How to handle ties in data vector of a group?}
 }
 \value{
 list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap

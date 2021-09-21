@@ -9,6 +9,7 @@ delay_model(
   y = NULL,
   distribution = c("exponential", "weibull"),
   bind = NULL,
+  ties = c("density", "equidist", "random"),
   optim_args = NULL,
   verbose = 0
 )
@@ -19,6 +20,8 @@ delay_model(
 \item{y}{numeric. observations from 2nd group}
 
 \item{bind}{character. parameter names that are bind together in 2-group situation.}
+
+\item{ties}{character. How to handle ties.}
 
 \item{optim_args}{list. optimization arguments to use. Use \code{NULL} to use the data-dependent default values.}
 

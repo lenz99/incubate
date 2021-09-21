@@ -26,21 +26,27 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
 #' @param y numeric. observations in second group.
 #' @param distribution character(1). delayed distribution family
 #' @param bind character(1). parameter names that are bind together (i.e. equated) between both groups
+#' @param ties character. How to handle ties within data of a group.
 #' @return objective function
-geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL) {
+geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL,
+                             ties=c('density', 'equidist', 'random'), verbose = 0L) {
+
+  # setup ----
   twoGr <- ! is.null(y)
   stopifnot( is.numeric(x), length(x) > 0L, ! twoGr || is.numeric(y) && length(y) > 0L )
   stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1L )
+  ties <- match.arg(ties)
 
-  # intersect enforces the canonical order of dist-parameters in bind!
-  oNames <- getDist(distribution, type = "param", twoGroup = FALSE, bind = NULL) #standard ('original') names
+  #standard ('original') names
+  oNames <- getDist(distribution, type = "param", twoGroup = FALSE, bind = NULL)
+  #bind: intersect with oNames enforces the canonical order of dist-parameters!
   bind <- intersect(oNames, bind)
 
   ind_neg_x <- which(x < 0L)
   if (length(ind_neg_x)){
     warning("Negative values in data of x! These are dropped.", call. = FALSE)
     x <- x[-ind_neg_x]
-  }
+  }# fi
 
   # drop NA and ±Inf & sort
   x <- sort(x[is.finite(x)])
@@ -48,7 +54,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   if (!length(x)) {
     warning("No valid data in x! Only non-negative and finite real values are valid.", call. = FALSE)
     return(invisible(NULL))
-  }
+  }# fi
 
   if ( twoGr ){
     ind_neg_y <- which(y < 0L)
@@ -68,6 +74,79 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   distribution <- match.arg(distribution)
 
+
+  # data preparation ----
+
+  # Break ties in case of ties='break'
+  # @param obs: sorted data vector
+  preprocess <- function(obs) {
+    if (is.null(obs)) return(NULL)
+    if (ties == 'density' || ties == 'groupedML') return(obs)
+
+
+    diffobs <- diff(obs)
+    stopifnot( all(diffobs >= 0L) ) # i.e. sorted obs
+
+    tiesDiffInd <- which(diffobs == 0L) # < .Machine$double.xmin
+
+    if (length(tiesDiffInd)){
+      #rl <- rle(diff(tiesDiffInd))
+      if (verbose > 0L){
+        cat(length(tiesDiffInd) + sum(diff(tiesDiffInd)>1L) + 1L, 'tied observations in',
+            sum(diff(tiesDiffInd)>1L) + 1L, #length(which(rl$values > 1L))+1L,
+            'group(s) within data vector.\n')
+      }
+
+      #round-off errors/precision:
+      roundDig <- seq(-4, 6)
+      rDigInd <- roundDig %>%
+        purrr::map_lgl(.f = ~all(dplyr::near(x = obs, y = round(obs, digits = .x),
+                                             tol = min(.02, 2*10**-(.x+1)))))
+      roundOffPrecision <- 10**-min(roundDig[which(rDigInd)])
+      if (verbose > 0L){
+        cat("Round-off error has magnitude", roundOffPrecision, "\n")
+      }
+
+      # rounding radius can't be wider than smallest observed diff.
+      # plogis to mitigate the effect of sample size: the larger the sample the more we can «trust» the observed minimal diff
+      # obs[1L] = min(obs) = diff of minimal obs with 0
+      #QQQ what is rounding precision of measurement? add this inside the min-function
+      rr <- .5 * min(stats::plogis(q = length(obs), scale = 11) * diffobs[which(diffobs > 0L)],
+                     # rounding precision here
+                     roundOffPrecision,
+                     obs[1L], na.rm = TRUE)
+
+      ## modify tied observations per group of ties
+      # sort() ensures that data after tie-break is still sorted from small to large
+      startInd <- endInd <- 1L
+      repeat {
+        #proceed to end of tie-group
+        while (endInd < length(tiesDiffInd) && tiesDiffInd[endInd+1L] == tiesDiffInd[endInd] + 1L) {endInd <- endInd+1L}
+        #include adjacent index to complete tie-group
+        obsInd <- c(tiesDiffInd[startInd:endInd], tiesDiffInd[endInd]+1L)
+        stopifnot( sd(obs[obsInd]) == 0L ) #check: tie-group
+        obs[obsInd] <- obs[obsInd] + if (ties == 'random') sort(runif(n = length(obsInd), min = -rr, max = +rr)) else
+          #QQQ Cheng (1989) on Moran test statistic proposes to have equidist on CDF-transformed values.
+          #+ They use the ties = 'dens' approach for estimation of parameters for Moran's statistic
+          seq.int(from = -rr, to = +rr, length.out = length(obsInd))
+        startInd <- endInd <- endInd+1L
+        if ( startInd > length(tiesDiffInd) ) break
+      }
+
+      if (verbose > 1L){ cat("New data: ", paste(obs, collapse = ", "), "\n")}
+    }
+
+    # we have broken all ties
+    stopifnot( !any(diff(obs)==0L) )
+
+    obs
+  } #fn preprocess
+
+  x <- preprocess(obs = x)
+  if (isTRUE(twoGr)) y <- preprocess(obs = y)
+
+
+  # optimization arguments -----
   par_names <- getDist(distribution = distribution, type = "param",
                        twoGroup = twoGr, bind = bind)
 
@@ -115,9 +194,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   }# getParSetting.gr
 
 
-
-  par0_x <- getParSetting.gr(x)
-
+  # parameter bounds: lower & upper
   lowerVec <- upperVec <- purrr::set_names(rep(NA_real_, length(par_names)),
                                            nm = par_names)
 
@@ -136,6 +213,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     } #fi
   } #rof
 
+  par0_x <- getParSetting.gr(x)
   parV <-
     if (! twoGr) {
       upperVec['delay'] <- par0_x[['delay_upper']]
@@ -165,7 +243,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
         } else {
           upperVec['delay.x'] <- par0_x[['delay_upper']]
           upperVec['delay.y'] <- par0_y[['delay_upper']]
-        }
+        } # fi
+
 
         if (distribution == 'exponential') {
 
@@ -220,21 +299,26 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     control = list(parscale = pmin.int(1e7, pmax.int(1e-7, parV)))
   )
 
+
+
+
+  # objective function ----
+
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
-  getCumDiffs <- function(data, pars, group){
+  getCumDiffs <- function(obs, pars, group){
     pars.gr <- getPars(pars, group = group, twoGr = twoGr, oNames = oNames, bind = bind)
 
-    # contract: x is sorted!
+    # contract: data is sorted!
     cumDiffs <- diff(c(0L,
                        purrr::exec(getDist(distribution, type = "cdf"),
-                                   !!! c(list(q=data), pars.gr)),
+                                   !!! c(list(q=obs), pars.gr)),
                        1L))
 
     # use densFun for ties
     ind_z <- which(cumDiffs == 0L)
     if ( length(ind_z) ){
       #ind_z[which(ind_z == 1L)] <- 2L #at least 2 to avoid idx 0 later when using x[ind_zx - 1]
-      ind_z[which(ind_z > length(data))] <- length(data) # cap at length of data, then we use ind_z to directly address data
+      ind_z[which(ind_z > length(obs))] <- length(obs) # cap at length of data, then we use ind_z to directly address data
       cumDiffs[ind_z] <- purrr::exec(getDist(distribution, type = "dens"),
                                         !!! c(list(x = x[ind_z]), pars.gr))
     } #fi
@@ -243,7 +327,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     cumDiffs[which(cumDiffs < .Machine$double.xmin)] <- .Machine$double.xmin
 
     log(cumDiffs)
-  }
+
+  }# fn getCumDiffs
 
   #' negative maximum spacing estimation objective function.
   #' Estimate parameters by minimizing this function.
@@ -265,6 +350,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   attr(negMSE, which = "twoGroup") <- twoGr
   # when bind is NULL there will be no attributed named 'bind'
   attr(negMSE, which = "bind") <- bind
+  # method how to handle ties
+  attr(negMSE, which = "ties") <- ties
 
   negMSE
 }
@@ -338,11 +425,13 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param bind character. parameter names that are bind together in 2-group situation.
+#' @param ties character. How to handle ties.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `mps_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL, optim_args=NULL, verbose = 0) {
+delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL,
+                        ties=c('density', 'equidist', 'random'), optim_args=NULL, verbose = 0) {
 
   # unpack x if it is a list of two vectors
   if (is.list(x)){
@@ -353,7 +442,8 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
 
   twoGr <- ! is.null(y)
   distribution <- match.arg(distribution)
-  objFun <- geomSpaceFactory(x = x, y = y, distribution = distribution, bind = bind)
+  ties <- match.arg(ties)
+  objFun <- geomSpaceFactory(x = x, y = y, distribution = distribution, bind = bind, ties = ties, verbose = verbose)
 
   optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
 
