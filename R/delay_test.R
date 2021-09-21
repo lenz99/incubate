@@ -22,31 +22,30 @@
 #' @param param character[1]. Parameter to test difference for. Default value is `'delay'`.
 #' @param R numeric[1]. Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param ties character. How to handle ties in data vector of a group?
+#' @param verbose numeric. How many details are requested?
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
-test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400,
-                            ties = c('density', 'equidist', 'random')) {
+test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400,
+                            ties = c('equidist', 'density', 'random'), verbose = 0) {
+  STRICT <- TRUE #keep only conv=0 model fits?
   distribution <- match.arg(distribution)
   ties <- match.arg(ties)
   par_names <- getDist(distribution = distribution, type = "param")
   stopifnot( is.numeric(x), length(x) > length(par_names), is.numeric(y), length(y) > length(par_names) )
   stopifnot( is.numeric(R), length(R) == 1L, R >= 1L )
-  stopifnot( is.character(param), length(param) >= 1L )
+  stopifnot( is.character(param), length(param) >= 1L, nzchar(param) )
 
   # Test statistic calculated from the given data and the model specification.
   #
   # The test statistic takes non-negative values.
   # High values of the test statistic speak in favour of H1:
-  # @return list containing value of test statistic and null model fit
+  # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y) {
     #fit0 <- fit1 <- NULL
     fit0 <- delay_model(x = x, y = y, distribution = distribution, bind = param, ties = ties)
     fit1 <- delay_model(x = x, y = y, distribution = distribution, ties = ties)
 
     if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
-
-    # XXX do I need to check convergence of re-fits?
-    # keep also fits with error-code 52: in my tests all those fits *looked* actually OK..
 
     # if more restricted model fit0 yields better fit (=lower criterion) than more general fit1
     #+we are in trouble, possibly due to non-convergence, e.g. convergence code 52
@@ -67,8 +66,11 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
       fit1 <- update(fit1, optim_args = fit1oa)
 
       if (is.null(fit1) || fit0[['val']] < fit1[['val']]) return(invisible(NULL))
-    }
+    }# fi bad fit1
 
+    # convergence of re-fits?
+    # keep also fits with error-code 52: in my tests all those fits *looked* actually OK..
+    if (STRICT && (fit0[['convergence']] != 0 || fit1[['convergence']] != 0)) return(invisible(NULL))
 
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
@@ -102,10 +104,10 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
   # under H0, expect counts according to uniform distribution
   # nbr of classes as recommended by David S. Moore (Tests of Chi-squared Type, 1986)
   gof_nClasses <- max(length(coef(fit0)) + 2L, ceiling(2L * N**.4))
-  transf_tab <- tabulate(findInterval(transf_obs, vec = seq(0L, 1L, length.out = gof_nClasses+1L),
+  transf_tab <- tabulate(findInterval(transf_obs, vec = seq.int(from=0L, to=1L, length.out = gof_nClasses+1L),
                                       rightmost.closed = TRUE, all.inside = TRUE), nbins = gof_nClasses)
   # use adjusted degrees of freedom (loose one df for each parameter estimated)
-  P_gof_pearson <- pchisq(q = sum((transf_tab - mean(transf_tab))**2L) / mean(transf_tab),
+  P_gof_pearson <- stats::pchisq(q = sum((transf_tab - mean(transf_tab))**2L) / mean(transf_tab),
                           df = gof_nClasses - length(coef(fit0)) - 1L, lower.tail = FALSE)
 
   # EDF-based GOF-test
@@ -181,7 +183,7 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
   ranFunArgsX <- c(list(n=length(x)), coef(fit0, group = "x"))
   ranFunArgsY <- c(list(n=length(y)), coef(fit0, group = "y"))
 
-  t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(1L),
+  t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(1L+(verbose>0L)),
                                          FUN = function(dummy){
 
                                            # generate new data according to given fitted null-model
@@ -192,13 +194,23 @@ test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), pa
                                            #                                 y = rlang::exec(ranFun, !!! ranFunArgsY))[["val"]]},
                                            #     silent = TRUE)
                                            ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
-                                                               y = rlang::exec(ranFun, !!! ranFunArgsY))[["val"]]
-                                           if (is.null(ts_boot)) ts_boot <- NA_real_
+                                                               y = rlang::exec(ranFun, !!! ranFunArgsY))
+                                           if (is.null(ts_boot)) return(rep(NA_real_, 1L+(verbose>0L)))
 
-                                           ts_boot
+                                           if (verbose > 0L)
+                                             c(ts_boot[["val"]], ts_boot[['fit0']][['convergence']]) else
+                                               ts_boot[['val']]
+
 
                                          }, future.seed = TRUE)
 
+  if (verbose > 0L){
+    fit0_conv <- t0_dist[2L,]
+    cat('Proportion of model failures:', sprintf('%6.2f%%', 100L*length(which(is.na(fit0_conv)))/length(fit0_conv)), '\n')
+    cat('Proportion of convergence= 0:', sprintf('%6.2f%%', 100L*length(which(fit0_conv == 0))/length(fit0_conv)), '\n')
+    cat('Proportion of convergence=52:', sprintf('%6.2f%%', 100L*length(which(fit0_conv == 52))/length(fit0_conv)), '\n')
+    t0_dist <- t0_dist[1L,]
+  }
   t0_dist <- t0_dist[is.finite(t0_dist)]
   chisq_df_hat <- NULL
   try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",

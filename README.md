@@ -32,12 +32,11 @@ plot(fm)
 ``` r
 # confidence interval for delay-parameters
 confint(fm, parm = c('delay.x', 'delay.y'))
-#>            2.5%  97.5%
-#> delay.x 0.90021 1.1490
-#> delay.y 1.08503 1.8678
-
-# test on difference in delay, using only R=50 bootstrap draws
-delay_test <- test_delay_diff(x, y, R = 50)
+#>           2.5%  97.5%
+#> delay.x 0.9002 1.1490
+#> delay.y 1.0850 1.8678
+# test on difference in delay, using only R=75 bootstrap draws
+delay_test <- test_diff(x, y, R = 75)
 plot(delay_test)
 ```
 
@@ -59,14 +58,10 @@ plan(multisession, workers = 4)
 That’s it. You do *not* have to change any function calls. `incubate` is
 `future`-aware. Consult the [`future`-package on
 CRAN](https://cran.r-project.org/web/packages/future/) for more
-information about futures and about supported computation plans in R.
+information about futures and about supported computation plans.
 
 When you are done with the heavy computing, it is best practice to
-release the parallel connections:
-
-``` r
-plan(sequential)
-```
+release the parallel connections via `plan(sequential)`.
 
 ## Installation
 
