@@ -25,7 +25,7 @@
 #' @param verbose numeric. How many details are requested?
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
-test_delay_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400,
+test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400,
                             ties = c('density', 'equidist', 'random'), verbose = 0) {
   STRICT <- TRUE #keep only conv=0 model fits?
   distribution <- match.arg(distribution)
