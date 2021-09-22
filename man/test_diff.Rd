@@ -10,7 +10,7 @@ test_diff(
   distribution = c("exponential", "weibull"),
   param = "delay",
   R = 400,
-  ties = c("density", "equidist", "random"),
+  ties = c("equidist", "density", "random"),
   verbose = 0
 )
 }

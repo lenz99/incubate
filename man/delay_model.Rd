@@ -9,7 +9,7 @@ delay_model(
   y = NULL,
   distribution = c("exponential", "weibull"),
   bind = NULL,
-  ties = c("density", "equidist", "random"),
+  ties = c("equidist", "density", "random"),
   optim_args = NULL,
   verbose = 0
 )
