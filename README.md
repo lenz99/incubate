@@ -32,9 +32,9 @@ plot(fm)
 ``` r
 # confidence interval for delay-parameters
 confint(fm, parm = c('delay.x', 'delay.y'))
-#>           2.5%  97.5%
-#> delay.x 0.9002 1.1490
-#> delay.y 1.0850 1.8678
+#>              2.5%    97.5%
+#> delay.x 0.9002049 1.148961
+#> delay.y 1.0850495 1.867758
 # test on difference in delay, using only R=75 bootstrap draws
 delay_test <- test_diff(x, y, R = 75)
 plot(delay_test)
@@ -67,15 +67,18 @@ release the parallel connections via `plan(sequential)`.
 
 The `incubate` package is hosted publicly at
 [Gitlab](https://gitlab.com/imb-dev/incubate). To install its latest
-version use from within an R-session:
+released version use from within an R-session:
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate")
+remotes::install_gitlab("imb-dev/incubate@main")
 ```
 
+Drop the suffix `@main` to get the latest development version from
+Gitlab.
+
 To install a specific version, add the version tag after the name,
-separated by a `@`, e.g. to install `incubate` in version `v0.0.3` use
+separated by a `@`, e.g. to install `incubate` in version `v0.2` use
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate@v0.0.3")
+remotes::install_gitlab("imb-dev/incubate@v0.2")
 ```
