@@ -254,7 +254,7 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
   teststat <- x[["testDist"]]
 
   if (missing(title)) title <- glue::glue('Distribution of test statistic under H0 for parameter {dQuote(x$param)}')
-  if (missing(subtitle)) subtitle <- glue::glue('Sampling distribution, based on {length(teststat)} parametric bootstrap drawings. ',
+  if (missing(subtitle)) subtitle <- glue::glue('Sampling distribution, based on {length(teststat)} parametric bootstrap draws. ',
                                                 'Bootstrap P-value = {format.pval(x$P$boot, eps = 1e-3)}')
                                                 #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
 
@@ -291,9 +291,9 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
 #' @param n integer. Number of observations per group for the power simulation. Can be two different numbers, control group and then treatment group.
 #' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80 percent.
 #' @param R integer. Number of bootstrap samples to assess difference in parameter within each power simulation.
-#' @return list. Results of power simulation. Or `NULL` in case of errors.  Package `sscn` provides helper functions for convenience.
+#' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
-ssc_delay_sim_power <- function(distribution = c("exponential", "weibull"), param = "delay",
+power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
                                 eff = stop("Provide parameters for each group (reference group first) that reflect the effect!"),
                                 n, sig.level = 0.05, nPowerSim = 16e2, R = 2e2){
 
@@ -359,13 +359,14 @@ ssc_delay_sim_power <- function(distribution = c("exponential", "weibull"), para
   if ( length(P_dist) < 100L )
       warning("Low resultion for power estimate.")
 
-  structure(
-    list(id = "delay:2groups", name = "Delay: Difference in delay for time-to-event data in two groups",
-         eff = eff, sig.level = sig.level, n = n, N = sum(n),
-         P_dist = P_dist, ##debug
-         power = if (length(P_dist)) sum(P_dist < sig.level) / length(P_dist) else NA_real_
-    ),
-    class = "sscn"
+  # structure(
+  list(id = "delayed:2groups", name = "Difference in delayed model for time-to-event data in two groups",
+       distribution = distribution, param = param,
+       eff = eff, sig.level = sig.level, n = n, N = sum(n),
+       P_dist = P_dist, ##debug
+       power = if (length(P_dist)) sum(P_dist < sig.level) / length(P_dist) else NA_real_
   )
+  #   , class = "sscn"
+  # )
 }
 

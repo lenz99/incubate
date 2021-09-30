@@ -74,13 +74,13 @@ plan(sequential)
 ## Installation
 
 The `incubate` package is hosted publicly at [Gitlab](https://gitlab.com/imb-dev/incubate).
-To install its latest released version use from within an R-session:
+To install its latest **released version** use from within an R-session:
 
 ``` r
 remotes::install_gitlab("imb-dev/incubate@main")
 ```
 
-Drop the suffix `@main` to get the latest development version from Gitlab.
+Drop the suffix `@main` to get the latest **development version** from Gitlab.
 
 To install a specific version, add the version tag after the name, separated by a `@`, e.g. to install `incubate` in version `v0.2` use
 

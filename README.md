@@ -67,13 +67,13 @@ release the parallel connections via `plan(sequential)`.
 
 The `incubate` package is hosted publicly at
 [Gitlab](https://gitlab.com/imb-dev/incubate). To install its latest
-released version use from within an R-session:
+**released version** use from within an R-session:
 
 ``` r
 remotes::install_gitlab("imb-dev/incubate@main")
 ```
 
-Drop the suffix `@main` to get the latest development version from
+Drop the suffix `@main` to get the latest **development version** from
 Gitlab.
 
 To install a specific version, add the version tag after the name,
