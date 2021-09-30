@@ -3,5 +3,8 @@
 .RData
 .Ruserdata
 
+# mkuhn, 2021-09-30: avoid RStudio stuff
+*.Rproj
+
 .DS_Store
 

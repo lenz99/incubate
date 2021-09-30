@@ -70,11 +70,8 @@ The `incubate` package is hosted publicly at
 **released version** use from within an R-session:
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate@main")
+remotes::install_gitlab("imb-dev/incubate")
 ```
-
-Drop the suffix `@main` to get the latest **development version** from
-Gitlab.
 
 To install a specific version, add the version tag after the name,
 separated by a `@`, e.g. to install `incubate` in version `v0.2` use
@@ -82,3 +79,6 @@ separated by a `@`, e.g. to install `incubate` in version `v0.2` use
 ``` r
 remotes::install_gitlab("imb-dev/incubate@v0.2")
 ```
+
+The suffix `@develop` points to the latest **development version** from
+Gitlab.
