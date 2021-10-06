@@ -25,7 +25,7 @@
 #' @param verbose numeric. How many details are requested?
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
-test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = "delay", R = 400,
+test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
                             ties = c('equidist', 'density', 'random'), verbose = 0) {
   STRICT <- TRUE #keep only conv=0 model fits?
   distribution <- match.arg(distribution)
@@ -42,19 +42,21 @@ test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = 
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y) {
     #fit0 <- fit1 <- NULL
-    fit0 <- delay_model(x = x, y = y, distribution = distribution, bind = param, ties = ties)
+    fit0 <- delay_model(x = x, y = y, distribution = distribution, ties = ties, bind = param)
     fit1 <- delay_model(x = x, y = y, distribution = distribution, ties = ties)
 
     if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
 
     # if more restricted model fit0 yields better fit (=lower criterion) than more general fit1
     #+we are in trouble, possibly due to non-convergence, e.g. convergence code 52
+    #+we refit the general fit1 again using parameter-values from fit0
     if ( fit0[['val']] < fit1[['val']] ){
       warning('Restricted model with better fit than unrestricted model.', call. = FALSE)
       # re-run fit1 with start values based on fitted parameters of reduced model fit0
       fit1oa <- attr(fit1[['objFun']], 'optim_args', exact = TRUE)
       stopifnot( is.list(fit1oa), 'par' %in% names(fit1oa) )
 
+      # QQQ does match() or pmatch help here to avoid for-loop?
       pn1 <- names(fit1[['par']])
       for (na0 in names(fit0[['par']])) fit1oa[['par']][startsWith(pn1, prefix = na0)] <- coef(fit0)[[na0]]
 
@@ -70,7 +72,8 @@ test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = 
 
     # convergence of re-fits?
     # keep also fits with error-code 52: in my tests all those fits *looked* actually OK..
-    if (STRICT && (fit0[['convergence']] != 0 || fit1[['convergence']] != 0)) return(invisible(NULL))
+    # XXX try harder for non-convergence when testStat is called first?
+    if ( STRICT && (fit0[['convergence']] != 0 || fit1[['convergence']] != 0) ) return(invisible(NULL))
 
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
@@ -86,12 +89,15 @@ test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = 
   }
   fit0 <- ts_obs[["fit0"]]
 
+
   # P-values based GOF-tests
-  #+ H0: simpler model is sufficient and the GOF-test solely builds on fit0:
+  #+ H0: simpler/restricted model 0 is sufficient
+  #+ the GOF-test solely builds on fit0
   #+ take fitted parameters for both groups under null-model
-  #+ and apply cumulative distribution functions on the observed data for both groups
+  #+ and transform the observed data for both groups via cumulative distribution functions
   cFun <- getDist(distribution = distribution, type = "cdf")
   # sorted transformed observations. sorting is needed for Anderson-Darling (AD)-test
+  #QQQ this is also done in getCumDiff which is called in negMSE (for lots of parameters)
   transf_obs <- sort(c(rlang::exec(cFun, !!! c(list(q = x), coef(fit0, group = "x"))),
                        rlang::exec(cFun, !!! c(list(q = y), coef(fit0, group = "y"))) ))
 
@@ -116,7 +122,7 @@ test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = 
   A2 <- -N - mean((2L * i - 1L) * log(transf_obs) + (2L*N + 1L - 2L*i)*log(1-transf_obs))
 
 
-  P_gof_ad <- if (identical(distribution, 'exponential')){
+  P_gof_ad <- if ( identical(distribution, 'exponential') ){
     # modification for Exponential (cf Stephens, Table 4.14, p.138)
     # the correction factor approaches 1 from above.
     # We keep the number of N as all observations, independent of the number of parameters estimated in the null-model.
@@ -206,9 +212,9 @@ test_diff <- function(x, y, distribution = c("exponential", "weibull"), param = 
 
   if (verbose > 0L){
     fit0_conv <- t0_dist[2L,]
-    cat('Proportion of model failures:', sprintf('%6.2f%%', 100L*length(which(is.na(fit0_conv)))/length(fit0_conv)), '\n')
-    cat('Proportion of convergence= 0:', sprintf('%6.2f%%', 100L*length(which(fit0_conv == 0))/length(fit0_conv)), '\n')
-    cat('Proportion of convergence=52:', sprintf('%6.2f%%', 100L*length(which(fit0_conv == 52))/length(fit0_conv)), '\n')
+    cat('Proportion of model failures:', sprintf('%6.1f%%', 100L*length(which(is.na(fit0_conv)))/length(fit0_conv)), '\n')
+    cat('Proportion of convergence= 0:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 0))/length(fit0_conv)), '\n')
+    cat('Proportion of convergence=52:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 52))/length(fit0_conv)), '\n')
     t0_dist <- t0_dist[1L,]
   }
   t0_dist <- t0_dist[is.finite(t0_dist)]

@@ -2,7 +2,7 @@
 #' Extract the parameters for the specified group.
 #' This is an internal helper function
 #' used in `coef.mps_fit` and in the factory method `geomSpaceFactory` below
-#' @param par named parameters (as simple vector or as list both works)
+#' @param par named parameters (as simple vector or as list both work)
 #' @return parameter vector for the relevant group
 getPars <- function(par, group = "x", twoGr, oNames, bind) {
   if ( ! twoGr || is.null(group) ) return(par)
@@ -25,7 +25,7 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
 #' @param distribution character(1). delayed distribution family
-#' @param bind character(1). parameter names that are bind together (i.e. equated) between both groups
+#' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param ties character. How to handle ties within data of a group.
 #' @return objective function
 geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL,
@@ -36,11 +36,18 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   stopifnot( is.numeric(x), length(x) > 0L, ! twoGr || is.numeric(y) && length(y) > 0L )
   stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1L )
   ties <- match.arg(ties)
+  # tie-breaking via density is difficult for two-group situation
+  stopifnot( ! (ties == 'density' && twoGr) )
 
-  #standard ('original') names
+  #standard ('original') names of distribution
   oNames <- getDist(distribution, type = "param", twoGroup = FALSE, bind = NULL)
   #bind: intersect with oNames enforces the canonical order of dist-parameters!
   bind <- intersect(oNames, bind)
+
+  distribution <- match.arg(distribution)
+
+
+  # data preparation ----
 
   ind_neg_x <- which(x < 0L)
   if (length(ind_neg_x)){
@@ -72,16 +79,13 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     }
   } #fi twoGr
 
-  distribution <- match.arg(distribution)
 
-
-  # data preparation ----
 
   # Break ties in case of ties='break'
   # @param obs: sorted data vector
   preprocess <- function(obs) {
     if (is.null(obs)) return(NULL)
-    if (ties == 'density' || ties == 'groupedML') return(obs)
+    if (ties == 'density' ) return(obs) ##|| ties == 'groupedML') # groupedML not implemented yet
 
 
     diffobs <- diff(obs)
@@ -98,11 +102,12 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       }
 
       #round-off errors/precision:
-      roundDig <- seq(-4, 6)
-      rDigInd <- roundDig %>%
-        purrr::map_lgl(.f = ~all(dplyr::near(x = obs, y = round(obs, digits = .x),
-                                             tol = min(.02, 2*10**-(.x+1)))))
-      roundOffPrecision <- 10**-min(roundDig[which(rDigInd)])
+      roundDig <- seq.int(-4L, 6L)
+      rDigInd <- purrr::map_lgl(.x = roundDig,
+                                .f = ~all(dplyr::near(x = obs, y = round(obs, digits = .x),
+                                                      tol = 4L*10L**min(-2L, -.x-1L))) )
+      #XXX think here: fails for small obs! use if (all(obs < .5))??
+      roundOffPrecision <- 10L**-if (!any(rDigInd)) max(roundDig)+1L else roundDig[which.max(rDigInd)]
       if (verbose > 0L){
         cat("Round-off error has magnitude", roundOffPrecision, "\n")
       }
@@ -159,8 +164,9 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     DELAY_MIN <- 1e-9
 
     parV <- switch (EXPR = distribution,
-                    exponential = c( max(DELAY_MIN, min(obs) - 2/length(obs)),
-                                     mean(obs - min(obs) + 2/length(obs))**-1L ),
+                    # min(obs) = obs[1L]
+                    exponential = c( max(DELAY_MIN, obs[1L] - 2/length(obs)),
+                                     mean(obs - obs[1L] + 2/length(obs))**-1L ),
                     weibull = {
                       # start values from 'Weibull plot'
                       #+using the empirical distribution function
@@ -179,7 +185,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
                       start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
 
 
-                      c( max(DELAY_MIN, min(obs) - 2/length(obs)),
+                      c( max(DELAY_MIN, obs[1L] - 2/length(obs)),
                          start_shape,
                          start_scale )
                     },
@@ -190,7 +196,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       par = parV,
       delay_upper = max(DELAY_MIN, min(obs) - .1/length(obs), min(obs)*.99999)
     )
-  }# getParSetting.gr
+  }# fn getParSetting.gr
 
 
   # parameter bounds: lower & upper
@@ -360,7 +366,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 #'
 #' The objective function carries the given data in its environment and it is to be minimized.
 #' R's standard routine `stats::optim` does the optimization, using numerical derivatives.
-#' @param objFun objective function
+#' @param objFun objective function to be minimized
 #' @param optim_args list of own arguments for optimization. If `NULL` it uses the default optim arguments associated to the objective function.
 #' @param verbose integer that indicates the level of verboseness. Default 0 is quiet.
 #' @return optimization object including a named parameter vector or `NULL` in case of errors during optimization
@@ -380,10 +386,10 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       silent = TRUE)
 
   if (is.null(optObj)){
-    if (verbose >= 1) warning("MSE-optimization failed during delay fit!", call. = FALSE)
+    if (verbose > 0L) warning("MSE-optimization failed during delay fit!", call. = FALSE)
   } else if ( isTRUE(optObj$convergence > 0L) ){
     # do a 2nd attempt of optim in case it did not converge in the first place
-    if (verbose >= 2) message("No proper convergence during 1st optimization in delay fit. Re-try with different parameter scaling.")
+    if (verbose > 1L) message("No proper convergence during 1st optimization in delay fit. Re-try with different parameter scaling.")
 
     stopifnot( "control"  %in% names(optim_args),
                "parscale" %in% names(optim_args$control) )
@@ -397,12 +403,12 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       newparsc[which(newparsc > 1e8)] <- 1e8
       optim_args[['control']][['parscale']] <- newparsc
 
-
+      optObj <- NULL
       try(expr = {optObj <- purrr::exec(stats::optim, !!! optim_args)},
           silent = TRUE)
 
       #XXX should we update the optim_args: start values when we used the default optim_args?
-      if ( isTRUE(optObj$convergence > 0L && verbose >= 1) ) warning("No proper convergence after re-try.", call. = FALSE)
+      if ( is.null(optObj) || isTRUE(optObj$convergence > 0L && verbose > 0L) ) warning("No proper convergence after re-try.", call. = FALSE)
     }## fi rescaling for 2nd attempt
   }## fi 2nd attempt necessary?
 
@@ -480,10 +486,9 @@ coef.mps_fit <- function(object, group = NULL){
 
   # original parameter names of distribution
   oNames <- getDist(object[["distribution"]], type = "param", twoGroup = FALSE, bind = NULL)
-  # contract: bind was intersected with parameter names and, hence, has right order
-  bind <- object[["bind"]]
-
-  getPars(object[["par"]], group = group, twoGr = object[["twoGroup"]], oNames = oNames, bind = bind)
+  getPars(object[["par"]], group = group, twoGr = object[["twoGroup"]], oNames = oNames,
+          # contract: bind was intersected with parameter names and, hence, has right order
+          bind = object[["bind"]])
 }
 
 #' @export
