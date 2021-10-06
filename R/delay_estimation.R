@@ -322,10 +322,11 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     # use densFun for ties
     ind_z <- which(cumDiffs == 0L)
     if ( length(ind_z) ){
+      stopifnot( ties == 'density' ) # other tie-strategies have already dealt with them in preprocess
       #ind_z[which(ind_z == 1L)] <- 2L #at least 2 to avoid idx 0 later when using x[ind_zx - 1]
       ind_z[which(ind_z > length(obs))] <- length(obs) # cap at length of data, then we use ind_z to directly address data
       cumDiffs[ind_z] <- purrr::exec(getDist(distribution, type = "dens"),
-                                        !!! c(list(x = x[ind_z]), pars.gr))
+                                        !!! c(list(x = obs[ind_z]), pars.gr))
     } #fi
 
     # respect the machine's numerical lower limit
