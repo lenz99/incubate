@@ -7,7 +7,7 @@
 delay_fit(objFun, optim_args = NULL, verbose = 0)
 }
 \arguments{
-\item{objFun}{objective function}
+\item{objFun}{objective function to be minimized}
 
 \item{optim_args}{list of own arguments for optimization. If \code{NULL} it uses the default optim arguments associated to the objective function.}
 

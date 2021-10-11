@@ -20,7 +20,7 @@ geomSpaceFactory(
 
 \item{distribution}{character(1). delayed distribution family}
 
-\item{bind}{character(1). parameter names that are bind together (i.e. equated) between both groups}
+\item{bind}{character. parameter names that are bind together (i.e. equated) between both groups}
 
 \item{ties}{character. How to handle ties within data of a group.}
 

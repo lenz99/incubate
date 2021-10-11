@@ -6,7 +6,7 @@
 \usage{
 test_diff(
   x,
-  y,
+  y = stop("Provide data for group y!"),
   distribution = c("exponential", "weibull"),
   param = "delay",
   R = 400,

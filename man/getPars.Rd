@@ -9,7 +9,7 @@ used in \code{coef.mps_fit} and in the factory method \code{geomSpaceFactory} be
 getPars(par, group = "x", twoGr, oNames, bind)
 }
 \arguments{
-\item{par}{named parameters (as simple vector or as list both works)}
+\item{par}{named parameters (as simple vector or as list both work)}
 }
 \value{
 parameter vector for the relevant group
