@@ -101,13 +101,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
             'group(s) within data vector.\n')
       }
 
-      #round-off errors/precision:
-      roundDig <- seq.int(-4L, 6L)
-      rDigInd <- purrr::map_lgl(.x = roundDig,
-                                .f = ~all(dplyr::near(x = obs, y = round(obs, digits = .x),
-                                                      tol = 4L*10L**min(-2L, -.x-1L))) )
-      #XXX think here: fails for small obs! use if (all(obs < .5))??
-      roundOffPrecision <- 10L**-if (!any(rDigInd)) max(roundDig)+1L else roundDig[which.max(rDigInd)]
+      roundOffPrecision <- estimRoundingError(obs, maxObs = 1000L)
       if (verbose > 0L){
         cat("Round-off error has magnitude", roundOffPrecision, "\n")
       }
@@ -117,8 +111,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       # obs[1L] = min(obs) = diff of minimal obs with 0
       rr <- .5 * min(stats::plogis(q = length(obs), scale = 11) * diffobs[which(diffobs > 0L)],
                      # rounding precision here
-                     roundOffPrecision,
-                     obs[1L], na.rm = TRUE)
+                     roundOffPrecision, obs[1L], na.rm = TRUE)
 
       ## modify tied observations per group of ties
       # sort() ensures that data after tie-break is still sorted from small to large
@@ -138,7 +131,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       }
 
       if (verbose > 1L){ cat("New data: ", paste(obs, collapse = ", "), "\n")}
-    }
+    } #fi tiesdiff
 
     # we have broken all ties
     stopifnot( !any(diff(obs)==0L) )
