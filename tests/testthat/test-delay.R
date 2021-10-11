@@ -1,11 +1,11 @@
 # mkuhn, 2021-04-07
 # examples for MPS-fitting
 
-library(dplyr)
-library(purrr)
-library(future)
-library(future.apply)
-library(future.callr)
+library('dplyr', warn.conflicts = FALSE)
+library('purrr', warn.conflicts = FALSE)
+library('future')
+library('future.apply')
+library('future.callr')
 
 test_that("Fit delayed Exponentials", {
   # from a call to 9 + rexp(13, rate = 0.5)
@@ -66,17 +66,17 @@ test_that("Test difference in delay for two exponential fits", {
   y <- 11 + rexp(17L, rate = .08)
 
   # increasing effect
-  te_diff_delays_eff <- purrr::map(purrr::set_names(c(0, 9, 19)),
-                               ~ test_delay_diff(x = x + .x, y = y, param = "delay", R = 399))
+  te_diff_delays <- purrr::map(purrr::set_names(c(0, 9, 19)),
+                               ~ test_diff(x = x + .x, y = y, param = "delay", R = 399))
 
   # null model (no effect) has a high P-value
-  expect_gt(purrr::chuck(te_diff_delays_eff, "0", "P", "boot"), expected = .1)
+  expect_gt(purrr::chuck(te_diff_delays, "0", "P", "boot"), expected = .1)
 
   # the bigger the effect (=difference in delay) the smaller the P-value
-  expect_true(all(diff(purrr::map_dbl(te_diff_delays_eff, ~ purrr::chuck(., "P", "boot"))) < 0L))
+  expect_true(all(diff(purrr::map_dbl(te_diff_delays, ~ purrr::chuck(., "P", "boot"))) < 0L))
   # negative correlation betw effect size and P-values
-  expect_lt(cor(x = as.integer(names(te_diff_delays_eff)),
-                y = purrr::map_dbl(te_diff_delays_eff, ~ purrr::chuck(., "P", "boot"))),
+  expect_lt(cor(x = as.integer(names(te_diff_delays)),
+                y = purrr::map_dbl(te_diff_delays, ~ purrr::chuck(., "P", "boot"))),
             expected = -.66)
 
   #test effect of sample size: increase n and power goes up.
@@ -90,7 +90,7 @@ test_that("Test difference in delay for two exponential fits", {
             ~ 9 + rexp(., rate = .07))
 
   te_diff_delays_n <- purrr::map2(.x = xs, .y = ys,
-       .f = ~ suppressWarnings(test_delay_diff(x = .x, y = .y, param = "delay", R = 399)))
+       .f = ~ suppressWarnings(test_diff(x = .x, y = .y, param = "delay", R = 399)))
 
   expect_lt(cor(x = as.integer(names(te_diff_delays_n)),
                 y = purrr::map_dbl(te_diff_delays_n, ~ purrr::chuck(., "P", "boot"))),
@@ -114,7 +114,7 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
 
     # return P-value of bootstrap test
     Pval <- NA_real_
-    try(Pval <- purrr::chuck(test_delay_diff(x = x, y = y, param = "delay", distribution = "exp", R = 201), "P", "boot"),
+    try(Pval <- purrr::chuck(test_diff(x = x, y = y, param = "delay", distribution = "exp", R = 201), "P", "boot"),
         silent = TRUE)
 
     Pval

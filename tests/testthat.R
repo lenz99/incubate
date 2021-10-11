@@ -1,4 +1,4 @@
-library(testthat)
-library(incubate)
+library('testthat')
+library('incubate')
 
 test_check("incubate")
