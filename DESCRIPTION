@@ -8,7 +8,7 @@ Authors@R:
            role = c("aut", "cre"),
            email = "matthias.kuhn@tu-dresden.de",
            comment = c(ORCID = "0000-0003-2868-5155"))
-Description: Parametric event time analysis where groups have different incubation periods where hazard is different.
+Description: Parametric event time analysis for groups with variable incubation periods where hazard is zero.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
