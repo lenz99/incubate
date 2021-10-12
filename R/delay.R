@@ -15,6 +15,7 @@ rexp_delayed <- function(n, delay, rate = 1) rexp(n = n, rate = rate) + delay
 dweib_delayed <- function(x, delay, shape, scale = 1, ...) dweibull(x = x - delay, shape, scale, ...)
 #' @export
 pweib_delayed <- function(q, delay, shape, scale = 1, ...) pweibull(q = q - delay, shape, scale, ...)
+#{cat(sprintf('min: %.3f, delay: %.3f — shape: %.2f — scale: %.2f\n', min(q), delay, shape, scale)); }
 #' @export
 rweib_delayed <- function(n, delay, shape, scale = 1) rweibull(n = n, shape = shape, scale = scale) + delay
 

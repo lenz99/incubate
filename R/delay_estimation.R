@@ -196,10 +196,11 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   lowerVec <- upperVec <- purrr::set_names(rep(NA_real_, length(par_names)),
                                            nm = par_names)
 
+  PAR_LOW <- 1e-7
   PAR_BOUNDS <- list(delay = c(lower = 0, upper = NA_real_),
-                     rate = c(lower = 0, upper = +Inf),
-                     shape = c(lower = 0, upper = +Inf),
-                     scale = c(lower = 0, upper = +Inf))
+                     rate  = c(lower = PAR_LOW, upper = +Inf),
+                     shape = c(lower = PAR_LOW, upper = +Inf),
+                     scale = c(lower = PAR_LOW, upper = +Inf))
 
 
   # alas, purrr::iwalk did not work for me here
