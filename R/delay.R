@@ -4,17 +4,17 @@
 
 #' Density of delayed exponential distribution.
 #' @export
-dexp_delayed <- function(x, delay, rate = 1, ...) dexp(x = x - delay, rate, ...)
+dexp_delayed <- function(x, delay, rate = 1, ...) dexp(x = x - delay, rate = rate, ...)
 #' @export
-pexp_delayed <- function(q, delay, rate = 1, ...) pexp(q = q - delay, rate, ...)
+pexp_delayed <- function(q, delay, rate = 1, ...) pexp(q = q - delay, rate = rate, ...)
 #' @export
 rexp_delayed <- function(n, delay, rate = 1) rexp(n = n, rate = rate) + delay
 
 #' Density of delayed Weibull distribution
 #' @export
-dweib_delayed <- function(x, delay, shape, scale = 1, ...) dweibull(x = x - delay, shape, scale, ...)
+dweib_delayed <- function(x, delay, shape, scale = 1, ...) dweibull(x = x - delay, shape = shape, scale = scale, ...)
 #' @export
-pweib_delayed <- function(q, delay, shape, scale = 1, ...) pweibull(q = q - delay, shape, scale, ...)
+pweib_delayed <- function(q, delay, shape, scale = 1, ...) pweibull(q = q - delay, shape = shape, scale = scale, ...)
 #{cat(sprintf('min: %.3f, delay: %.3f — shape: %.2f — scale: %.2f\n', min(q), delay, shape, scale)); }
 #' @export
 rweib_delayed <- function(n, delay, shape, scale = 1) rweibull(n = n, shape = shape, scale = scale) + delay

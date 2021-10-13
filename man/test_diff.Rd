@@ -21,7 +21,7 @@ test_diff(
 
 \item{distribution}{character\link{1}. Name of the parametric delay distribution to use.}
 
-\item{param}{character\link{1}. Parameter to test difference for. Default value is \code{'delay'}.}
+\item{param}{character. Names of parameters to test difference for. Default value is \code{'delay'}.}
 
 \item{R}{numeric\link{1}. Number of bootstrap samples to evaluate the distribution of the test statistic.}
 

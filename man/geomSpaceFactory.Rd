@@ -25,6 +25,8 @@ geomSpaceFactory(
 \item{ties}{character. How to handle ties within data of a group.}
 
 \item{pars}{parameter vector.}
+
+\item{aggregated}{logical. For two group case return individual mean log cum-diffs per group if \code{FALSE}}
 }
 \value{
 objective function

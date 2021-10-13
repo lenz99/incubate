@@ -1,4 +1,58 @@
 
+#' Goodness-of-fit (GOF) test statistic.
+#' Moran's GOF is based on spacings
+#' @param delayFit delay_model fit
+#' @param method character(1). which method to use for GOF. Default is 'moran'.
+#' @return A list with class `htest` containing the GOF-test result
+#' @export
+test_GOF <- function(delayFit, method = 'moran'){
+
+  stopifnot( inherits(delayFit, what = 'mps_fit') )
+  method <- match.arg(method)
+
+  # make switch statement later on: pearson, AD, ..
+  stopifnot( method == 'moran')
+
+  # Moran's GOF test statistic: Cheng & Stephens (1989)
+  # @param mseCrit: the negative avg logged cumulative spacings
+  # @param n nbr of observations
+  # @param k nbr of parameters to be estimated
+  testStat_mo <- function(mseCrit, n, k){
+    EUL_MAS <- -digamma(1L)
+    mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - (12L*(n + 1L))**-1L
+    mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - (6L*(n + 1L))**-1L
+
+    C1 <- mo_m - sqrt(.5 * n * mo_v)
+    C2 <- sqrt(mo_v / (2L*n))
+
+    (mseCrit * (n+1L) + .5 * k - C1) / C2
+  }
+
+  nObs <- if (delayFit$twoGroup) lengths(delayFit$data) else length(delayFit$data)
+  statist <- if (delayFit$twoGroup){
+    # criterion per group
+    vals <- delayFit$objFun(pars = coef(delayFit), aggregated = FALSE)
+    # sum of two independent chi-sq. is chi-sq
+    c(`X^2` = sum(testStat_mo(mseCrit = vals,
+                              n = nObs, k = length(coef(delayFit))/2)) )
+  } else {
+    # single group
+    c(`X^2` = testStat_mo(mseCrit = delayFit$val,
+                          n = nObs, k = length(coef(delayFit))) )
+  }
+
+  p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
+  data_nam <- if (delayFit$twoGroup) names(delayFit$data) else 'x'
+  meth <- switch(method,
+                 `moran` = "Moran's Goodness-of-fit (GOF) test",
+                 stop('This method is not implemented yet!'))
+
+  # return test object
+  structure(
+    list(method = meth, data.name = data_nam,
+         statistic = statist, p.value = p_val),
+    class = 'htest')
+}
 
 #' Test the difference for delay model parameter(s) between two uncorrelated groups.
 #'
@@ -19,7 +73,7 @@
 #' @param x data from reference/control group.
 #' @param y data from the treatment group.
 #' @param distribution character[1]. Name of the parametric delay distribution to use.
-#' @param param character[1]. Parameter to test difference for. Default value is `'delay'`.
+#' @param param character. Names of parameters to test difference for. Default value is `'delay'`.
 #' @param R numeric[1]. Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param verbose numeric. How many details are requested?
@@ -60,6 +114,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       pn1 <- names(fit1[['par']])
       for (na0 in names(fit0[['par']])) fit1oa[['par']][startsWith(pn1, prefix = na0)] <- coef(fit0)[[na0]]
 
+      ## XXX abs should not be necessary because we allow only for non-negative parameters
+      # Better apply lower limits for parameters?!!
       newparsc <- abs(fit1oa[['par']])
       newparsc[which(newparsc < 1e-7)] <- 1e-7
       newparsc[which(newparsc > 1e8)] <- 1e8
@@ -96,15 +152,17 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   #+ take fitted parameters for both groups under null-model
   #+ and transform the observed data for both groups via cumulative distribution functions
   cFun <- getDist(distribution = distribution, type = "cdf")
+  #XXX use GOF for both groups individually (and use chi-sq as sum of two independent chi-sq to assess result)
   # sorted transformed observations. sorting is needed for Anderson-Darling (AD)-test
   #QQQ this is also done in getCumDiff which is called in negMSE (for lots of parameters)
-  transf_obs <- sort(c(rlang::exec(cFun, !!! c(list(q = x), coef(fit0, group = "x"))),
-                       rlang::exec(cFun, !!! c(list(q = y), coef(fit0, group = "y"))) ))
+  transf_obs <- sort.int(c(rlang::exec(cFun, !!! c(list(q = x), coef(fit0, group = "x"))),
+                           rlang::exec(cFun, !!! c(list(q = y), coef(fit0, group = "y"))) ))
 
   # number of observations
   N <- length(transf_obs)
   nx <- length(x); ny <- length(y)
   stopifnot( N == nx + ny )
+
 
   # Pearson GOF-test based on Chi-square distribution.
   # under H0, expect counts according to uniform distribution
@@ -175,7 +233,9 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   }
 
 
-  ## QQQ add GOF Moran's test: Cheng & Stephens (1989)
+  GOF_mo <- test_GOF(delayFit = fit0, method = 'moran')
+  if (verbose > 0L) cat("Moran test stat: ", GOF_mo$statistic, "\n")
+
 
 
   # parametric bootstrap:
@@ -247,6 +307,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       P = list(boot = P_boot,
                gof_pearson = P_gof_pearson,
                gof_ad = P_gof_ad,
+               gof_mo = GOF_mo$p.value,
                lr = P_lr,
                lr_pp = P_lr_pp)
     ), class = "test_delay")

@@ -304,7 +304,9 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   # objective function ----
 
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
-  getCumDiffs <- function(obs, pars, group){
+  # @return n+1 cumulative diffs on log-scale
+  getCumDiffs <- function(pars, group){
+    obs <- get(group)
     pars.gr <- getPars(pars, group = group, twoGr = twoGr, oNames = oNames, bind = bind)
 
     # contract: data is sorted!
@@ -330,17 +332,28 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   }# fn getCumDiffs
 
+
   #' negative maximum spacing estimation objective function.
   #' Estimate parameters by minimizing this function.
   #' @param pars parameter vector.
-  negMSE <- function(pars){
+  #' @param aggregated logical. For two group case return individual mean log cum-diffs per group if `FALSE`
+  negMSE <- function(pars, aggregated = TRUE){
     stopifnot( length(par_names) == length(pars) )
     pars <- purrr::set_names(pars, par_names)
 
-    #QQQ for twoGr: does it make a difference to first merge x and y and then do the cumDiffs, log and mean
-    - if (! twoGr) mean(getCumDiffs(x, pars, group = "x")) else
-      weighted.mean(c(mean(getCumDiffs(x, pars, group = "x")), mean(getCumDiffs(y, pars, group = "y"))),
-                    w = c(length(x), length(y)))
+    - if (! twoGr) {
+      mean(getCumDiffs(pars, group = "x"))
+    } else {
+      #twoGr:
+      #the approach to first merge x and y and then do the cumDiffs, log and mean does not work out
+      #because the parameters should be optimized within group.
+      #a merged data leads to frequent non-convergence or visually bad fits
+      res <- c(mean(getCumDiffs(pars, group = "x")), mean(getCumDiffs(pars, group = "y")))
+      if (aggregated)
+        weighted.mean(res, w = c(length(x), length(y)))
+      else
+        res
+    }
 
   }
 

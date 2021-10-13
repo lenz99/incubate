@@ -18,7 +18,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp <- coef(fd_exp)
 
   # optim does converge properly now for this data vector!
-  expect_identical(fd_exp$convergence, expected = 0L) #used to be 52L
+  expect_identical(fd_exp$convergence, expected = 0L) # used to be 52L
 
   expect_equal(coef_exp[1L], expected = c(delay = 9), tolerance = .03)
   expect_equal(coef_exp[2L], expected = c(rate = 0.5), tolerance = .3)
@@ -30,8 +30,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp2 <- coef(fd_exp2)
 
   expect_identical(fd_exp2[["convergence"]], expected = 0L)
-  expect_equal(as.numeric(coef_exp2[1L]), expected = as.numeric(coef_exp[1L]), tolerance = .002)
-  expect_equal(as.numeric(coef_exp2[2L]), expected = as.numeric(coef_exp[2L]), tolerance = .002)
+  expect_equal(as.numeric(coef_exp2[1:2]), expected = as.numeric(coef_exp), tolerance = .002)
 
 
   # bind delay
@@ -57,13 +56,55 @@ test_that("Fit delayed Exponentials", {
 })
 
 
+test_that('GOF-test on exponentials', {
+  future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 1L))
+
+  # GOF-tests on true exponential data with varying sample size, delay and rate
+  GOF_pvals <- future.apply::future_replicate(n = 260L, simplify = TRUE, expr = {
+    # vary n
+    fit1 <- delay_model(x=rexp_delayed(n = 10, delay = 11, rate = .4), distribution = 'exponential')
+    fit2 <- delay_model(x=rexp_delayed(n = 25, delay = 11, rate = .4), distribution = 'exponential')
+    fit3 <- delay_model(x=rexp_delayed(n = 50, delay = 11, rate = .4), distribution = 'exponential')
+    # vary delay
+    fit4 <- delay_model(x=rexp_delayed(n = 10, delay = 0,   rate = .4), distribution = 'exponential')
+    fit5 <- delay_model(x=rexp_delayed(n = 10, delay = 5,   rate = .4), distribution = 'exponential')
+    fit6 <- delay_model(x=rexp_delayed(n = 10, delay = 15, rate = .4), distribution = 'exponential')
+    # vary rate
+    fit7 <- delay_model(x=rexp_delayed(n = 10, delay = 11, rate = .01), distribution = 'exponential')
+    fit8 <- delay_model(x=rexp_delayed(n = 10, delay = 11, rate = .2), distribution = 'exponential')
+    fit9 <- delay_model(x=rexp_delayed(n = 10, delay = 9, rate = 1.5), distribution = 'exponential')
+
+    c(test_GOF(delayFit = fit1, method = 'moran')$p.value,
+      test_GOF(delayFit = fit2, method = 'moran')$p.value,
+      test_GOF(delayFit = fit3, method = 'moran')$p.value,
+      test_GOF(delayFit = fit4, method = 'moran')$p.value,
+      test_GOF(delayFit = fit5, method = 'moran')$p.value,
+      test_GOF(delayFit = fit6, method = 'moran')$p.value,
+      test_GOF(delayFit = fit7, method = 'moran')$p.value,
+      test_GOF(delayFit = fit8, method = 'moran')$p.value,
+      test_GOF(delayFit = fit9, method = 'moran')$p.value)
+  })
+
+  # expect uniform P-values for GOF under valid H0
+  expect_equal(object = as.numeric(rowMeans(GOF_pvals)), expected = rep(0.5, NROW(GOF_pvals)),
+               tolerance = .1)
+  GOF_pvals_ks <- apply(GOF_pvals, 1, FUN = \(x) ks.test(x, y = 'punif')$p.value)
+  expect_gte(length(which(GOF_pvals_ks < .25)) / NROW(GOF_pvals),
+             expected = .2)
+  expect_gte(length(which(GOF_pvals_ks > .75)) / NROW(GOF_pvals),
+             expected = .2)
+
+
+  future::plan(sequential)
+})
+
 test_that("Test difference in delay for two exponential fits", {
 
   future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 1L))
 
   set.seed(12345)
-  x <- 11 + rexp(13L, rate = .05)
-  y <- 11 + rexp(17L, rate = .08)
+  x <- rexp_delayed(13L, delay = 11, rate = .05)
+  y <- rexp_delayed(17L, delay = 11, rate = .08)
 
   # increasing effect
   te_diff_delays <- purrr::map(purrr::set_names(c(0, 9, 19)),
