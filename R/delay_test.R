@@ -1,55 +1,93 @@
 
 #' Goodness-of-fit (GOF) test statistic.
-#' Moran's GOF is based on spacings
+#' The GOF-test is performed for a fitted delay-model.
+#' There are different GOF-tests implemented:
+#' * __Moran GOF__ is based on spacings, like the MSE-criterion itself.
+#' * __Pearson GOF__ uses categories and compares observed to expected frequencies.
+#' * __Anderson-Darling GOF__ makes inference based on the cumulative distribution function.
+#'
 #' @param delayFit delay_model fit
 #' @param method character(1). which method to use for GOF. Default is 'moran'.
 #' @return A list with class `htest` containing the GOF-test result
 #' @export
-test_GOF <- function(delayFit, method = 'moran'){
+test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
   stopifnot( inherits(delayFit, what = 'mps_fit') )
   method <- match.arg(method)
 
   # make switch statement later on: pearson, AD, ..
-  stopifnot( method == 'moran')
+  stopifnot( method == 'moran' || method == 'pearson')
 
-  # Moran's GOF test statistic: Cheng & Stephens (1989)
-  # @param mseCrit: the negative avg logged cumulative spacings
-  # @param n nbr of observations
-  # @param k nbr of parameters to be estimated
-  testStat_mo <- function(mseCrit, n, k){
-    EUL_MAS <- -digamma(1L)
-    mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - (12L*(n + 1L))**-1L
-    mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - (6L*(n + 1L))**-1L
-
-    C1 <- mo_m - sqrt(.5 * n * mo_v)
-    C2 <- sqrt(mo_v / (2L*n))
-
-    (mseCrit * (n+1L) + .5 * k - C1) / C2
-  }
-
+  data_name <- if (delayFit$twoGroup) names(delayFit$data) else 'x'
   nObs <- if (delayFit$twoGroup) lengths(delayFit$data) else length(delayFit$data)
-  statist <- if (delayFit$twoGroup){
-    # criterion per group
-    vals <- delayFit$objFun(pars = coef(delayFit), aggregated = FALSE)
-    # sum of two independent chi-sq. is chi-sq
-    c(`X^2` = sum(testStat_mo(mseCrit = vals,
-                              n = nObs, k = length(coef(delayFit))/2)) )
-  } else {
-    # single group
-    c(`X^2` = testStat_mo(mseCrit = delayFit$val,
-                          n = nObs, k = length(coef(delayFit))) )
-  }
+  params <- coef(delayFit)
+  k <- length(params)
 
-  p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
-  data_nam <- if (delayFit$twoGroup) names(delayFit$data) else 'x'
-  meth <- switch(method,
-                 `moran` = "Moran's Goodness-of-fit (GOF) test",
-                 stop('This method is not implemented yet!'))
+
+
+  # do the calculation
+  meth <- statist <- p_val <- NULL
+
+  switch(method,
+         'moran' = {
+           # Moran's GOF test
+           meth <- "Moran's Goodness-of-fit (GOF) test"
+
+           # Moran test statistic is neg. sum of logged spacings, see Cheng & Stephens (1989)
+           # @param mseCrit: the negative avg logged cumulative spacings, length 1 or 2
+           # @param n nbr of observations, length 1 or 2
+           # @param k nbr of parameters to be estimated
+           testStat_mo <- function(mseCrit, n, k){
+             EUL_MAS <- -digamma(1L)
+             mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - (12L*(n + 1L))**-1L
+             mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - (6L*(n + 1L))**-1L
+
+             C1 <- mo_m - sqrt(.5 * n * mo_v)
+             C2 <- sqrt(mo_v / (2L*n))
+
+             # factor (n+1) to go from -avg to -sum
+             (mseCrit * (n+1L) + .5 * k - C1) / C2
+           }
+
+
+           statist <- if (delayFit$twoGroup){
+             # sum of two independent chi-sq. is chi-sq
+             c(`X^2` = sum(testStat_mo(mseCrit = delayFit$objFun(pars = params, aggregated = FALSE), #criterion per group
+                                       n = nObs, k = k/2)) )
+           } else {
+             # single group
+             c(`X^2` = testStat_mo(mseCrit = delayFit$val,
+                                   n = nObs, k = k) )
+           }
+
+           p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
+         },
+
+         'pearson' = {
+           # Pearson GOF-test
+           meth <- "Pearson's Goodness-of-fit (GOF) test"
+
+           #+under H0, expect frequency counts according to uniform distribution
+           #+nbr of classes as recommended by David S. Moore (Tests of Chi-squared Type, 1986)
+           gof_nClasses <- max(k + 2L, ceiling(2L * sum(nObs)**.4))
+           #XXX continue here!! Do this per group in twoGr-case!!
+           transf_tab <- tabulate(findInterval(transf_obs, vec = seq.int(from=0L, to=1L, length.out = gof_nClasses+1L),
+                                               rightmost.closed = TRUE, all.inside = TRUE), nbins = gof_nClasses)
+           # inference based on Chi-square distribution.
+           # use adjusted degrees of freedom (loose one df for each parameter estimated)
+           P_gof_pearson <- stats::pchisq(q = sum((transf_tab - mean(transf_tab))**2L) / mean(transf_tab),
+                                          df = gof_nClasses - k - 1L, lower.tail = FALSE)
+
+
+         },
+         stop('This method is not supported!')
+  )
+
+
 
   # return test object
   structure(
-    list(method = meth, data.name = data_nam,
+    list(method = meth, data.name = data_name,
          statistic = statist, p.value = p_val),
     class = 'htest')
 }
@@ -80,7 +118,7 @@ test_GOF <- function(delayFit, method = 'moran'){
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
-                            ties = c('equidist', 'density', 'random'), verbose = 0) {
+                      ties = c('equidist', 'density', 'random'), verbose = 0) {
   STRICT <- TRUE #keep only conv=0 model fits?
   distribution <- match.arg(distribution)
   ties <- match.arg(ties)
@@ -172,7 +210,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
                                       rightmost.closed = TRUE, all.inside = TRUE), nbins = gof_nClasses)
   # use adjusted degrees of freedom (loose one df for each parameter estimated)
   P_gof_pearson <- stats::pchisq(q = sum((transf_tab - mean(transf_tab))**2L) / mean(transf_tab),
-                          df = gof_nClasses - length(coef(fit0)) - 1L, lower.tail = FALSE)
+                                 df = gof_nClasses - length(coef(fit0)) - 1L, lower.tail = FALSE)
 
   # EDF-based GOF-test
   # Anderson-Darling (AD) test statistic, cf Stephens, Tests based on EDF Statistics p.101, (4.2)
@@ -280,8 +318,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   t0_dist <- t0_dist[is.finite(t0_dist)]
   chisq_df_hat <- NULL
   try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
-                                      start = list(df = length(param)),
-                                      method = "Brent", lower = .001, upper = 401))},
+                                                  start = list(df = length(param)),
+                                                  method = "Brent", lower = .001, upper = 401))},
       silent = TRUE)
 
   P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
@@ -323,7 +361,7 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
   if (missing(title)) title <- glue::glue('Distribution of test statistic under H0 for parameter {dQuote(x$param)}')
   if (missing(subtitle)) subtitle <- glue::glue('Sampling distribution, based on {length(teststat)} parametric bootstrap draws. ',
                                                 'Bootstrap P-value = {format.pval(x$P$boot, eps = 1e-3)}')
-                                                #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
+  #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
 
 
   p <- dplyr::tibble(teststat = teststat) %>%
@@ -336,8 +374,8 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
     {ceiling(max(. + .1, . * 1.01))}
 
   if (! is.null(x[['chisq_df_hat']]) && is.numeric(x[['chisq_df_hat']])) p <- p + ggplot2::geom_function(inherit.aes = FALSE,
-                           fun = stats::dchisq, args = list(df = x[['chisq_df_hat']]),
-                           col = "red", linetype = "dotted")
+                                                                                                         fun = stats::dchisq, args = list(df = x[['chisq_df_hat']]),
+                                                                                                         col = "red", linetype = "dotted")
 
   p +
     ggplot2::geom_vline(xintercept = x[["t_obs"]], linetype = "dashed", colour = "grey") +
@@ -361,8 +399,8 @@ plot.test_delay <- function(x, y, title, subtitle, ...){
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
-                                eff = stop("Provide parameters for each group (reference group first) that reflect the effect!"),
-                                n, sig.level = 0.05, nPowerSim = 16e2, R = 2e2){
+                       eff = stop("Provide parameters for each group (reference group first) that reflect the effect!"),
+                       n, sig.level = 0.05, nPowerSim = 16e2, R = 2e2){
 
   distribution <- match.arg(distribution)
   ranFun <- getDist(distribution, type = "r")
@@ -424,7 +462,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
   }
 
   if ( length(P_dist) < 100L )
-      warning("Low resultion for power estimate.")
+    warning("Low resultion for power estimate.")
 
   # structure(
   list(id = "delayed:2groups", name = "Difference in delayed model for time-to-event data in two groups",

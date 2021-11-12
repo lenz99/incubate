@@ -49,42 +49,30 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   # data preparation ----
 
-  ind_neg_x <- which(x < 0L)
-  if (length(ind_neg_x)){
-    warning("Negative values in data of x! These are dropped.", call. = FALSE)
-    x <- x[-ind_neg_x]
-  }# fi
-
-  # drop NA and ±Inf & sort
-  x <- sort(x[is.finite(x)])
-
-  if (!length(x)) {
-    warning("No valid data in x! Only non-negative and finite real values are valid.", call. = FALSE)
-    return(invisible(NULL))
-  }# fi
-
-  if ( twoGr ){
-    ind_neg_y <- which(y < 0L)
-    if (length(ind_neg_y)){
-      warning("Negative values in data of y! These are dropped.", call. = FALSE)
-      y <- y[-ind_neg_y]
-    }
-
-    # drop NA and ±Inf & sort
-    y <- sort(y[is.finite(y)])
-
-    if ( !length(y) ) {
-      warning("No valid data in y! Only non-negative and finite real values are valid.", call. = FALSE)
-      return(invisible(NULL))
-    }
-  } #fi twoGr
-
-
 
   # Break ties in case of ties='break'
-  # @param obs: sorted data vector
+  # @param obs: data vector
+  # @return sorted, cleaned up data vector or NULL in case of trouble
   preprocess <- function(obs) {
+
+
+    ind_neg <- which(obs < 0L)
+    if (length(ind_neg)){
+      warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
+      obs <- obs[-ind_neg]
+    }# fi
+
+    # drop NA and ±Inf & sort
+    obs <- sort(obs[is.finite(obs)])
+
+    if (!length(obs)) {
+      warning("No valid data! Only non-negative and finite real values are valid.", call. = FALSE)
+      return(invisible(NULL))
+    }# fi
+
     if (is.null(obs)) return(NULL)
+
+    # tie break
     if (ties == 'density' ) return(obs) ##|| ties == 'groupedML') # groupedML not implemented yet
 
 
@@ -128,7 +116,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
           seq.int(from = -rr, to = +rr, length.out = length(obsInd)) #evenly spread
         startInd <- endInd <- endInd+1L
         if ( startInd > length(tiesDiffInd) ) break
-      }
+      } #repeat
 
       if (verbose > 1L){ cat("New data: ", paste(obs, collapse = ", "), "\n")}
     } #fi tiesdiff
@@ -139,8 +127,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     obs
   } #fn preprocess
 
-  x <- preprocess(obs = x)
-  if (isTRUE(twoGr)) y <- preprocess(obs = y)
+  if (is.null({x <- preprocess(obs = x)})) return(invisible(NULL))
+  if (isTRUE(twoGr) && is.null({y <- preprocess(obs = y)})) return(invisible(NULL))
 
 
   # optimization arguments -----
@@ -336,7 +324,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   #' negative maximum spacing estimation objective function.
   #' Estimate parameters by minimizing this function.
   #' @param pars parameter vector.
-  #' @param aggregated logical. For two group case return individual mean log cum-diffs per group if `FALSE`
+  #' @param aggregated logical. For two group case, if `FALSE` return individual mean log cum-diffs per group
   negMSE <- function(pars, aggregated = TRUE){
     stopifnot( length(par_names) == length(pars) )
     pars <- purrr::set_names(pars, par_names)
@@ -345,9 +333,9 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       mean(getCumDiffs(pars, group = "x"))
     } else {
       #twoGr:
-      #the approach to first merge x and y and then do the cumDiffs, log and mean does not work out
+      #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
       #because the parameters should be optimized within group.
-      #a merged data leads to frequent non-convergence or visually bad fits
+      #a merged data lead to frequent non-convergence or visually bad fits
       res <- c(mean(getCumDiffs(pars, group = "x")), mean(getCumDiffs(pars, group = "y")))
       if (aggregated)
         weighted.mean(res, w = c(length(x), length(y)))
