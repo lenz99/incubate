@@ -3,9 +3,18 @@
 \name{test_GOF}
 \alias{test_GOF}
 \title{Goodness-of-fit (GOF) test statistic.
-Moran's GOF is based on spacings}
+The GOF-test is performed for a fitted delay-model.
+There are different GOF-tests implemented:
+\itemize{
+\item \strong{Moran GOF} is based on spacings, like the MSE-criterion itself.
+\item \strong{Pearson GOF} uses categories and compares observed to expected frequencies.
+\item \strong{Anderson-Darling GOF} makes inference based on the cumulative distribution function.
+}}
 \usage{
-test_GOF(delayFit, method = "moran")
+test_GOF(
+  delayFit,
+  method = c("moran", "pearson", "pearson2", "AD", "ad", "anderson")
+)
 }
 \arguments{
 \item{delayFit}{delay_model fit}
@@ -17,5 +26,11 @@ A list with class \code{htest} containing the GOF-test result
 }
 \description{
 Goodness-of-fit (GOF) test statistic.
-Moran's GOF is based on spacings
+The GOF-test is performed for a fitted delay-model.
+There are different GOF-tests implemented:
+\itemize{
+\item \strong{Moran GOF} is based on spacings, like the MSE-criterion itself.
+\item \strong{Pearson GOF} uses categories and compares observed to expected frequencies.
+\item \strong{Anderson-Darling GOF} makes inference based on the cumulative distribution function.
+}
 }

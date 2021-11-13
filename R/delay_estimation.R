@@ -344,6 +344,9 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   }
 
+  # add preprocessed data as attribute
+  attr(negMSE, which = 'x') <- x
+  if (twoGr) { attr(negMSE, which = 'y') <- y}
   # add "optim_args" & distribution as attributes to the objective function
   attr(negMSE, which = "optim_args") <- c(list(fn = negMSE), optim_args) #optim_args
   attr(negMSE, which = "distribution") <- distribution
@@ -444,6 +447,9 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
   distribution <- match.arg(distribution)
   ties <- match.arg(ties)
   objFun <- geomSpaceFactory(x = x, y = y, distribution = distribution, bind = bind, ties = ties, verbose = verbose)
+  # set preprocessed data
+  x <- attr(objFun, 'x', exact = TRUE)
+  if (twoGr) { y <- attr(objFun, 'y', exact = TRUE)}
 
   optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
 
