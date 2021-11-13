@@ -184,7 +184,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   lowerVec <- upperVec <- purrr::set_names(rep(NA_real_, length(par_names)),
                                            nm = par_names)
 
-  PAR_LOW <- 1e-7
+  PAR_LOW <- 1e-13
   PAR_BOUNDS <- list(delay = c(lower = 0, upper = NA_real_),
                      rate  = c(lower = PAR_LOW, upper = +Inf),
                      shape = c(lower = PAR_LOW, upper = +Inf),
@@ -209,8 +209,9 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     } else {
       stopifnot( twoGr )
 
-      # all parameters are bound: treat x and y as a single group
+      # all parameters are bound
       if ( length(bind) == length(oNames) ) {
+        # treat x and y as a single group for start value heuristic
         par0_xy <- getParSetting.gr(c(x,y))
 
         upperVec['delay'] <- par0_xy[['delay_upper']]
@@ -283,7 +284,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     upper = upperVec,
     method = "L-BFGS-B",
     # QQQ something like exp(trunc(log(par))) where par is the start parameters
-    control = list(parscale = pmin.int(1e7, pmax.int(1e-7, parV)))
+    control = list(parscale = pmin.int(1e11, pmax.int(1e-11, parV)))
   )
 
 
@@ -299,18 +300,16 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
     # contract: data is sorted!
     cumDiffs <- diff(c(0L,
-                       purrr::exec(getDist(distribution, type = "cdf"),
-                                   !!! c(list(q=obs), pars.gr)),
+                       purrr::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)),
                        1L))
 
     # use densFun for ties
     ind_z <- which(cumDiffs == 0L)
     if ( length(ind_z) ){
-      stopifnot( ties == 'density' ) # other tie-strategies have already dealt with them in preprocess
+      stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in preprocess
       #ind_z[which(ind_z == 1L)] <- 2L #at least 2 to avoid idx 0 later when using x[ind_zx - 1]
       ind_z[which(ind_z > length(obs))] <- length(obs) # cap at length of data, then we use ind_z to directly address data
-      cumDiffs[ind_z] <- purrr::exec(getDist(distribution, type = "dens"),
-                                        !!! c(list(x = obs[ind_z]), pars.gr))
+      cumDiffs[ind_z] <- purrr::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_z]), pars.gr))
     } #fi
 
     # respect the machine's numerical lower limit
@@ -335,7 +334,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       #twoGr:
       #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
       #because the parameters should be optimized within group.
-      #a merged data lead to frequent non-convergence or visually bad fits
+      #merged data lead to frequent non-convergence or visually bad fits
       res <- c(mean(getCumDiffs(pars, group = "x")), mean(getCumDiffs(pars, group = "y")))
       if (aggregated)
         weighted.mean(res, w = c(length(x), length(y)))
