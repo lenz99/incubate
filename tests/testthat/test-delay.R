@@ -51,6 +51,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp3 <- coef(fd_exp3)
 
   expect_identical(length(coef_exp3), length(coef_exp2c))
+  # similar coefficients (but the criterion is not identical, weighted mean for both groups vs overall mean)
   expect_equal(coef_exp2c[1L], coef_exp3[1L], tolerance = .01)
   expect_equal(coef_exp2c[2L], coef_exp3[2L], tolerance = .05)
 })

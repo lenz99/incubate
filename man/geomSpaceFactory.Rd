@@ -26,7 +26,7 @@ geomSpaceFactory(
 
 \item{pars}{parameter vector.}
 
-\item{aggregated}{logical. For two group case return individual mean log cum-diffs per group if \code{FALSE}}
+\item{aggregated}{logical. For two group case, if \code{FALSE} return individual mean log cum-diffs per group}
 }
 \value{
 objective function

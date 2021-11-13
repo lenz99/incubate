@@ -449,9 +449,18 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
 
   if (is.null(optObj)) return(invisible(NULL))
 
+  # get CDF-transformed data
+  oNames <- getDist(distribution, type = 'param')
+  data_tr <- purrr::exec(getDist(distribution, type = "cdf"),
+                         !!! c(list(q=x), getPars(par = optObj$par, group = 'x', twoGr = twoGr, oNames = oNames, bind = bind)))
+  if (twoGr) data_tr <-
+    list(x = data_tr,
+         y = purrr::exec(getDist(distribution, type = "cdf"),
+                         !!! c(list(q=y), getPars(par = optObj$par, group = 'y', twoGr = twoGr, oNames = oNames, bind = bind))))
   structure(
     list(
       data = if (twoGr) list(x = x, y = y) else x,
+      data_transf = data_tr, # store CDF-transformed data
       distribution = distribution,
       twoGroup = twoGr,
       bind = bind,
