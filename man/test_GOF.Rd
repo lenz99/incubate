@@ -22,7 +22,7 @@ test_GOF(
 \item{method}{character(1). which method to use for GOF. Default is 'moran'.}
 }
 \value{
-A list with class \code{htest} containing the GOF-test result
+An \code{htest}-object containing the GOF-test result
 }
 \description{
 Goodness-of-fit (GOF) test statistic.

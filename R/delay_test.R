@@ -8,7 +8,7 @@
 #'
 #' @param delayFit delay_model fit
 #' @param method character(1). which method to use for GOF. Default is 'moran'.
-#' @return A list with class `htest` containing the GOF-test result
+#' @return An `htest`-object containing the GOF-test result
 #' @export
 test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 'ad', 'anderson')){
 
@@ -29,12 +29,13 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
            # Moran's GOF test
            meth <- "Moran's Goodness-of-fit (GOF) test"
 
-           # Moran test statistic is neg. sum of logged spacings, see Cheng & Stephens (1989)
+           EUL_MAS <- -digamma(1L)
+           # Moran test statistic is negative sum of logged spacings, see Cheng & Stephens (1989)
            # @param mseCrit: the negative avg logged cumulative spacings, length 1 or 2
            # @param n nbr of observations, length 1 or 2
            # @param k nbr of parameters to be estimated
+           # @return Moran's test statistic, length 1 or 2
            testStat_mo <- function(mseCrit, n, k){
-             EUL_MAS <- -digamma(1L)
              mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - (12L*(n + 1L))**-1L
              mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - (6L*(n + 1L))**-1L
 
@@ -86,6 +87,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
            # under H0, expect frequency counts according to uniform distribution
            #+nbr of classes as recommended by David S. Moore (Tests of Chi-squared Type, 1986)
 
+           #XXX duplicated code: make function test_pe?
            if (delayFit$twoGroup) {
              gof_nClasses <- pmax.int(k/2 + 2L, ceiling(2L * nObs**.4))
              tab_transf <- purrr::map2(.x = delayFit$data_transf, .y = gof_nClasses,
@@ -115,46 +117,45 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
 
            meth <- 'Anderson-Darling Goodness-of-fit (GOF) test (per group)'
 
-           if (delayFit$twoGroup) {
-             #XXX fix me
-
-             # Weibull two-group:
-             # the P-value for the AD-test depends on the shape parameter estimate
-             #+cf the MC-study of Lockhart for finite samples but there it assumes a single shape parameter estimate,
-             #+we might have two! for the time being we use the harmonic mean (the smallest mean)
-             #+which might overstate shape_inverse and is hence conservative for the P-value
-             ##shape_pars <- coef(delayFit)[grepl("shape", names(coef(delayFit)))]
-             ##stopifnot( length(shape_pars) <= 2L )
-             # harmonic mean of shape parameters
-             #shape_hm <- if (length(shape_pars) == 1L) shape_pars[[1L]] else 2L * prod(shape_pars) / sum(shape_pars)
-           } else {
-             i <- seq_along(delayFit$data_transf)
-             # in fact, rev-order in 2nd term
-             A2 <- -nObs - mean((2L * i - 1L) * log(delayFit$data_transf) + (2L*nObs - (2L*i-1L))*log(1-delayFit$data_transf))
-             statist <- c(`A^2` = A2)
-
-             p_val <- if ( identical(delayFit$distribution, 'exponential') ){
-               # modification for Exponential (cf Stephens, Table 4.14, p.138)
-               # the correction factor approaches 1 from above.
-               # We keep the number of N as all observations, independent of the number of parameters estimated in the null-model.
-               #+XXX should we increase N by the number of parameters p estimated less 2 ( p -2 because 2 parameters are estimated in standard delayed exponential)
-               A2_mod <- A2 * max(1L, 1L + 5.4 / nObs - 11 / nObs**2L)
-
-               #stats::plogis(3.8829139 - 0.4357149 * A2_mod -5.4427475 * sqrt(A2_mod))
-               .ad_pval[['exponential']](A2_mod)
-
-             } else {
-               stopifnot( identical(delayFit$distribution, "weibull") )
-               # P-value for Weibull based on Lockhart, 1994 (Table 1)
-               # interpolation model on logits using critical value and inverse of shape parameter
-               # fm_c3 <- lm(log(sig_level/(1-sig_level)) ~ (crit_val + sqrt(crit_val)) * c, data = crit_weib)
-               # coef(fm_c3)
-               # stats::plogis(5.358389287 -2.589581570 * A2 -8.640666568 * sqrt(A2) + 0.635487306 * shape_inv +
-               #                 # interaction effects
-               #                 3.626348262  * A2 * shape_inv -1.422402077 * sqrt(A2) * shape_inv)
-               .ad_pval[['weibull']](A2, params[['shape']])
-             }
+           testStat_ad <- function(n, datr){
+             i <- seq_along(datr)
+             # in fact, A2 utilizes rev-order in its 2nd summation term
+             -n - mean((2L * i - 1L) * log(datr) + (2L*n - (2L*i-1L))*log(1-datr))
            }
+
+           ##i <- if (delayFit$twoGroup) purrr::map(delayFit$data_transf, seq_along) else seq_along(delayFit$data_transf)
+           A2 <- if (delayFit$twoGroup) purrr::map2_dbl(.x = nObs, .y = delayFit$data_transf, .f = testStat_ad) else testStat_ad(n = nObs, datr = delayFit$data_transf)
+
+           p_val <- if ( identical(delayFit$distribution, 'exponential') ){
+             # modification for Exponential (cf Stephens, Table 4.14, p.138)
+             # the correction factor approaches 1 from above.
+             # We keep the number of N as all observations, independent of the number of parameters estimated in the null-model.
+             #+XXX should we increase N by the number of parameters p estimated less 2 ( p -2 because 2 parameters are estimated in standard delayed exponential)
+             A2_mod <- A2 * pmax.int(1L, 1L + 5.4 / nObs - 11 / nObs**2L)
+
+             #stats::plogis(3.8829139 - 0.4357149 * A2_mod -5.4427475 * sqrt(A2_mod))
+             .ad_pval[['exponential']](A2_mod)
+
+           } else {
+             stopifnot( identical(delayFit$distribution, 'weibull') )
+             # P-value for Weibull based on Lockhart, 1994 (Table 1)
+             # interpolation model on logits using critical value and inverse of shape parameter
+             # fm_c3 <- lm(log(sig_level/(1-sig_level)) ~ (crit_val + sqrt(crit_val)) * c, data = crit_weib)
+             # coef(fm_c3)
+             # stats::plogis(5.358389287 -2.589581570 * A2 -8.640666568 * sqrt(A2) + 0.635487306 * shape_inv +
+             #                 # interaction effects
+             #                 3.626348262  * A2 * shape_inv -1.422402077 * sqrt(A2) * shape_inv)
+             .ad_pval[['weibull']](A2, params[grepl('shape', names(params), fixed = TRUE)])
+           }
+
+           if (delayFit$twoGroup){
+             A2 <- paste(signif(A2, 4), collapse = ' and ')
+             # use Liptak to bring both P-values of AD-tests per group together
+             p_val <- pnorm(sum(sqrt(nObs) * qnorm(p_val)) / sqrt(sum(nObs)))
+           }
+
+           statist <- c(`A^2` = A2)
+
          },
          # catch all
          stop('This method is not supported!')
@@ -163,11 +164,15 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
 
 
   # return test object
+
+  # stats:::print.htest recognizes:
+  #+parameter, alternative, null.value, conf.int, estimate
   structure(
     list(method = meth, data.name = data_name,
          statistic = statist, p.value = p_val),
     class = 'htest')
 }
+
 
 #' Test the difference for delay model parameter(s) between two uncorrelated groups.
 #'
@@ -266,85 +271,18 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   #+ the GOF-test solely builds on fit0
   #+ take fitted parameters for both groups under null-model
   #+ and transform the observed data for both groups via cumulative distribution functions
-  cFun <- getDist(distribution = distribution, type = "cdf")
-  #XXX use GOF for both groups individually (and use chi-sq as sum of two independent chi-sq to assess result)
-  # sorted transformed observations. sorting is needed for Anderson-Darling (AD)-test
-  #QQQ this is also done in getCumDiff which is called in negMSE (for lots of parameters)
-  transf_obs <- sort.int(c(rlang::exec(cFun, !!! c(list(q = x), coef(fit0, group = "x"))),
-                           rlang::exec(cFun, !!! c(list(q = y), coef(fit0, group = "y"))) ))
 
-  # number of observations
-  N <- length(transf_obs)
-  nx <- length(x); ny <- length(y)
-  stopifnot( N == nx + ny )
-
+  # spacings-based GOF-test
+  GOF_mo <- test_GOF(delayFit = fit0, method = 'moran')
+  #if (verbose > 0L) cat("Moran test stat: ", GOF_mo$statistic, "\n")
 
   # Pearson GOF-test based on Chi-square distribution.
   # under H0, expect counts according to uniform distribution
-  GOF_pears <- test_GOF(delayFit = fit0, method = 'pearson')
+  GOF_pears <- test_GOF(delayFit = fit0, method = 'pearson2')
 
   # EDF-based GOF-test
   # Anderson-Darling (AD) test statistic, cf Stephens, Tests based on EDF Statistics p.101, (4.2)
-  i <- seq_along(transf_obs)
-  A2 <- -N - mean((2L * i - 1L) * log(transf_obs) + (2L*N + 1L - 2L*i)*log(1-transf_obs))
-
-
-  P_gof_ad <- if ( identical(distribution, 'exponential') ){
-    # modification for Exponential (cf Stephens, Table 4.14, p.138)
-    # the correction factor approaches 1 from above.
-    # We keep the number of N as all observations, independent of the number of parameters estimated in the null-model.
-    #+XXX should we increase N by the number of parameters p estimated less 2 ( p -2 because 2 parameters are estimated in standard delayed exponential)
-    A2_mod <- A2 * max(1L, 1L + 5.4 / N - 11 / N**2L)
-
-    # P-value for A2_mod based on upper tail percentage points (table 4.14, p.138)
-    # use linear extrapolation on log-scaled sig_level to get P-values
-    # A2_mod_crit <- tribble(~sig_level, ~crit_val,
-    #   .25, .736,
-    #   .15, .916,
-    #   .10, 1.062,
-    #   .05, 1.321,
-    #   .025, 1.591,
-    #   .01, 1.959)
-    # ggplot(A2_mod_crit, mapping = aes(x = crit_val, y=sig_level)) +
-    #   scale_y_log10() +
-    #   geom_point() +
-    #   geom_line(size = .25)
-    # model with log-siglevel as response and critical value as predictor
-    # coef(lm(log(sig_level) ~ crit_val, data = A2_mod_crit))
-    # min(1L, exp(.51014 - 2.62843 * A2_mod))
-
-    # linear model with logits as response and sqrt(crit) as predictor
-    # coef(lm(log(sig_level / (1-sig_level)) ~ sqrt(crit_val), data = A2_mod_crit))
-    # stats::plogis(4.42397965 - 6.42703744 * sqrt(A2_mod))
-
-    # P-value comes from back-transformed linear model with logits as response and crit + sqrt(crit) as predictors
-    # coef(lm(log(sig_level / (1-sig_level)) ~ crit_val + sqrt(crit_val), data = A2_mod_crit))
-    stats::plogis(3.8829139 - 0.4357149 * A2_mod -5.4427475 * sqrt(A2_mod))
-
-  } else {
-    stopifnot( identical(distribution, "weibull") )
-    # P-value for Weibull based on Lockhart, 1994 (Table 1)
-    # interpolation model on logits using critical value and inverse of shape parameter
-    # fm_c3 <- lm(log(sig_level/(1-sig_level)) ~ (crit_val + sqrt(crit_val)) * c, data = crit_weib)
-    # coef(fm_c3)
-    # the P-value for the AD-test depends on the shape parameter estimate
-    #+cf the MC-study of Lockhart for finite samples but there it assumes a single shape parameter estimate,
-    #+XXX we might have two! for the time being we use the harmonic mean (the smallest mean)
-    #+which might overstate shape_inverse and is hence conservative for the P-value
-    shape_pars <- coef(fit0)[grepl("shape", names(coef(fit0)))]
-    stopifnot( length(shape_pars) <= 2L )
-    # harmonic mean of shape parameters
-    shape_hm <- if (length(shape_pars) == 1L) shape_pars[[1L]] else 2L * prod(shape_pars) / sum(shape_pars)
-    shape_inv <- min(0.5, shape_inv) # maximal value of 0.5, see Lockhart, 1994
-    stats::plogis(5.358389287 -2.589581570 * A2 -8.640666568 * sqrt(A2) + 0.635487306 * shape_inv +
-                    # interaction effects
-                    3.626348262  * A2 * shape_inv -1.422402077 * sqrt(A2) * shape_inv)
-  }
-
-
-  GOF_mo <- test_GOF(delayFit = fit0, method = 'moran')
-  if (verbose > 0L) cat("Moran test stat: ", GOF_mo$statistic, "\n")
-
+  GOF_ad <- test_GOF(delayFit = fit0, method = 'AD')
 
 
   # parametric bootstrap:
@@ -363,11 +301,6 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
                                            # generate new data according to given fitted null-model
                                            # sort is not needed here, as it goes through the whole pipeline (factory method)
-                                           #
-                                           # ts_boot <- NA_real_
-                                           # try(expr = {ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
-                                           #                                 y = rlang::exec(ranFun, !!! ranFunArgsY))[["val"]]},
-                                           #     silent = TRUE)
                                            ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
                                                                y = rlang::exec(ranFun, !!! ranFunArgsY))
                                            if (is.null(ts_boot)) return(rep(NA_real_, 1L+(verbose>0L)))
@@ -414,9 +347,9 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       chisq_df_hat = chisq_df_hat,
       param = param,
       P = list(boot = P_boot,
-               gof_pearson = as.vector(GOF_pears$p.value),
-               gof_ad = P_gof_ad,
                gof_mo = as.vector(GOF_mo$p.value),
+               gof_pearson = as.vector(GOF_pears$p.value),
+               gof_ad = as.vector(GOF_ad$p.value),
                lr = P_lr,
                lr_pp = P_lr_pp)
     ), class = "test_delay")

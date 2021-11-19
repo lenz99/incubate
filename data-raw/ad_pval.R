@@ -86,6 +86,7 @@ A2_crit_weib <- tibble::tribble(~shape_inv, ~`a=0.5`, ~`a=0.25`, ~`a=0.15`, ~`a=
                         0.40,  0.327, 0.448, 0.532, 0.598, 0.711, 0.824, 0.974, 1.089,
                         0.45,  0.334, 0.469, 0.547, 0.615, 0.732, 0.850, 1.006, 1.125,
                         0.50,  0.342, 0.472, 0.563, 0.636, 0.757, 0.879, 1.043, 1.167) %>%
+  # scaling for regression models
   mutate(shape_inv2 = as.numeric(scale(shape_inv))) %>%  #center: 0.25, scale: 0.166
   tidyr::pivot_longer(cols = starts_with('a='),
                       names_to = 'p_val', names_prefix = 'a=', names_transform = list(p_val = as.numeric),
@@ -101,6 +102,7 @@ ggplot(data = A2_crit_weib, aes(x = statist, y = p_val, col = as.character(shape
 
 
 qq_weib <- seq(from = .24, to = 4, by = .01)
+# approximation for fixed shape parameter to get p_value (1-CDF) according to given statistic
 pfun_weib_fixedShape <- purrr::map(.x = unique(A2_crit_weib$shape_inv),
                       .f = ~ {
                         dfsub <- dplyr::filter(A2_crit_weib, near(shape_inv, .));
@@ -108,17 +110,59 @@ pfun_weib_fixedShape <- purrr::map(.x = unique(A2_crit_weib$shape_inv),
                                                 term_limit = 4, term_lower_bound = 4,
                                                 probs = dfsub$prob)
                         approxfun(x = c(0, qq_weib, +Inf),
-                                  y = c(0, pmetalog(ml, q = qq_weib, term = 4), 1), method = 'linear')
+                                  y = c(0, 1 - pmetalog(ml, q = qq_weib, term = 4), 1), method = 'linear')
                       })
 names(pfun_weib_fixedShape) <- unique(A2_crit_weib$shape_inv)
 
 # approximate for inverse shape parameter
+#+use approx-funs for different fixed shapes at specified quantile, so that I can evaluate any shape value
+# is vectorized for shape, but not for quantile!!
+# pfun_weib0a <- function(q, shape){
+#   shape_inv <- pmin.int(0.5, 1/shape) # maximal value of 0.5, see Lockhart, 1994
+#   af <- approxfun(x=as.numeric(names(pfun_weib_fixedShape)),
+#                   y=purrr::map_dbl(.x = pfun_weib_fixedShape, .f = ~ .(q)), method = 'linear')
+#   af(shape_inv)
+# }
+
+# vectorized, short code but less efficient because we use approxfun for each row in data.frame again (even if q is identical)
+# pfun_weib0b <- function(q, shape){
+#   shape_inv <- pmin.int(0.5, 1/shape) # maximal value of 0.5, see Lockhart, 1994
+#   # data.frame does the vector recycling
+#   data.frame(shape_inv, q) %>%
+#     rowwise() %>%
+#     mutate(
+#       # store approxfuns for shape
+#       af = list(approxfun(x=as.numeric(names(pfun_weib_fixedShape)),
+#                            y=purrr::map_dbl(.x = pfun_weib_fixedShape, .f = ~ .(q)), method = 'linear')),
+#       ##af_lab = env_label(environment(af)), #memory address
+#       # value of function
+#       afval = af(shape_inv))
+#   af(shape_inv)
+# }
+
+
+# approximate for inverse shape parameter
+#+use approx-funs for different fixed shapes at specified quantile, so that I can evaluate any shape value
+#+vectorized for quantile q and shape parameter
+#+uses approxfun for shape only for unique values of q
 pfun_weib <- function(q, shape){
-  shape_inv <- min(0.5, 1/shape) # maximal value of 0.5, see Lockhart, 1994
-  af <- approxfun(x=as.numeric(names(pfun_weib_fixedShape)),
-                  y=1-purrr::map_dbl(.x = pfun_weib_fixedShape, .f = ~ .(q)), method = 'linear')
-  af(shape_inv)
+  shape_inv <- pmin.int(0.5, 1/shape) # maximal value of 0.5, see Lockhart, 1994
+  # data.frame does the vector recycling
+  combiDF <- data.frame(shape_inv, q)
+
+  purrr::map(.x = unique(q),
+             .f = function(qu) af=approxfun(x=as.numeric(names(pfun_weib_fixedShape)),
+                          y=purrr::map_dbl(.x = pfun_weib_fixedShape, .f = ~ .(qu)), method = 'linear')) %>%
+    tibble::tibble(q = unique(q), af = .) %>%
+    dplyr::inner_join(y = combiDF, by = 'q') %>% rowwise() %>%
+    dplyr::mutate(
+      ### confirm we have a single approxfun per quantile value
+      ##aflab = env_label(environment(af)),
+      # value of function
+      afval = af(shape_inv)) %>%
+    dplyr::pull(afval)
 }
+
 # make list-object pfun_weib_fixedShape accessible to the function
 environment(pfun_weib) <- rlang::env(pfun_weib_fixedShape=pfun_weib_fixedShape)
 
@@ -136,7 +180,6 @@ summary(fm_wei4)
 
 fm_wei5 <- lm(log(p_val) ~ 0 + statist + sqrt(statist) + log(statist) + statist:shape_inv2 + sqrt(statist):shape_inv2 + log(statist):shape_inv2, data = A2_crit_weib)
 summary(fm_wei5)
-
 
 
 sum((exp(fitted(fm_wei2)) - A2_crit_weib$p_val)^2)
