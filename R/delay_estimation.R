@@ -102,7 +102,6 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
                      roundOffPrecision, obs[1L], na.rm = TRUE)
 
       ## modify tied observations per group of ties
-      # sort() ensures that data after tie-break is still sorted from small to large
       startInd <- endInd <- 1L
       repeat {
         #proceed to end of tie-group
@@ -110,10 +109,14 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
         #include adjacent index to complete tie-group
         obsInd <- c(tiesDiffInd[startInd:endInd], tiesDiffInd[endInd]+1L)
         stopifnot( sd(obs[obsInd]) == 0L ) #check: tie-group
-        obs[obsInd] <- obs[obsInd] + if (ties == 'random') sort(runif(n = length(obsInd), min = -rr, max = +rr)) else
-          #QQQ Cheng (1989) on Moran test statistic proposes to have equidist on CDF-transformed values.
-          #+They first use the ties = 'dens' approach for estimation of parameters for Moran's statistic
-          seq.int(from = -rr, to = +rr, length.out = length(obsInd)) #evenly spread
+        obs[obsInd] <- obs[obsInd] + if (ties == 'random') {
+          # sort ensures that data after tie-break is still sorted from small to large
+          sort(runif(n = length(obsInd), min = -rr, max = +rr)) } else {
+            # ties == 'equidist'
+            # use evenly spaced observations to break tie as proposed by Cheng (1989) on Moran test statistic
+            #+They first use the ties = 'density' approach for initial estimation of parameters for Moran's statistic
+            seq.int(from = -rr, to = +rr, length.out = length(obsInd))
+          }
         startInd <- endInd <- endInd+1L
         if ( startInd > length(tiesDiffInd) ) break
       } #repeat
@@ -292,24 +295,28 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   # objective function ----
 
+  # log spacings:
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
   # @return n+1 cumulative diffs on log-scale
   getCumDiffs <- function(pars, group){
     obs <- get(group)
     pars.gr <- getPars(pars, group = group, twoGr = twoGr, oNames = oNames, bind = bind)
 
+    # calculate spacings
     # contract: data is sorted!
     cumDiffs <- diff(c(0L,
                        purrr::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)),
                        1L))
 
+
     # use densFun for ties
-    ind_z <- which(cumDiffs == 0L)
-    if ( length(ind_z) ){
+    # we check difference of obs directly (not cumDiffs)
+    #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
+    ind_t <- which(diff(obs) == 0L)
+    if ( length(ind_t) ){
       stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in preprocess
-      #ind_z[which(ind_z == 1L)] <- 2L #at least 2 to avoid idx 0 later when using x[ind_zx - 1]
-      ind_z[which(ind_z > length(obs))] <- length(obs) # cap at length of data, then we use ind_z to directly address data
-      cumDiffs[ind_z] <- purrr::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_z]), pars.gr))
+      # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
+      cumDiffs[1L+ind_t] <- purrr::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
     } #fi
 
     # respect the machine's numerical lower limit
