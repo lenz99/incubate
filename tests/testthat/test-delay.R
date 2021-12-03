@@ -25,7 +25,7 @@ test_that("Fit delayed Exponentials", {
   expect_equal(coef_exp[2L], expected = c(rate = 0.5), tolerance = .3)
 
   set.seed(20210429)
-  yy <- 10.5 + rexp(21L, rate = .9)
+  yy <- rexp_delayed(21L, delay = 10.5, rate = .9)
 
   fd_exp2 <- delay_model(x = xx, y = yy, distribution = "exp")
   coef_exp2 <- coef(fd_exp2)

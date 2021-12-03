@@ -49,7 +49,6 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   # data preparation ----
 
-
   # Break ties in case of ties='break'
   # @param obs: data vector
   # @return sorted, cleaned up data vector or NULL in case of trouble
@@ -619,14 +618,21 @@ simulate.mps_fit <- function(object, nsim = 1, seed = NULL, ...){
 
 #' Confidence intervals for parameters of MPS-model fits.
 #'
-#' Basic bootstrap confidence limits are generated. At least R=1000 bootstrap replications are recommended.
-#' @param R bootstrap replications
+#' Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
+#' At least R=1000 bootstrap replications are recommended. Default are normal-based confidence intervals.
+#' @param R number of bootstrap replications
+#' @param bs_type character. Which type of bootstrap is requested?
+#' @param type character. Which type of bootstrap inference is requested?
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
-confint.mps_fit <- function(object, parm, level = 0.95, R = 99L, ...){
-  stopifnot( inherits(object, 'mps_fit'))
+confint.mps_fit <- function(object, parm, level = 0.95, R = 199L, bs_type = c('simple', 'parametric'), type = c('normal', 'quantile'), ...){
+  stopifnot(inherits(object, 'mps_fit'))
+  stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
+  stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
 
-  stopifnot( is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
+  bs_type <- match.arg(bs_type)
+  type <- match.arg(type)
+
   cf <- coef(object)
   pnames <- names(cf)
   stopifnot( is.numeric(cf), is.character(pnames) )
@@ -635,7 +641,7 @@ confint.mps_fit <- function(object, parm, level = 0.95, R = 99L, ...){
     if (is.numeric(parm)) parm <- pnames[parm]
   parm <- intersect(pnames, parm)
 
-  if (is.null(parm) || ! length(parm) || any(! nzchar(parm)) ){
+  if (is.null(parm) || ! length(parm) || any(! nzchar(parm))) {
     warning('Invalid parameter name given in argument parm=')
     return(invisible(NULL))
   }
@@ -645,26 +651,45 @@ confint.mps_fit <- function(object, parm, level = 0.95, R = 99L, ...){
   a <- (1L - level) / 2L
   a <- c(a, 1L - a)
 
+  twoGr <- isTRUE(object$twoGroup)
 
-  # basic bootstrap confidence limits
+  nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
-  # get bootstrap distribution of coefficients in data from fitted model
+  R <- ceiling(R)
+  if (R < 1000) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low.',
+                        call. = FALSE)
 
-  # for performance reasons, we 'inline' the simulate code into future_vapply, cf test_delay_diff
-  ranFun <- getDist(object$distribution, type = "r")
-  nObs <- if (isTRUE(object$twoGroup)) lengths(object$data) else length(object$data)
+  # get bootstrap distribution of coefficients from fitted model
 
-  # arguments to the random function generation
-  ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
-  ranFunArgsY <- if (isTRUE(object$twoGroup)) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
+  coefFun <- switch(bs_type,
+                    simple = function(dummy){
+                      # draw bootstrap samples from the data
+                      x <- (if (twoGr) object$data$x else object$data)[sample.int(n = nObs[[1L]], replace = TRUE)]
+                      y <- if (twoGr) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
+
+                      coef(delay_model(x=x, y=y, distribution = object$distribution, bind = object$bind))
+                    },
+                    parametric = {
+                      # generate data from the fitted model
+                      # for performance reasons, we 'inline' the simulate code, cf test_diff
+                      ranFun <- getDist(object$distribution, type = "r")
+                      # arguments to the random function generation
+                      ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
+                      ranFunArgsY <- if (twoGr) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
+
+                      function(dummy){
+                        # cf simulate (but inlined here for performance reasons)
+                        x <- rlang::exec(ranFun, !!! ranFunArgsX)
+                        y <- if (twoGr) rlang::exec(ranFun, !!! ranFunArgsY)
+
+                        coef(delay_model(x=x, y=y, distribution = object$distribution, bind = object$bind))
+                      }
+                    },
+                    stop('Unkown bootstrap type!')
+  )
 
   coefMat <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(length(cf)),
-                                         FUN = function(dummy){
-                                           x <- rlang::exec(ranFun, !!! ranFunArgsX)
-                                           y <- if (isTRUE(object$twoGroup)) rlang::exec(ranFun, !!! ranFunArgsY)
-
-                                           coef(delay_model(x=x, y=y, distribution = object$distribution, bind = object$bind))
-                                         }, future.seed = TRUE)
+                                         FUN = coefFun, future.seed = TRUE)
 
   # more clear and shorter but less efficient!
   # coefMat <- object %>%
@@ -674,9 +699,25 @@ confint.mps_fit <- function(object, parm, level = 0.95, R = 99L, ...){
   #                                 coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
   #                               })
 
-  # cf Davison, p28
-  ci <- 2L * cf - t(apply(coefMat, 1L, quantile, probs = rev(a), na.rm = TRUE))
-  colnames(ci) <- rev(colnames(ci))
+
+  # bootstrapped confidence limits
+  ci <- switch(type,
+    quantile = {
+      # bias-corrected quantile-based CI
+      # cf Davison, p28
+      # vector - matrix: vector is expanded column-wise, and the row-dimension fits (=number of coefs)
+      2L * cf - t(apply(coefMat, 1L, quantile, probs = rev(a), na.rm = TRUE))
+      },
+    normal = {
+      # bias-corrected normal-based CI
+      t(c(1L, 1L) %o% (2L * cf - rowMeans(coefMat)) + qnorm(a) %o% apply(coefMat, 1L, sd))
+    },
+    stop('This type of bootstrap confidence interval is not supported!')
+  )
+
+  # ensure formatted column names
+  colnames(ci) <- paste0(format(a*100, trim = TRUE, nsmall = 1L), '%')
+
 
   # enforce parameter bounds also for CI
   # all parameters are non-negative!

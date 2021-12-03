@@ -4,14 +4,27 @@
 \alias{confint.mps_fit}
 \title{Confidence intervals for parameters of MPS-model fits.}
 \usage{
-\method{confint}{mps_fit}(object, parm, level = 0.95, R = 99L, ...)
+\method{confint}{mps_fit}(
+  object,
+  parm,
+  level = 0.95,
+  R = 199L,
+  bs_type = c("simple", "parametric"),
+  type = c("normal", "quantile"),
+  ...
+)
 }
 \arguments{
-\item{R}{bootstrap replications}
+\item{R}{number of bootstrap replications}
+
+\item{bs_type}{character. Which type of bootstrap is requested?}
+
+\item{type}{character. Which type of bootstrap inference is requested?}
 }
 \value{
 A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 }
 \description{
-Basic bootstrap confidence limits are generated. At least R=1000 bootstrap replications are recommended.
+Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
+At least R=1000 bootstrap replications are recommended.
 }
