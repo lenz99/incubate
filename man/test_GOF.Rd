@@ -11,10 +11,7 @@ There are different GOF-tests implemented:
 \item \strong{Anderson-Darling GOF} makes inference based on the cumulative distribution function.
 }}
 \usage{
-test_GOF(
-  delayFit,
-  method = c("moran", "pearson", "pearson2", "AD", "ad", "anderson")
-)
+test_GOF(delayFit, method = c("moran", "pearson", "AD", "ad", "anderson"))
 }
 \arguments{
 \item{delayFit}{delay_model fit}

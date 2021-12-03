@@ -1,7 +1,7 @@
 
 #' Extract the parameters for the specified group.
 #' This is an internal helper function
-#' used in `coef.mps_fit` and in the factory method `geomSpaceFactory` below
+#' used in `coef.incubate_fit` and in the factory method `geomSpaceFactory` below
 #' @param par named parameters (as simple vector or as list both work)
 #' @return parameter vector for the relevant group
 getPars <- function(par, group = "x", twoGr, oNames, bind) {
@@ -437,7 +437,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param ties character. How to handle ties.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
-#' @return `mps_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
+#' @return `incubate_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
 delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL,
                         ties=c('equidist', 'density', 'random'), optim_args=NULL, verbose = 0) {
@@ -480,11 +480,11 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
       par = optObj$par,
       val = optObj$value, ##objFun(optObj$par),
       convergence = optObj$convergence
-    ), class = "mps_fit")
+    ), class = "incubate_fit")
 }
 
 #' @export
-print.mps_fit <- function(x){
+print.incubate_fit <- function(x){
   cat( glue::glue_data(x, .sep = "\n",
                        "Fit a delayed {distribution} via Maximum Product Spacing for {if (twoGroup) 'two independent groups' else 'a single group'}.",
                        "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
@@ -496,9 +496,9 @@ print.mps_fit <- function(x){
 #' @param group character string to request the canonical parameter for one group
 #' @return named coefficient vector
 #' @export
-coef.mps_fit <- function(object, group = NULL){
+coef.incubate_fit <- function(object, group = NULL){
 
-  #stopifnot( inherits(object, "mps_fit") )
+  #stopifnot( inherits(object, "incubate_fit") )
 
   # original parameter names of distribution
   oNames <- getDist(object[["distribution"]], type = "param", twoGroup = FALSE, bind = NULL)
@@ -508,14 +508,14 @@ coef.mps_fit <- function(object, group = NULL){
 }
 
 #' @export
-summary.mps_fit <- function(object, ...){
+summary.incubate_fit <- function(object, ...){
   print(object)
 }
 
 #' Refit a MPS-fit with specified optimization arguments.
 #' If more things need to be changed use `delay_model`.
 #' @export
-update.mps_fit <- function(object, optim_args, verbose = 0, ...){
+update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
   objFun <- object[['objFun']]
 
@@ -534,12 +534,12 @@ update.mps_fit <- function(object, optim_args, verbose = 0, ...){
       par = optObj$par,
       val = optObj$value, ##objFun(optObj$par),
       convergence = optObj$convergence
-    ), class = "mps_fit")
+    ), class = "incubate_fit")
 }
 
 #' @export
-plot.mps_fit <- function(x, y, title, subtitle, ...){
-  stopifnot( inherits(x, "mps_fit") )
+plot.incubate_fit <- function(x, y, title, subtitle, ...){
+  stopifnot( inherits(x, "incubate_fit") )
   # parameter y comes from the plot-generic. y is not used here.
 
   cumFun <- getDist(x[["distribution"]], type = "cdf")
@@ -593,8 +593,8 @@ plot.mps_fit <- function(x, y, title, subtitle, ...){
 #' @param seed currently unused! XXX
 #' @return list of simulated data
 #' @export
-simulate.mps_fit <- function(object, nsim = 1, seed = NULL, ...){
-  stopifnot( inherits(object, 'mps_fit'))
+simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
+  stopifnot( inherits(object, 'incubate_fit'))
 
   ranFun <- getDist(object$distribution, type = "r")
   nObs <- if (isTRUE(object$twoGroup)) lengths(object$data) else length(object$data)
@@ -625,8 +625,8 @@ simulate.mps_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' @param type character. Which type of bootstrap inference is requested?
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
-confint.mps_fit <- function(object, parm, level = 0.95, R = 199L, bs_type = c('simple', 'parametric'), type = c('normal', 'quantile'), ...){
-  stopifnot(inherits(object, 'mps_fit'))
+confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_type = c('simple', 'parametric'), type = c('normal', 'quantile'), ...){
+  stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
 

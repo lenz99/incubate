@@ -4,7 +4,7 @@
 \alias{getPars}
 \title{Extract the parameters for the specified group.
 This is an internal helper function
-used in \code{coef.mps_fit} and in the factory method \code{geomSpaceFactory} below}
+used in \code{coef.incubate_fit} and in the factory method \code{geomSpaceFactory} below}
 \usage{
 getPars(par, group = "x", twoGr, oNames, bind)
 }
@@ -17,5 +17,5 @@ parameter vector for the relevant group
 \description{
 Extract the parameters for the specified group.
 This is an internal helper function
-used in \code{coef.mps_fit} and in the factory method \code{geomSpaceFactory} below
+used in \code{coef.incubate_fit} and in the factory method \code{geomSpaceFactory} below
 }

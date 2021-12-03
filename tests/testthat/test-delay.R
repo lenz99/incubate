@@ -2,7 +2,7 @@
 # examples for MPS-fitting
 
 library('purrr', warn.conflicts = FALSE)
-library('tidyr', warn.confilcts = FALSE)
+library('tidyr', warn.conflicts = FALSE)
 library('dplyr', warn.conflicts = FALSE)
 library('future')
 library('future.apply')

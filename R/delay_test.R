@@ -12,7 +12,7 @@
 #' @export
 test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'anderson')){
 
-  stopifnot( inherits(delayFit, what = 'mps_fit') )
+  stopifnot( inherits(delayFit, what = 'incubate_fit') )
   method <- match.arg(method)
 
   twoGr <- isTRUE(delayFit$twoGroup)
@@ -330,13 +330,21 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
                gof_ad = as.vector(GOF_ad$p.value),
                lr = P_lr,
                lr_pp = P_lr_pp)
-    ), class = "test_delay")
+    ), class = "incubate_test")
 }
 
+#' @export
+print.incubate_test <- function(x, ...){
+  params <- paste(x$param, collapse = ' & ')
+  cat('Test for difference in parameter ', params, 'between two groups.\n')
+  cat('Alternative hypothesis: ', params, 'are different between the two groups.\n')
+  cat('Parametric Bootstrap P-value: ', format.pval(x$P$boot))
+  cat('\n')
+}
 
 #' @export
-plot.test_delay <- function(x, y, title, subtitle, ...){
-  stopifnot(inherits(x, "test_delay"))
+plot.incubate_test <- function(x, y, title, subtitle, ...){
+  stopifnot(inherits(x, "incubate_test"))
 
   teststat <- x[["testDist"]]
 

@@ -28,7 +28,7 @@ delay_model(
 \item{verbose}{integer. level of verboseness. Default 0 is quiet.}
 }
 \value{
-\code{mps_fit} object that contains the information of the delayed model fit. Or \code{NULL} if optimization failed (e.g. too few observations).
+\code{incubate_fit} object that contains the information of the delayed model fit. Or \code{NULL} if optimization failed (e.g. too few observations).
 }
 \description{
 Maximum product spacing is used to fit the parameters.
