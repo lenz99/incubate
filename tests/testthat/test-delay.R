@@ -1,8 +1,9 @@
 # mkuhn, 2021-04-07
 # examples for MPS-fitting
 
-library('dplyr', warn.conflicts = FALSE)
 library('purrr', warn.conflicts = FALSE)
+library('tidyr', warn.confilcts = FALSE)
+library('dplyr', warn.conflicts = FALSE)
 library('future')
 library('future.apply')
 library('future.callr')
@@ -57,43 +58,50 @@ test_that("Fit delayed Exponentials", {
 })
 
 
-test_that('GOF-test on exponentials', {
+test_that('GOF-test on single-group exponentials', {
   future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 1L))
 
   # GOF-tests on true exponential data with varying sample size, delay and rate
-  GOF_pvals <- future.apply::future_replicate(n = 260L, simplify = TRUE, expr = {
-    # vary n
-    fit1 <- delay_model(x=rexp_delayed(n = 10, delay = 11, rate = .4), distribution = 'exponential')
-    fit2 <- delay_model(x=rexp_delayed(n = 25, delay = 11, rate = .4), distribution = 'exponential')
-    fit3 <- delay_model(x=rexp_delayed(n = 50, delay = 11, rate = .4), distribution = 'exponential')
-    # vary delay
-    fit4 <- delay_model(x=rexp_delayed(n = 10, delay = 0,   rate = .4), distribution = 'exponential')
-    fit5 <- delay_model(x=rexp_delayed(n = 10, delay = 5,   rate = .4), distribution = 'exponential')
-    fit6 <- delay_model(x=rexp_delayed(n = 10, delay = 15, rate = .4), distribution = 'exponential')
-    # vary rate
-    fit7 <- delay_model(x=rexp_delayed(n = 10, delay = 11, rate = .01), distribution = 'exponential')
-    fit8 <- delay_model(x=rexp_delayed(n = 10, delay = 11, rate = .2), distribution = 'exponential')
-    fit9 <- delay_model(x=rexp_delayed(n = 10, delay = 9, rate = 1.5), distribution = 'exponential')
+  # results in a matrix of dimension #scenarios x #replications
+  fitting_expos <- future.apply::future_replicate(n = 467L, simplify = FALSE, expr = {
+    scenarios <- tidyr::expand_grid(n = c(10, 25, 50), delay = c(0, 5, 15), rate = c(.01, .2, .4, 1, 1.5, 4))
+    # fit exponential models with varying n, delay and rate
+    purrr::pmap(.l = scenarios,
+                .f = ~ delay_model(x = rexp_delayed(n = ..1, delay = ..2, rate = ..3),
+                                   distribution = 'exponential'))
+  }) %>% purrr::transpose() # get a list of scenarios, each containing its models of replicated data
 
-    c(test_GOF(delayFit = fit1, method = 'moran')$p.value,
-      test_GOF(delayFit = fit2, method = 'moran')$p.value,
-      test_GOF(delayFit = fit3, method = 'moran')$p.value,
-      test_GOF(delayFit = fit4, method = 'moran')$p.value,
-      test_GOF(delayFit = fit5, method = 'moran')$p.value,
-      test_GOF(delayFit = fit6, method = 'moran')$p.value,
-      test_GOF(delayFit = fit7, method = 'moran')$p.value,
-      test_GOF(delayFit = fit8, method = 'moran')$p.value,
-      test_GOF(delayFit = fit9, method = 'moran')$p.value)
-  })
+  # list: for each scenario, the vector of Moran's GOF-test p-value
+  GOF_pvals <- list(
+    moran = purrr::map(.x = fitting_expos, .f = ~ purrr::map_dbl(., \(fit) test_GOF(fit, method = 'moran')$p.value)),
+    pearson = purrr::map(.x = fitting_expos, .f = ~ purrr::map_dbl(., \(fit) test_GOF(fit, method = 'pearson')$p.value)),
+    ad = purrr::map(.x = fitting_expos, .f = ~ purrr::map_dbl(., \(fit) test_GOF(fit, method = 'ad')$p.value))
+  )
+
+  # to visualize the GOF P-values:
+  # as_tibble(GOF_pvals[['moran']], .name_repair = 'unique') %>%
+  #   pivot_longer(cols = everything()) %>%
+  #   ggplot(aes(x=value, col = name)) +
+  #   geom_freqpoly(binwidth = .12) + xlim(0, 1)
 
   # expect uniform P-values for GOF under valid H0
-  expect_equal(object = as.numeric(rowMeans(GOF_pvals)), expected = rep(0.5, NROW(GOF_pvals)),
-               tolerance = .1)
-  GOF_pvals_ks <- apply(GOF_pvals, 1, FUN = \(x) ks.test(x, y = 'punif')$p.value)
-  expect_gte(length(which(GOF_pvals_ks < .25)) / NROW(GOF_pvals),
-             expected = .2)
-  expect_gte(length(which(GOF_pvals_ks > .75)) / NROW(GOF_pvals),
-             expected = .2)
+  # go over the three types of GOF-tests, within test type, check each scenario
+  # use purrr::flatten(GOF_pvals) as data argument to walk to test *all* in one go
+  purrr::walk(GOF_pvals[['pearson']], .f = ~expect_equal(object = mean(.), expected = 0.5,
+                                                       tolerance = .25, info = 'pearson'))
+  purrr::walk(GOF_pvals[['ad']], .f = ~expect_equal(object = mean(.), expected = 0.5,
+                                                         tolerance = .25, info = 'AD'))
+
+  # Moran's test:
+  purrr::walk(GOF_pvals[['moran']], .f = ~expect_equal(object = mean(.), expected = 0.5,
+                                                            tolerance = .15, info = 'moran'))
+  GOF_moran_pvals_KSpval <- purrr::map_dbl(GOF_pvals[['moran']], .f = ~suppressWarnings(ks.test(., y = 'punif')$p.value))
+  # not too many small P-values
+  expect_lte(length(which(GOF_moran_pvals_KSpval < .05)) / length(GOF_moran_pvals_KSpval),
+             expected = .3)
+  # some high P-values
+  expect_gte(length(which(GOF_moran_pvals_KSpval > .6)) / length(GOF_moran_pvals_KSpval),
+             expected = .15)
 
 
   future::plan(sequential)

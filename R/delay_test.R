@@ -10,13 +10,14 @@
 #' @param method character(1). which method to use for GOF. Default is 'moran'.
 #' @return An `htest`-object containing the GOF-test result
 #' @export
-test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 'ad', 'anderson')){
+test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'anderson')){
 
   stopifnot( inherits(delayFit, what = 'mps_fit') )
   method <- match.arg(method)
 
-  data_name <- if (delayFit$twoGroup) paste(names(delayFit$data), collapse = ' and ') else 'x'
-  nObs <- if (delayFit$twoGroup) lengths(delayFit$data) else length(delayFit$data)
+  twoGr <- isTRUE(delayFit$twoGroup)
+  data_name <- if (twoGr) paste(names(delayFit$data), collapse = ' and ') else 'x'
+  nObs <- if (twoGr) lengths(delayFit$data) else length(delayFit$data)
   params <- coef(delayFit)
   k <- length(params)
 
@@ -30,6 +31,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
            meth <- "Moran's Goodness-of-fit (GOF) test"
 
            EUL_MAS <- -digamma(1L)
+
            # Moran test statistic is negative sum of logged spacings, see Cheng & Stephens (1989)
            # @param mseCrit: the negative avg logged cumulative spacings, length 1 or 2
            # @param n nbr of observations, length 1 or 2
@@ -47,7 +49,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
            }# fun
 
 
-           statist <- if (delayFit$twoGroup){ ##  && length(delayFit$bind) < length(oNames) # not needed!?
+           statist <- if (twoGr){ ##  && length(delayFit$bind) < length(oNames) # not needed!?
              # sum of two independent chi-sq. is chi-sq
              c(`X^2` = sum(testStat_mo(mseCrit = delayFit$objFun(pars = params, aggregated = FALSE), #criterion per group
                                        n = nObs, k = k/2)) )
@@ -62,50 +64,29 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
 
          pearson = {
            # Pearson GOF-test
-           meth <- "Pearson's Goodness-of-fit (GOF) test"
-
-           # under H0, expect frequency counts according to uniform distribution
-           # in two group case, we merge the transformed data of both groups (as both are expected to be std-uniform)
-
-           #+nbr of classes as recommended by David S. Moore (Tests of Chi-squared Type, 1986)
-           gof_nClasses <- max(k + 2L, ceiling(2L * sum(nObs)**.4))
-
-           tab_transf <- tabulate(findInterval(unlist(delayFit$data_transf, use.names = FALSE),
-                                               vec = seq.int(from=0L, to=1L, length.out = gof_nClasses+1L),
-                                               rightmost.closed = TRUE, all.inside = TRUE), nbins = gof_nClasses)
-
-           statist <- c(`X^2` = sum((tab_transf - mean(tab_transf))**2L) / mean(tab_transf))
-           # inference based on Chi-square distribution.
-           # use adjusted degrees of freedom (loose one df for each parameter estimated)
-           p_val <- stats::pchisq(q = statist, df = gof_nClasses - k - 1L, lower.tail = FALSE)
-         },
-
-         pearson2 = {
-           # Pearson GOF-test
-           meth <- "Pearson's Goodness-of-fit (GOF) test (per group)"
+           meth <- "Pearson's Goodness-of-fit (GOF) test" # (per group) ## this is our standard
 
            # under H0, expect frequency counts according to uniform distribution
            #+nbr of classes as recommended by David S. Moore (Tests of Chi-squared Type, 1986)
 
-           #XXX duplicated code: make function test_pe?
-           if (delayFit$twoGroup) {
-             gof_nClasses <- pmax.int(k/2 + 2L, ceiling(2L * nObs**.4))
-             tab_transf <- purrr::map2(.x = delayFit$data_transf, .y = gof_nClasses,
-                                       .f = ~ tabulate(findInterval(.x, vec = seq.int(from=0L, to=1L, length.out = .y+1L),
-                                                                    rightmost.closed = TRUE, all.inside = TRUE), nbins = .y))
-             statist <- c(`X^2` = sum(purrr::map_dbl(.x = tab_transf, .f = ~ sum((. - mean(.))**2L) / mean(.))))
-             p_val <- stats::pchisq(q = statist, df = sum(gof_nClasses) - k - 2L, lower.tail = FALSE)
+           testStat_pe <- function(datr, nCl){
+             tab_transf <- tabulate(findInterval(datr,
+                                   vec = seq.int(from=0L, to=1L, length.out = nCl+1L),
+                                   rightmost.closed = TRUE, all.inside = TRUE), nbins = nCl)
+             c(`X^2` = sum((tab_transf - mean(tab_transf))**2L) / mean(tab_transf))
+           }
 
+           if (twoGr) {
+             nCl <- pmax.int(k/2 + 2L, ceiling(2L * nObs**.4))
+             # sum of two chi-square test statistics
+             statist <- c(`X^2` = sum(purrr::map2_dbl(.x = delayFit$data_transf, .y = nCl, .f = testStat_pe)))
+             p_val <- stats::pchisq(q = statist, df = sum(nCl) - k - 2L, lower.tail = FALSE)
            } else {
-             gof_nClasses <- max(k + 2L, ceiling(2L * sum(nObs)**.4))
-             tab_transf <- tabulate(findInterval(unlist(delayFit$data_transf, use.names = FALSE),
-                                                 vec = seq.int(from=0L, to=1L, length.out = gof_nClasses+1L),
-                                                 rightmost.closed = TRUE, all.inside = TRUE), nbins = gof_nClasses)
-
-             statist <- c(`X^2` = sum((tab_transf - mean(tab_transf))**2L) / mean(tab_transf))
+             nCl <- max(k + 2L, ceiling(2L * nObs**.4))
+             statist <- testStat_pe(datr = delayFit$data_transf, nCl = nCl)
              # inference based on Chi-square distribution.
              # use adjusted degrees of freedom (loose one df for each parameter estimated)
-             p_val <- stats::pchisq(q = statist, df = gof_nClasses - k - 1L, lower.tail = FALSE)
+             p_val <- stats::pchisq(q = statist, df = nCl - k - 1L, lower.tail = FALSE)
            }
 
          },
@@ -117,38 +98,35 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
 
            meth <- 'Anderson-Darling Goodness-of-fit (GOF) test (per group)'
 
-           testStat_ad <- function(n, datr){
+           testStat_ad <- function(datr, n){
              i <- seq_along(datr)
              # in fact, A2 utilizes rev-order in its 2nd summation term
              -n - mean((2L * i - 1L) * log(datr) + (2L*n - (2L*i-1L))*log(1-datr))
            }
 
-           ##i <- if (delayFit$twoGroup) purrr::map(delayFit$data_transf, seq_along) else seq_along(delayFit$data_transf)
-           A2 <- if (delayFit$twoGroup) purrr::map2_dbl(.x = nObs, .y = delayFit$data_transf, .f = testStat_ad) else testStat_ad(n = nObs, datr = delayFit$data_transf)
+           A2 <- if (twoGr) {
+             purrr::map2_dbl(.x = delayFit$data_transf, .y = nObs, .f = testStat_ad)
+           } else {
+             testStat_ad(datr = delayFit$data_transf, n = nObs)
+           }
 
            p_val <- if ( identical(delayFit$distribution, 'exponential') ){
              # modification for Exponential (cf Stephens, Table 4.14, p.138)
              # the correction factor approaches 1 from above.
              # We keep the number of N as all observations, independent of the number of parameters estimated in the null-model.
-             #+XXX should we increase N by the number of parameters p estimated less 2 ( p -2 because 2 parameters are estimated in standard delayed exponential)
+             # QQQ Should we increase N by the number of parameters p estimated less 2 ( p -2 because 2 parameters are estimated in standard delayed exponential)
              A2_mod <- A2 * pmax.int(1L, 1L + 5.4 / nObs - 11 / nObs**2L)
 
-             #stats::plogis(3.8829139 - 0.4357149 * A2_mod -5.4427475 * sqrt(A2_mod))
              .ad_pval[['exponential']](A2_mod)
 
            } else {
              stopifnot( identical(delayFit$distribution, 'weibull') )
              # P-value for Weibull based on Lockhart, 1994 (Table 1)
              # interpolation model on logits using critical value and inverse of shape parameter
-             # fm_c3 <- lm(log(sig_level/(1-sig_level)) ~ (crit_val + sqrt(crit_val)) * c, data = crit_weib)
-             # coef(fm_c3)
-             # stats::plogis(5.358389287 -2.589581570 * A2 -8.640666568 * sqrt(A2) + 0.635487306 * shape_inv +
-             #                 # interaction effects
-             #                 3.626348262  * A2 * shape_inv -1.422402077 * sqrt(A2) * shape_inv)
              .ad_pval[['weibull']](A2, params[grepl('shape', names(params), fixed = TRUE)])
            }
 
-           if (delayFit$twoGroup){
+           if (twoGr){
              A2 <- paste(signif(A2, 4), collapse = ' and ')
              # use Liptak to bring both P-values of AD-tests per group together
              p_val <- pnorm(sum(sqrt(nObs) * qnorm(p_val)) / sqrt(sum(nObs)))
@@ -169,7 +147,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'pearson2', 'AD', 
   #+parameter, alternative, null.value, conf.int, estimate
   structure(
     list(method = meth, data.name = data_name,
-         statistic = statist, p.value = p_val),
+         statistic = statist, p.value = as.numeric(p_val)),
     class = 'htest')
 }
 
@@ -278,7 +256,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
   # Pearson GOF-test based on Chi-square distribution.
   # under H0, expect counts according to uniform distribution
-  GOF_pears <- test_GOF(delayFit = fit0, method = 'pearson2')
+  GOF_pears <- test_GOF(delayFit = fit0, method = 'pearson')
 
   # EDF-based GOF-test
   # Anderson-Darling (AD) test statistic, cf Stephens, Tests based on EDF Statistics p.101, (4.2)
