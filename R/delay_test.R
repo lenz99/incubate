@@ -15,6 +15,10 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
   stopifnot( inherits(delayFit, what = 'incubate_fit') )
   method <- match.arg(method)
 
+  if (delayFit$method != 'MSE'){
+    stop('Goodness-of-fit test only supported for models that are fit with maximum spacing estimation (MSE)!')
+  }
+
   twoGr <- isTRUE(delayFit$twoGroup)
   data_name <- if (twoGr) paste(names(delayFit$data), collapse = ' and ') else 'x'
   nObs <- if (twoGr) lengths(delayFit$data) else length(delayFit$data)
@@ -152,7 +156,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 }
 
 
-#' Test the difference for delay model parameter(s) between two uncorrelated groups.
+#' Test the difference for delay model parameter(s) between two uncorrelated groups, based on maximum spacing estimation (MSE).
 #'
 #' It is in fact a model comparison between a null model where the parameters are enforced to be equal and an unconstrained full model.
 #' As test statistic we use twice the difference in best (=lowest) objective function value, i.e. 2 * (`val_0` - `val_1`).
@@ -194,8 +198,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y) {
     #fit0 <- fit1 <- NULL
-    fit0 <- delay_model(x = x, y = y, distribution = distribution, ties = ties, bind = param)
-    fit1 <- delay_model(x = x, y = y, distribution = distribution, ties = ties)
+    fit0 <- delay_model(x = x, y = y, distribution = distribution, method = 'MSE', ties = ties, bind = param)
+    fit1 <- delay_model(x = x, y = y, distribution = distribution, method = 'MSE', ties = ties)
 
     if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
 

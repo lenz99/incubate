@@ -29,7 +29,7 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
 #' @param ties character. How to handle ties within data of a group.
 #' @return objective function
 geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL,
-                             ties=c('equidist', 'density', 'random'), verbose = 0L) {
+                             ties=c('equidist', 'density', 'random', 'none'), verbose = 0L) {
 
   # setup ----
   twoGr <- ! is.null(y)
@@ -37,7 +37,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1L )
   ties <- match.arg(ties)
   # tie-breaking via density is difficult for two-group situation
-  stopifnot( ! (ties == 'density' && twoGr) )
+  stopifnot( ties != 'density' || !twoGr )
 
   #standard ('original') names of distribution
   oNames <- getDist(distribution, type = "param", twoGroup = FALSE, bind = NULL)
@@ -53,7 +53,6 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   # @param obs: data vector
   # @return sorted, cleaned up data vector or NULL in case of trouble
   preprocess <- function(obs) {
-
 
     ind_neg <- which(obs < 0L)
     if (length(ind_neg)){
@@ -72,7 +71,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     if (is.null(obs)) return(NULL)
 
     # tie break
-    if (ties == 'density' ) return(obs) ##|| ties == 'groupedML') # groupedML not implemented yet
+    if (ties == 'density' || ties == 'none' ) return(obs) ##|| ties == 'groupedML') # groupedML not implemented yet
 
 
     diffobs <- diff(obs)
@@ -433,13 +432,15 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' Numerical optimization is done by `stats::optim`.
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
+#' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
+#' @param method character. Which method to fit the model? MSE = maximum spacing estimation or MLE = maximum likelihood estimation
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param ties character. How to handle ties.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), bind=NULL,
+delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), method = c('MSE', 'MLE'), bind=NULL,
                         ties=c('equidist', 'density', 'random'), optim_args=NULL, verbose = 0) {
 
   # unpack x if it is a list of two vectors
@@ -451,7 +452,30 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
 
   twoGr <- ! is.null(y)
   distribution <- match.arg(distribution)
+  method <- match.arg(method)
   ties <- match.arg(ties)
+
+  if (method == 'MLE') {
+    if ( twoGr || distribution != 'exponential') {
+      warning('MLE fitting is currently only supported for single group delayed exponential!')
+      return(invisible(NULL))
+    }
+
+    #XXX pre-processing (NA & neg. values) is done in the geomSpaceFactory() -- this should be shared
+    return(structure(
+      list(
+        data = if (twoGr) list(x = x, y = y) else x,
+        distribution = distribution,
+        method = method,
+        twoGroup = twoGr,
+        bind = bind,
+        #objFun = objFun, ### neg. log-lik as objective function?!
+        par = c(delay = min(x), rate = 1/(mean(x) - min(x))),
+        val = - length(x) * ( log(mean(x) - min(x)) + 1L ), ## think here: taken from profiled likelihood. Is it generally correct?
+        convergence = 0L
+      ), class = "incubate_fit"))
+  } # MLE
+
   objFun <- geomSpaceFactory(x = x, y = y, distribution = distribution, bind = bind, ties = ties, verbose = verbose)
   # set preprocessed data
   x <- attr(objFun, 'x', exact = TRUE)
@@ -474,6 +498,7 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
       data = if (twoGr) list(x = x, y = y) else x,
       data_transf = data_tr, # store CDF-transformed data
       distribution = distribution,
+      method = method,
       twoGroup = twoGr,
       bind = bind,
       objFun = objFun,
@@ -485,10 +510,10 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
 
 #' @export
 print.incubate_fit <- function(x){
-  cat( glue::glue_data(x, .sep = "\n",
-                       "Fit a delayed {distribution} via Maximum Product Spacing for {if (twoGroup) 'two independent groups' else 'a single group'}.",
-                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
-                       "Fitted coefficients: {coef(x) %>% signif(5) %>% paste(paste('\n  ', names(.)), ., sep = ': ', collapse = ' ')}\n\n")
+  cat(glue::glue_data(x, .sep = "\n",
+                      "Fit a delayed {distribution} via {c('Maximum Product Spacing', 'Maximum Likelihood')[[1L+(method=='MLE')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
+                      "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
+                      "Fitted coefficients: {coef(x) %>% signif(5) %>% paste(paste('\n  ', names(.)), ., sep = ': ', collapse = ' ')}\n\n")
   )
 }
 
@@ -497,12 +522,11 @@ print.incubate_fit <- function(x){
 #' @return named coefficient vector
 #' @export
 coef.incubate_fit <- function(object, group = NULL){
-
   #stopifnot( inherits(object, "incubate_fit") )
 
-  # original parameter names of distribution
-  oNames <- getDist(object[["distribution"]], type = "param", twoGroup = FALSE, bind = NULL)
-  getPars(object[["par"]], group = group, twoGr = object[["twoGroup"]], oNames = oNames,
+  getPars(object[["par"]], group = group, twoGr = object[["twoGroup"]],
+          # use original parameter names of distribution
+          oNames = getDist(object[["distribution"]], type = "param", twoGroup = FALSE, bind = NULL),
           # contract: bind was intersected with parameter names and, hence, has right order
           bind = object[["bind"]])
 }
@@ -667,7 +691,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_type =
                       x <- (if (twoGr) object$data$x else object$data)[sample.int(n = nObs[[1L]], replace = TRUE)]
                       y <- if (twoGr) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
 
-                      coef(delay_model(x=x, y=y, distribution = object$distribution, bind = object$bind))
+                      coef(delay_model(x=x, y=y, distribution = object$distribution, method = object$method, bind = object$bind))
                     },
                     parametric = {
                       # generate data from the fitted model
@@ -682,7 +706,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_type =
                         x <- rlang::exec(ranFun, !!! ranFunArgsX)
                         y <- if (twoGr) rlang::exec(ranFun, !!! ranFunArgsY)
 
-                        coef(delay_model(x=x, y=y, distribution = object$distribution, bind = object$bind))
+                        coef(delay_model(x=x, y=y, distribution = object$distribution, method = object$method, bind = object$bind))
                       }
                     },
                     stop('Unkown bootstrap type!')
@@ -710,6 +734,11 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_type =
       },
     normal = {
       # bias-corrected normal-based CI
+
+      #delayH_mle_bias <- mean(delay_mle_bs) - delayH_mle
+      #delayH_mle_sd <- sd(delay_mle_bs)
+      ## normal approximation
+      ##ci_delay_mle <- delayH_mle - delayH_mle_bias + c(-1, 1) * qnorm(.975) * delayH_mle_sd
       t(c(1L, 1L) %o% (2L * cf - rowMeans(coefMat)) + qnorm(a) %o% apply(coefMat, 1L, sd))
     },
     stop('This type of bootstrap confidence interval is not supported!')

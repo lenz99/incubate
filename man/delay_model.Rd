@@ -8,6 +8,7 @@ delay_model(
   x,
   y = NULL,
   distribution = c("exponential", "weibull"),
+  method = c("MSE", "MLE"),
   bind = NULL,
   ties = c("equidist", "density", "random"),
   optim_args = NULL,
@@ -18,6 +19,10 @@ delay_model(
 \item{x}{numeric. observations of 1st group. Can also be a list of data from two groups.}
 
 \item{y}{numeric. observations from 2nd group}
+
+\item{distribution}{character. Which delayed distribution is assumed? Exponential or Weibull.}
+
+\item{method}{character. Which method to fit the model? MSE = maximum spacing estimation or MLE = maximum likelihood estimation}
 
 \item{bind}{character. parameter names that are bind together in 2-group situation.}
 

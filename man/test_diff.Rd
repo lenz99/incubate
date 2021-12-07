@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_test.R
 \name{test_diff}
 \alias{test_diff}
-\title{Test the difference for delay model parameter(s) between two uncorrelated groups.}
+\title{Test the difference for delay model parameter(s) between two uncorrelated groups, based on maximum spacing estimation (MSE).}
 \usage{
 test_diff(
   x,

@@ -9,7 +9,7 @@ geomSpaceFactory(
   y = NULL,
   distribution = c("exponential", "weibull"),
   bind = NULL,
-  ties = c("equidist", "density", "random"),
+  ties = c("equidist", "density", "random", "none"),
   verbose = 0L
 )
 }
