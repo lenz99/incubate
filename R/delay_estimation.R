@@ -645,17 +645,17 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
 #' At least R=1000 bootstrap replications are recommended. Default are normal-based confidence intervals.
 #' @param R number of bootstrap replications
-#' @param bs_type character. Which type of bootstrap is requested?
-#' @param type character. Which type of bootstrap inference is requested?
+#' @param bs_data character. Which type of bootstrap is requested?
+#' @param bs_infer character. Which type of bootstrap inference is requested?
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
-confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_type = c('simple', 'parametric'), type = c('normal', 'quantile'), ...){
+confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_data = c('simple', 'parametric'), bs_infer = c('normal', 'quantile'), ...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
 
-  bs_type <- match.arg(bs_type)
-  type <- match.arg(type)
+  bs_data <- match.arg(bs_data)
+  bs_infer <- match.arg(bs_infer)
 
   cf <- coef(object)
   pnames <- names(cf)
@@ -685,7 +685,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_type =
 
   # get bootstrap distribution of coefficients from fitted model
 
-  coefFun <- switch(bs_type,
+  coefFun <- switch(bs_data,
                     simple = function(dummy){
                       # draw bootstrap samples from the data
                       x <- (if (twoGr) object$data$x else object$data)[sample.int(n = nObs[[1L]], replace = TRUE)]
@@ -725,7 +725,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_type =
 
 
   # bootstrapped confidence limits
-  ci <- switch(type,
+  ci <- switch(bs_infer,
     quantile = {
       # bias-corrected quantile-based CI
       # cf Davison, p28

@@ -9,17 +9,17 @@
   parm,
   level = 0.95,
   R = 199L,
-  bs_type = c("simple", "parametric"),
-  type = c("normal", "quantile"),
+  bs_data = c("simple", "parametric"),
+  bs_infer = c("normal", "quantile"),
   ...
 )
 }
 \arguments{
 \item{R}{number of bootstrap replications}
 
-\item{bs_type}{character. Which type of bootstrap is requested?}
+\item{bs_data}{character. Which type of bootstrap is requested?}
 
-\item{type}{character. Which type of bootstrap inference is requested?}
+\item{bs_infer}{character. Which type of bootstrap inference is requested?}
 }
 \value{
 A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.

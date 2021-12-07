@@ -1,3 +1,10 @@
+# incubate 0.7
+* change of S3-classes:
+    * for delay model fitting the new class is `incubate_fit`
+    * for tests the new class is `incubate_test`
+* confidence intervals supports now simple data generation to draw from the data with replacement (besides parametric bootstrap)
+* preliminary support for MLE-fitting: this allows to compare confidence intervals based on MSE vs MLE
+
 # incubate 0.6.1
 * make handling of ties in calculation of spacings within the objective function more robust
 
