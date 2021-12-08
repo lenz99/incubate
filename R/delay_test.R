@@ -383,13 +383,13 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' Power simulation function for a two-group comparison of the delay parameter.
 #'
 #' Given an effect size and a sample size `n` it simulates the power.
-#' The higher number of power simulation rounds the more densely the space of data according to the specified model is sampled.
+#' The more power simulation rounds (parameter `nPowerSim=`) the more densely the space of data according to the specified model is sampled.
 #'
 #' @param eff list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for each of the two groups.
 #' @param param character. Parameter name for which to simulate the power.
 #' @param n integer. Number of observations per group for the power simulation. Can be two different numbers, control group and then treatment group.
-#' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80 percent.
-#' @param R integer. Number of bootstrap samples to assess difference in parameter within each power simulation.
+#' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80%.
+#' @param R integer. Number of bootstrap samples to assess difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which is enough for power analysis.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",

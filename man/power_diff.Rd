@@ -22,14 +22,14 @@ power_diff(
 
 \item{n}{integer. Number of observations per group for the power simulation. Can be two different numbers, control group and then treatment group.}
 
-\item{nPowerSim}{integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80 percent.}
+\item{nPowerSim}{integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80\%.}
 
-\item{R}{integer. Number of bootstrap samples to assess difference in parameter within each power simulation.}
+\item{R}{integer. Number of bootstrap samples to assess difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around \code{R=200} gives a resolution of 0.5\% which is enough for power analysis.}
 }
 \value{
 List of results of power simulation. Or \code{NULL} in case of errors.
 }
 \description{
 Given an effect size and a sample size \code{n} it simulates the power.
-The higher number of power simulation rounds the more densely the space of data according to the specified model is sampled.
+The more power simulation rounds (parameter \verb{nPowerSim=}) the more densely the space of data according to the specified model is sampled.
 }
