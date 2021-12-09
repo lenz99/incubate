@@ -11,6 +11,7 @@ test_diff(
   param = "delay",
   R = 400,
   ties = c("equidist", "density", "random"),
+  type = c("all", "bootstrap", "gof", "moran", "pearson", "ad", "lr"),
   verbose = 0
 )
 }
@@ -26,6 +27,8 @@ test_diff(
 \item{R}{numeric\link{1}. Number of bootstrap samples to evaluate the distribution of the test statistic.}
 
 \item{ties}{character. How to handle ties in data vector of a group?}
+
+\item{type}{character. Which type of tests to perform?}
 
 \item{verbose}{numeric. How many details are requested?}
 }

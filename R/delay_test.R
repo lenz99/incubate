@@ -178,18 +178,35 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 #' @param param character. Names of parameters to test difference for. Default value is `'delay'`.
 #' @param R numeric[1]. Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param ties character. How to handle ties in data vector of a group?
+#' @param type character. Which type of tests to perform?
 #' @param verbose numeric. How many details are requested?
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
-                      ties = c('equidist', 'density', 'random'), verbose = 0) {
+                      ties = c('equidist', 'density', 'random'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr'), verbose = 0) {
   STRICT <- TRUE #keep only conv=0 model fits?
   distribution <- match.arg(distribution)
   ties <- match.arg(ties)
+  type <- match.arg(type)
   par_names <- getDist(distribution = distribution, type = "param")
   stopifnot( is.numeric(x), length(x) > length(par_names), is.numeric(y), length(y) > length(par_names) )
   stopifnot( is.numeric(R), length(R) == 1L, R >= 1L )
   stopifnot( is.character(param), length(param) >= 1L, nzchar(param) )
+
+  # bitmask for test types
+  testMask <- logical(6L) %>%
+    purrr::set_names(nm = c('bootstrap', 'gof_moran', 'gof_pearson', 'gof_ad', 'lr', 'lr_pp'))
+
+  switch(EXPR = type,
+         all = { testMask <- testMask | TRUE },
+         bootstrap = {testMask[c('bootstrap', 'lr', 'lr_pp')] <- TRUE},
+         gof = {testMask[grepl('gof_', names(testMask), fixed = TRUE)] <- TRUE},
+         moran = {testMask['gof_moran'] <- TRUE},
+         pearson = {testMask['gof_pearson'] <- TRUE},
+         ad = {testMask['gof_ad'] <- TRUE},
+         lr = {testMask[grepl('lr', names(testMask), fixed = TRUE)] <- TRUE},
+         stop('This type of tests is not supported!')
+  )
 
   # Test statistic calculated from the given data and the model specification.
   #
@@ -255,86 +272,90 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   #+ and transform the observed data for both groups via cumulative distribution functions
 
   # spacings-based GOF-test
-  GOF_mo <- test_GOF(delayFit = fit0, method = 'moran')
+  GOF_mo <- if (testMask[['gof_moran']]) test_GOF(delayFit = fit0, method = 'moran')
   #if (verbose > 0L) cat("Moran test stat: ", GOF_mo$statistic, "\n")
 
   # Pearson GOF-test based on Chi-square distribution.
   # under H0, expect counts according to uniform distribution
-  GOF_pears <- test_GOF(delayFit = fit0, method = 'pearson')
+  GOF_pears <- if (testMask[['gof_pearson']]) test_GOF(delayFit = fit0, method = 'pearson')
 
   # EDF-based GOF-test
   # Anderson-Darling (AD) test statistic, cf Stephens, Tests based on EDF Statistics p.101, (4.2)
-  GOF_ad <- test_GOF(delayFit = fit0, method = 'AD')
+  GOF_ad <- if (testMask[['gof_ad']]) test_GOF(delayFit = fit0, method = 'AD')
 
 
-  # parametric bootstrap:
-  # generate R samples (x, y) by random sampling from the fitted H0-model (e.g. common delay),
-  #+where all nuisance parameters are at there best fit
-  # calculate the test statistic on the simulated data
-  # estimate P as proportion of simulated test statistics that exceed the observed test statistic t_obs
 
-  ranFun <- getDist(distribution, type = "r")
-  # arguments to the random function generation
-  ranFunArgsX <- c(list(n=length(x)), coef(fit0, group = "x"))
-  ranFunArgsY <- c(list(n=length(y)), coef(fit0, group = "y"))
+  t0_dist <- P_boot <- chisq_df_hat <- NULL
 
-  t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(1L+(verbose>0L)),
-                                         FUN = function(dummy){
+  if (testMask[['bootstrap']]){
+    # parametric bootstrap:
+    # generate R samples (x, y) by random sampling from the fitted H0-model (e.g. common delay),
+    #+where all nuisance parameters are at there best fit
+    # calculate the test statistic on the simulated data
+    # estimate P as proportion of simulated test statistics that exceed the observed test statistic t_obs
 
-                                           # generate new data according to given fitted null-model
-                                           # sort is not needed here, as it goes through the whole pipeline (factory method)
-                                           ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
-                                                               y = rlang::exec(ranFun, !!! ranFunArgsY))
-                                           if (is.null(ts_boot)) return(rep(NA_real_, 1L+(verbose>0L)))
+    ranFun <- getDist(distribution, type = "r")
+    # arguments to the random function generation
+    ranFunArgsX <- c(list(n=length(x)), coef(fit0, group = "x"))
+    ranFunArgsY <- c(list(n=length(y)), coef(fit0, group = "y"))
 
-                                           if (verbose > 0L)
-                                             c(ts_boot[["val"]], ts_boot[['fit0']][['convergence']]) else
-                                               ts_boot[['val']]
+    t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(1L+(verbose>0L)),
+                                           FUN = function(dummy){
+
+                                             # generate new data according to given fitted null-model
+                                             # sort is not needed here, as it goes through the whole pipeline (factory method)
+                                             ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
+                                                                 y = rlang::exec(ranFun, !!! ranFunArgsY))
+                                             if (is.null(ts_boot)) return(rep(NA_real_, 1L+(verbose>0L)))
+
+                                             if (verbose > 0L)
+                                               c(ts_boot[["val"]], ts_boot[['fit0']][['convergence']]) else
+                                                 ts_boot[['val']]
 
 
-                                         }, future.seed = TRUE)
+                                           }, future.seed = TRUE)
 
-  if (verbose > 0L){
-    fit0_conv <- t0_dist[2L,]
-    cat('Proportion of model failures:', sprintf('%6.1f%%', 100L*length(which(is.na(fit0_conv)))/length(fit0_conv)), '\n')
-    cat('Proportion of convergence= 0:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 0))/length(fit0_conv)), '\n')
-    cat('Proportion of convergence=52:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 52))/length(fit0_conv)), '\n')
-    t0_dist <- t0_dist[1L,]
+    if (verbose > 0L){
+      fit0_conv <- t0_dist[2L,]
+      cat('Proportion of model failures:', sprintf('%6.1f%%', 100L*length(which(is.na(fit0_conv)))/length(fit0_conv)), '\n')
+      cat('Proportion of convergence= 0:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 0))/length(fit0_conv)), '\n')
+      cat('Proportion of convergence=52:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 52))/length(fit0_conv)), '\n')
+      t0_dist <- t0_dist[1L,]
+    }
+    t0_dist <- t0_dist[is.finite(t0_dist)]
+
+    try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
+                                                    start = list(df = length(param)),
+                                                    method = "Brent", lower = .001, upper = 401))},
+        silent = TRUE)
+
+    P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
   }
-  t0_dist <- t0_dist[is.finite(t0_dist)]
-  chisq_df_hat <- NULL
-  try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
-                                                  start = list(df = length(param)),
-                                                  method = "Brent", lower = .001, upper = 401))},
-      silent = TRUE)
-
-  P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
-
 
   ## P-value from Log-rank tests
   dat_2gr <- tibble::tibble(evtime = c(x,y),
                             group = rep(c("x", "y"), times = c(length(x), length(y))))
-  P_lr <- stats::pchisq(q = survival::survdiff(survival::Surv(evtime) ~ group, rho = 0, data = dat_2gr)$chisq,
+  P_lr <- if (testMask[['lr']]) stats::pchisq(q = survival::survdiff(survival::Surv(evtime) ~ group, rho = 0, data = dat_2gr)$chisq,
                         df = 1L, lower.tail = FALSE)
   # Peto & Peto modified Gehan-Wilcoxon test
-  P_lr_pp <- stats::pchisq(q = survival::survdiff(survival::Surv(evtime) ~ group, rho = 1, data = dat_2gr)$chisq,
+  P_lr_pp <- if (testMask[['lr_pp']]) stats::pchisq(q = survival::survdiff(survival::Surv(evtime) ~ group, rho = 1, data = dat_2gr)$chisq,
                            df = 1L, lower.tail = FALSE)
 
 
   structure(
-    list(#fit0 = fit0, fit1 = fit1, ##debug
+    purrr::compact(list(#fit0 = fit0, fit1 = fit1, ##debug
       t_obs = ts_obs[["val"]],
       testDist = t0_dist,
-      R = length(t0_dist),
+      R = if (testMask[['bootstrap']]) length(t0_dist),
       chisq_df_hat = chisq_df_hat,
       param = param,
-      P = list(boot = P_boot,
+      P = purrr::compact(list(boot = P_boot,
                gof_mo = as.vector(GOF_mo$p.value),
                gof_pearson = as.vector(GOF_pears$p.value),
                gof_ad = as.vector(GOF_ad$p.value),
                lr = P_lr,
-               lr_pp = P_lr_pp)
-    ), class = "incubate_test")
+               lr_pp = P_lr_pp))
+    )), class = "incubate_test")
 }
 
 #' @export
@@ -342,7 +363,8 @@ print.incubate_test <- function(x, ...){
   params <- paste(x$param, collapse = ' & ')
   cat('Test for difference in parameter ', params, 'between two groups.\n')
   cat('Alternative hypothesis: ', params, 'are different between the two groups.\n')
-  cat('Parametric Bootstrap P-value: ', format.pval(x$P$boot))
+  P_boot_str <- if (is.numeric(x$P$boot)) format.pval(x$P$boot) else '-'
+  cat('Parametric Bootstrap P-value: ', P_boot_str)
   cat('\n')
 }
 
@@ -351,6 +373,11 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
   stopifnot(inherits(x, "incubate_test"))
 
   teststat <- x[["testDist"]]
+
+  if (is.null(teststat)) {
+    message('No bootstrap test to visualize.')
+    return(invisible(NULL))
+  }
 
   if (missing(title)) title <- glue::glue('Distribution of test statistic under H0 for parameter {dQuote(x$param)}')
   if (missing(subtitle)) subtitle <- glue::glue('Sampling distribution, based on {length(teststat)} parametric bootstrap draws. ',
@@ -442,7 +469,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
                                           P_val <- NA_real_
                                           try(expr = {
                                             P_val <- test_diff(x = dat_ctrl, y =dat_trtm,
-                                                               distribution = distribution, param = param, R = R) %>%
+                                                               distribution = distribution, param = param, R = R, type = 'bootstrap') %>%
                                               purrr::pluck("P", "boot", .default = NA_real_) }, silent = TRUE)
                                           P_val
                                         }, future.seed = TRUE)
