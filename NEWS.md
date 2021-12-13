@@ -1,3 +1,9 @@
+# incubate 0.7.2
+* allow to use `boot` package to calculate confidence interval
+
+# incubate 0.7.1
+* allow to choose which tests to perform in `test_diff` (helpful when calculation of AD GOF-tests fails on older R-installations)
+
 # incubate 0.7
 * change of S3-classes:
     * for delay model fitting the new class is `incubate_fit`

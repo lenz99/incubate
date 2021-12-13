@@ -9,8 +9,9 @@
   parm,
   level = 0.95,
   R = 199L,
-  bs_data = c("simple", "parametric"),
-  bs_infer = c("normal", "quantile"),
+  bs_data = c("ordinary", "parametric"),
+  bs_infer = c("normal", "normal0", "quantile0", "quantile"),
+  useBoot = FALSE,
   ...
 )
 }
@@ -20,6 +21,8 @@
 \item{bs_data}{character. Which type of bootstrap is requested?}
 
 \item{bs_infer}{character. Which type of bootstrap inference is requested?}
+
+\item{useBoot}{logical. Delegate bootstrap confint calculation to the \code{boot}-package?}
 }
 \value{
 A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.

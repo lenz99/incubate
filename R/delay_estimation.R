@@ -647,15 +647,22 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' @param R number of bootstrap replications
 #' @param bs_data character. Which type of bootstrap is requested?
 #' @param bs_infer character. Which type of bootstrap inference is requested?
+#' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
-confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_data = c('simple', 'parametric'), bs_infer = c('normal', 'quantile'), ...){
+confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
+                                 bs_data = c('ordinary', 'parametric'), bs_infer = c('normal', 'normal0', 'quantile0', 'quantile'), useBoot=FALSE, ...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
+  twoGr <- isTRUE(object$twoGroup)
+  useBoot <- isTRUE(useBoot)
 
   bs_data <- match.arg(bs_data)
   bs_infer <- match.arg(bs_infer)
+
+  # currently, only single group is supported for boot-package
+  if (useBoot) stopifnot( !twoGr, bs_infer %in% c('normal', 'quantile', 'quantile0'))
 
   cf <- coef(object)
   pnames <- names(cf)
@@ -675,78 +682,104 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L, bs_data =
   a <- (1L - level) / 2L
   a <- c(a, 1L - a)
 
-  twoGr <- isTRUE(object$twoGroup)
-
   nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
   R <- ceiling(R)
-  if (R < 1000) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low.',
+  if (R < 1000) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<1000).',
                         call. = FALSE)
 
   # get bootstrap distribution of coefficients from fitted model
+  ci <- if (useBoot){
+    stopifnot(!twoGr) # for the time being
+    bo <- boot::boot(data = object$data, statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distribution,
+                                                                                     method = object$method, bind = object$bind)),
+                     R = R, sim = bs_data, ran.gen = function(d, coe){
+                       ranFun <- getDist(object$distribution, type = "r")
+                       # arguments to the random function generation
+                       ranFunArgsX <- as.list(c(n=nObs[[1L]], coe))
 
-  coefFun <- switch(bs_data,
-                    simple = function(dummy){
-                      # draw bootstrap samples from the data
-                      x <- (if (twoGr) object$data$x else object$data)[sample.int(n = nObs[[1L]], replace = TRUE)]
-                      y <- if (twoGr) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
+                       rlang::exec(ranFun, !!! ranFunArgsX)
+                     }, mle = coef(object))
 
-                      coef(delay_model(x=x, y=y, distribution = object$distribution, method = object$method, bind = object$bind))
-                    },
-                    parametric = {
-                      # generate data from the fitted model
-                      # for performance reasons, we 'inline' the simulate code, cf test_diff
-                      ranFun <- getDist(object$distribution, type = "r")
-                      # arguments to the random function generation
-                      ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
-                      ranFunArgsY <- if (twoGr) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
+    bo_ci_type <- switch(bs_infer, quantile0 = 'basic', normal = 'norm', quantile = 'perc', stop('This boot.ci-type is not supported!'))
 
-                      function(dummy){
-                        # cf simulate (but inlined here for performance reasons)
-                        x <- rlang::exec(ranFun, !!! ranFunArgsX)
-                        y <- if (twoGr) rlang::exec(ranFun, !!! ranFunArgsY)
+    purrr::map(seq_len(length.out = length(coef(object))), .f = ~ {
+      bo_ci <- boot::boot.ci(bo, index = ., conf = level, type = bo_ci_type)
+      if (bo_ci_type == 'norm') bo_ci[['normal']][, -1L] else if (bo_ci_type == 'perc') bo_ci[['percent']][, -c(1:3)] else
+        bo_ci[[bo_ci_type]][,-c(1:3)]
+    }) %>% unlist %>% matrix(ncol = 2L, byrow = TRUE)
+  } else {
+    # get coefficients from bootstrapped data (either by ordinary bootstrap of data or by parametric bootstrap)
+    coefFun <- switch(bs_data,
+                      ordinary = function(dummy){
+                        # draw bootstrap samples from the data
+                        x <- (if (twoGr) object$data$x else object$data)[sample.int(n = nObs[[1L]], replace = TRUE)]
+                        y <- if (twoGr) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
 
                         coef(delay_model(x=x, y=y, distribution = object$distribution, method = object$method, bind = object$bind))
-                      }
-                    },
-                    stop('Unkown bootstrap type!')
-  )
+                      },
+                      parametric = {
+                        # generate data from the fitted model
+                        # for performance reasons, we 'inline' the simulate code, cf test_diff
+                        ranFun <- getDist(object$distribution, type = "r")
+                        # arguments to the random function generation
+                        ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
+                        ranFunArgsY <- if (twoGr) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
 
-  coefMat <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(length(cf)),
-                                         FUN = coefFun, future.seed = TRUE)
+                        function(dummy){
+                          # cf simulate (but inlined here for performance reasons)
+                          x <- rlang::exec(ranFun, !!! ranFunArgsX)
+                          y <- if (twoGr) rlang::exec(ranFun, !!! ranFunArgsY)
 
-  # more clear and shorter but less efficient!
-  # coefMat <- object %>%
-  #   simulate(nsim = R) %>%
-  #   future.apply::future_vapply(FUN.VALUE = double(length(cf)),
-  #                               FUN = function(da){
-  #                                 coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
-  #                               })
+                          coef(delay_model(x=x, y=y, distribution = object$distribution, method = object$method, bind = object$bind))
+                        }
+                      },
+                      stop('Unkown bootstrap data generation type!')
+    )
+
+    coefMat <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(length(cf)),
+                                           FUN = coefFun, future.seed = TRUE)
+
+    # more clear and shorter but less efficient!
+    # coefMat <- object %>%
+    #   simulate(nsim = R) %>%
+    #   future.apply::future_vapply(FUN.VALUE = double(length(cf)),
+    #                               FUN = function(da){
+    #                                 coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
+    #                               })
 
 
-  # bootstrapped confidence limits
-  ci <- switch(bs_infer,
-    quantile = {
-      # bias-corrected quantile-based CI
-      # cf Davison, p28
-      # vector - matrix: vector is expanded column-wise, and the row-dimension fits (=number of coefs)
-      2L * cf - t(apply(coefMat, 1L, quantile, probs = rev(a), na.rm = TRUE))
-      },
-    normal = {
-      # bias-corrected normal-based CI
+    # bootstrapped confidence limits
+    # bias-correction for parametric bootstrap only!?
+    #delayH_mle_bias <- mean(delay_mle_bs) - delayH_mle
+    #XXX quantile0 vs quantile, think here further: is it correct?
+    switch(bs_infer,
+                 quantile0 = {
+                   t(apply(coefMat, 1L, stats::quantile, probs = a, na.rm = TRUE))
+                 },
+                 quantile = {
+                   # bias-corrected quantile-based CI
+                   # cf Davison, p28
+                   # vector - matrix: vector is expanded column-wise, and the row-dimension fits (=number of coefs)
+                   2L * cf - t(apply(coefMat, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))
 
-      #delayH_mle_bias <- mean(delay_mle_bs) - delayH_mle
-      #delayH_mle_sd <- sd(delay_mle_bs)
-      ## normal approximation
-      ##ci_delay_mle <- delayH_mle - delayH_mle_bias + c(-1, 1) * qnorm(.975) * delayH_mle_sd
-      t(c(1L, 1L) %o% (2L * cf - rowMeans(coefMat)) + qnorm(a) %o% apply(coefMat, 1L, sd))
-    },
-    stop('This type of bootstrap confidence interval is not supported!')
-  )
+                 },
+                 normal0 = {
+                   t(c(1L, 1L) %o% .rowMeans(coefMat, m = length(cf), n = R) + stats::qnorm(a) %o% apply(coefMat, 1L, sd))
+                 },
+                 normal = {
+                   ## bias-corrected normal-based CI
+                   ## ci_delay_mle <- delayH_mle - delayH_mle_bias + c(-1, 1) * qnorm(.975) * delayH_mle_sd
+                   t(c(1L, 1L) %o% (2L * cf - .rowMeans(coefMat, m = length(cf), n = R)) +  stats::qnorm(a) %o% apply(coefMat, 1L, sd))
+                 },
+                 stop('This type of bootstrap confidence interval is not supported!')
+    )
 
-  # ensure formatted column names
+
+  }
+  # ensure formatted row and column names
+  rownames(ci) <- pnames
   colnames(ci) <- paste0(format(a*100, trim = TRUE, nsmall = 1L), '%')
-
 
   # enforce parameter bounds also for CI
   # all parameters are non-negative!

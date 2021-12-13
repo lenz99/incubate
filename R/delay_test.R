@@ -199,6 +199,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
   switch(EXPR = type,
          all = { testMask <- testMask | TRUE },
+         # bootstrap + LR-tests (for stankovic results) #XXX better use flags: doBootstrap=, doGOF=, doLR=?!
          bootstrap = {testMask[c('bootstrap', 'lr', 'lr_pp')] <- TRUE},
          gof = {testMask[grepl('gof_', names(testMask), fixed = TRUE)] <- TRUE},
          moran = {testMask['gof_moran'] <- TRUE},
