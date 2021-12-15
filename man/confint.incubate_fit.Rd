@@ -10,7 +10,7 @@
   level = 0.95,
   R = 199L,
   bs_data = c("ordinary", "parametric"),
-  bs_infer = c("normal", "normal0", "quantile0", "quantile"),
+  bs_infer = c("normal", "normal0", "t", "quantile0", "quantile"),
   useBoot = FALSE,
   ...
 )
@@ -20,7 +20,7 @@
 
 \item{bs_data}{character. Which type of bootstrap is requested?}
 
-\item{bs_infer}{character. Which type of bootstrap inference is requested?}
+\item{bs_infer}{character. Which type of bootstrap inference is requested to generate the confidence interval?}
 
 \item{useBoot}{logical. Delegate bootstrap confint calculation to the \code{boot}-package?}
 }
