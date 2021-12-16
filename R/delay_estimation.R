@@ -775,10 +775,15 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
            normal = {
              ## bias-corrected normal-based CI
              ## ci_delay_mle <- delayH_mle - delayH_mle_bias + c(-1, 1) * qnorm(.975) * delayH_mle_sd
-             t(c(1L, 1L) %o% (2L * cf - .rowMeans(coefMat, m = length(cf), n = R)) +  stats::qnorm(a) %o% apply(coefMat, 1L, sd))
+             t(c(1L, 1L) %o% (2L * cf - .rowMeans(coefMat, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(coefMat, 1L, sd))
+           },
+           t0 = {
+             t(c(1L, 1L) %o% .rowMeans(coefMat, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(coefMat, 1L, sd))
            },
            t = {
-             t(c(1L, 1L) %o% (2L * cf - .rowMeans(coefMat, m = length(cf), n = R)) +  stats::qt(a, df = sum(nObs)-length(cf)) %o% apply(coefMat, 1L, sd))
+             # we actually estimate the variance quite accurately through the high number of bootstrap samples,
+             #+ still we use a t-quantile to compensate the too low coverage when using qnorm, for the df we add 3L to be less conservative
+             t(c(1L, 1L) %o% (2L * cf - .rowMeans(coefMat, m = length(cf), n = R)) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(coefMat, 1L, sd))
            },
            stop('This type of bootstrap confidence interval is not supported!')
     )
