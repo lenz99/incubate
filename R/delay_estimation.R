@@ -661,8 +661,12 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   bs_data <- match.arg(bs_data)
   bs_infer <- match.arg(bs_infer)
 
-  # currently, only single group is supported for boot-package
-  if (useBoot) stopifnot( !twoGr, bs_infer %in% c('normal', 'quantile', 'quantile0'))
+  # check if we can really use boot
+  if ( useBoot && (!requireNamespace("boot", quietly = TRUE) || twoGr || !bs_infer %in% c('normal', 'quantile', 'quantile0')) ) {
+    warning('Using own implementation as package', sQuote('boot'), 'is not available or scenario not implemented.',
+            call. = FALSE)
+    useBoot <- FALSE
+  }
 
   cf <- coef(object)
   pnames <- names(cf)
@@ -673,7 +677,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   parm <- intersect(pnames, parm)
 
   if (is.null(parm) || ! length(parm) || any(! nzchar(parm))) {
-    warning('Invalid parameter name given in argument parm=')
+    warning('Invalid parameter name given in argument parm=', call. = FALSE)
     return(invisible(NULL))
   }
 
@@ -689,7 +693,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                         call. = FALSE)
 
   # get bootstrap distribution of coefficients from fitted model
-  ci <- if (useBoot && requireNamespace("boot", quietly = TRUE)){
+  ci <- if (useBoot) {
     stopifnot(!twoGr) # for the time being only single group calls are supported!
     bo <- boot::boot(data = object$data, statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distribution,
                                                                                      method = object$method, bind = object$bind)),
@@ -706,15 +710,20 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
     purrr::map(seq_len(length.out = length(coef(object))), .f = ~ {
       # the output of boot.ci can have different CIs as named matrix list entries
-      bo_ci <- boot::boot.ci(bo, index = ., conf = level, type = bo_ci_type)[[switch(bo_ci_type, norm = 'normal', perc = 'percent', bo_ci_type)]]
+      bo_ci <- boot::boot.ci(bo, index = ., conf = level, type = bo_ci_type)[[switch(bo_ci_type,
+                                                                                     norm = 'normal',
+                                                                                     perc = 'percent',
+                                                                                     bo_ci_type)]]
       # depending on the CI-type: normal yields 3 columns, perc and others give 5 columns
       stopifnot( is.matrix(bo_ci), NCOL(bo_ci) > 2L )
       # the last two columns are always the lower and upper bound
-      bo_ci[, c(NCOL(bo_ci)-1L, NCOL(bo_ci))]
-    }) %>% unlist %>% matrix(ncol = 2L, byrow = TRUE)
+      bo_ci[, c(NCOL(bo_ci)-1L, NCOL(bo_ci))] }) %>%
+      unlist %>%
+      matrix(ncol = 2L, byrow = TRUE)
   } else {
-    if (useBoot) warning('Using own implementation as package', sQuote('boot'), 'is not available.')
-    # get coefficients from bootstrapped data (either by ordinary bootstrap of data or by parametric bootstrap)
+    # own implementation: we inline data generation (simulate) and model fitting in one function
+    # get coefficients from bootstrapped data
+    #+(either by ordinary bootstrap of data or by parametric bootstrap)
     coefFun <- switch(bs_data,
                       ordinary = function(dummy){
                         # draw bootstrap samples from the data
@@ -753,11 +762,11 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
     #                                 coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
     #                               })
 
+    # EEE Idea: we could cache coefMat, for instance when we call confint with different bs_infer methods repeatedly
 
     # bootstrapped confidence limits
     # bias-correction for parametric bootstrap only!?
     #delayH_mle_bias <- mean(delay_mle_bs) - delayH_mle
-    #XXX quantile0 vs quantile, think here further: is it correct?
     switch(bs_infer,
            quantile0 = {
              t(apply(coefMat, 1L, stats::quantile, probs = a, na.rm = TRUE))
@@ -787,9 +796,8 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
            },
            stop('This type of bootstrap confidence interval is not supported!')
     )
+  } #esle useBoot
 
-
-  }
   # ensure formatted row and column names
   rownames(ci) <- pnames
   colnames(ci) <- paste0(format(a*100, trim = TRUE, nsmall = 1L), '%')
