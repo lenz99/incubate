@@ -1,3 +1,12 @@
+
+# incubate 0.7.4
+* add `bs_infer = 't0'` 
+* add +3 to degrees of freedom for t-quantiles in `bs_infer='t'` and `='t0'`
+* (these features were temporarily also released as 0.7.3)
+
+# incubate 0.7.3
+* fixed mapping of bootstrap inference names for `boot`-package
+
 # incubate 0.7.2
 * allow to use `boot` package to calculate confidence interval
 
