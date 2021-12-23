@@ -1,5 +1,6 @@
 
 #' Goodness-of-fit (GOF) test statistic.
+#'
 #' The GOF-test is performed for a fitted delay-model.
 #' There are different GOF-tests implemented:
 #' * __Moran GOF__ is based on spacings, like the MSE-criterion itself.
