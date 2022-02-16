@@ -1,6 +1,12 @@
 # mkuhn, 2021-10-11
 # Utility functions used within this package
 
+#' Compare two numeric vectors
+#' @seealso `dplyr::near`
+near <- function (x, y, tol = .Machine$double.eps^0.4){
+  abs(x - y) < tol
+}
+
 #' Estimate rounding error based on given sample of metric values
 #' The idea is to check at which level of rounding the sample values do not change.
 #' @param roundDigits integer. which level of rounding to test? Negative numbers round to corresponding powers of 10
@@ -24,7 +30,7 @@ estimRoundingError <- function(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100
   if (all(abs(obs) < .1)) obs <- 1L + obs
 
   rDigInd <- purrr::map_lgl(.x = roundDigits,
-                            .f = ~all(dplyr::near(x = obs, y = round(obs, digits = .x),
-                                                  tol = 2L * 10L**min(-2L, -.x-1L))) )
+                            .f = ~all(near(x = obs, y = round(obs, digits = .x),
+                                           tol = 2L * 10L**min(-2L, -.x-1L))) )
   10L**-if (!any(rDigInd)) max(roundDigits)+1L else if (all(rDigInd)) min(roundDigits)-1L else roundDigits[which.max(rDigInd)]
 }

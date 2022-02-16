@@ -510,10 +510,11 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
 
 #' @export
 print.incubate_fit <- function(x){
+  coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
                       "Fit a delayed {distribution} via {c('Maximum Product Spacing', 'Maximum Likelihood')[[1L+(method=='MLE')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
-                      "Fitted coefficients: {coef(x) %>% signif(5) %>% paste(paste('\n  ', names(.)), ., sep = ': ', collapse = ' ')}\n\n")
+                      "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
 }
 
@@ -576,10 +577,8 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 
     grNames <- names(x[["data"]])
 
-    p <- ggplot2::ggplot(data = x[["data"]] %>% unlist %>%
-                           tibble::enframe(name = "group") %>%
-                           dplyr::mutate(group = substr(x = group, 1L, 1L)),
-                         mapping = ggplot2::aes(x = value, col = group)) +
+    p <- ggplot2::ggplot(data = tibble::enframe(unlist(x[["data"]]), name = "group"),
+                         mapping = ggplot2::aes(x = value, col = substr(x = group, 1L, 1L))) +
       # add estimated delay model(s)
       purrr::map(grNames,
                  .f = ~ ggplot2::geom_function(mapping = ggplot2::aes(col = .x), inherit.aes = FALSE,
@@ -708,18 +707,18 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
     # 'perc' just takes the quantiles, 'basic' uses quantiles of the difference to the observed value
     bo_ci_type <- switch(bs_infer, quantile0 = 'perc', normal = 'norm', quantile = 'basic', stop('This boot.ci-type is not supported!'))
 
-    purrr::map(seq_len(length.out = length(coef(object))), .f = ~ {
-      # the output of boot.ci can have different CIs as named matrix list entries
-      bo_ci <- boot::boot.ci(bo, index = ., conf = level, type = bo_ci_type)[[switch(bo_ci_type,
-                                                                                     norm = 'normal',
-                                                                                     perc = 'percent',
-                                                                                     bo_ci_type)]]
-      # depending on the CI-type: normal yields 3 columns, perc and others give 5 columns
-      stopifnot( is.matrix(bo_ci), NCOL(bo_ci) > 2L )
-      # the last two columns are always the lower and upper bound
-      bo_ci[, c(NCOL(bo_ci)-1L, NCOL(bo_ci))] }) %>%
-      unlist %>%
-      matrix(ncol = 2L, byrow = TRUE)
+    matrix(unlist(
+      purrr::map(seq_len(length.out = length(coef(object))), .f = ~ {
+        # the output of boot.ci can have different CIs as named matrix list entries
+        bo_ci <- boot::boot.ci(bo, index = ., conf = level, type = bo_ci_type)[[switch(bo_ci_type,
+                                                                                       norm = 'normal',
+                                                                                       perc = 'percent',
+                                                                                       bo_ci_type)]]
+        # depending on the CI-type: normal yields 3 columns, perc and others give 5 columns
+        stopifnot( is.matrix(bo_ci), NCOL(bo_ci) > 2L )
+        # the last two columns are always the lower and upper bound
+        bo_ci[, c(NCOL(bo_ci)-1L, NCOL(bo_ci))] })),
+      ncol = 2L, byrow = TRUE)
   } else {
     # own implementation: we inline data generation (simulate) and model fitting in one function
     # get coefficients from bootstrapped data
@@ -755,9 +754,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                                            FUN = coefFun, future.seed = TRUE)
 
     # more clear and shorter but less efficient!
-    # coefMat <- object %>%
-    #   simulate(nsim = R) %>%
-    #   future.apply::future_vapply(FUN.VALUE = double(length(cf)),
+    # coefMat <-  future.apply::future_vapply(simulate(object, nsim = R), FUN.VALUE = double(length(cf)),
     #                               FUN = function(da){
     #                                 coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
     #                               })

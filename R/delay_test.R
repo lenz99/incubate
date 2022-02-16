@@ -195,8 +195,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   stopifnot( is.character(param), length(param) >= 1L, nzchar(param) )
 
   # bitmask for test types
-  testMask <- logical(6L) %>%
-    purrr::set_names(nm = c('bootstrap', 'gof_moran', 'gof_pearson', 'gof_ad', 'lr', 'lr_pp'))
+  testMask <- purrr::set_names(logical(6L), nm = c('bootstrap', 'gof_moran', 'gof_pearson', 'gof_ad', 'lr', 'lr_pp'))
 
   switch(EXPR = type,
          all = { testMask <- testMask | TRUE },
@@ -387,14 +386,13 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
   #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
 
 
-  p <- dplyr::tibble(teststat = teststat) %>%
-    ggplot2::ggplot(ggplot2::aes(x = teststat, y = ggplot2::after_stat(density))) +
+  p <- ggplot2::ggplot(tibble::tibble(teststat = teststat),
+                       mapping = ggplot2::aes(x = teststat, y = ggplot2::after_stat(density))) +
     ggplot2::geom_histogram(bins = 11L + ceiling(sqrt(length(teststat))))
 
   # extract maximum density value
-  ymax <- ggplot2::layer_data(p) %>%
-    dplyr::pull(y) %>%
-    {ceiling(max(. + .1, . * 1.01))}
+  ymax <- max(ggplot2::layer_data(p)[['y']])
+  ymax <- ceiling(max(ymax + .1, ymax * 1.01))
 
   if (! is.null(x[['chisq_df_hat']]) && is.numeric(x[['chisq_df_hat']])) p <- p + ggplot2::geom_function(inherit.aes = FALSE,
                                                                                                          fun = stats::dchisq, args = list(df = x[['chisq_df_hat']]),
@@ -470,9 +468,10 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
                                           #     fit_ctrl$convergence > 0L || fit_trtm$convergence > 0L ) NA else
                                           P_val <- NA_real_
                                           try(expr = {
-                                            P_val <- test_diff(x = dat_ctrl, y =dat_trtm,
-                                                               distribution = distribution, param = param, R = R, type = 'bootstrap') %>%
-                                              purrr::pluck("P", "boot", .default = NA_real_) }, silent = TRUE)
+                                            P_val <- purrr::pluck(test_diff(x = dat_ctrl, y = dat_trtm,
+                                                                            distribution = distribution, param = param, R = R, type = 'bootstrap'),
+                                                                  "P", "boot", .default = NA_real_)
+                                          }, silent = TRUE)
                                           P_val
                                         }, future.seed = TRUE)
 
