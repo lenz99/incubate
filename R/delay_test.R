@@ -180,11 +180,12 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 #' @param R numeric[1]. Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param type character. Which type of tests to perform?
-#' @param verbose numeric. How many details are requested?
+#' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
-                      ties = c('equidist', 'density', 'random'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr'), verbose = 0) {
+                      ties = c('equidist', 'density', 'random'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr'),
+                      verbose = 0) {
   STRICT <- TRUE #keep only conv=0 model fits?
   distribution <- match.arg(distribution)
   ties <- match.arg(ties)
@@ -234,9 +235,9 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       pn1 <- names(fit1[['par']])
       for (na0 in names(fit0[['par']])) fit1oa[['par']][startsWith(pn1, prefix = na0)] <- coef(fit0)[[na0]]
 
-      ## XXX abs should not be necessary because we allow only for non-negative parameters
-      # Better apply lower limits for parameters?!!
-      newparsc <- abs(fit1oa[['par']])
+      # we allow only for non-negative parameters
+      newparsc <- fit1oa[['par']]
+      # apply lower limits for parameters
       newparsc[which(newparsc < 1e-7)] <- 1e-7
       newparsc[which(newparsc > 1e8)] <- 1e8
       fit1oa[['control']][['parscale']] <- newparsc
@@ -248,13 +249,13 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
     # convergence of re-fits?
     # keep also fits with error-code 52: in my tests all those fits *looked* actually OK..
-    # XXX try harder for non-convergence when testStat is called first?
+    # XXX try harder for non-convergence when testStat is called for the first time (to have basis model)
     if ( STRICT && (fit0[['convergence']] != 0 || fit1[['convergence']] != 0) ) return(invisible(NULL))
 
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
     #   2. fit1 has low value (=good fit)
-    list(val = 2L * (fit0[["val"]] - fit1[["val"]]),
+    list(val = -2L * (fit1[["val"]] - fit0[["val"]]),
          fit0 = fit0)
   }
 
@@ -300,19 +301,16 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     ranFunArgsX <- c(list(n=length(x)), coef(fit0, group = "x"))
     ranFunArgsY <- c(list(n=length(y)), coef(fit0, group = "y"))
 
-    t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(1L+(verbose>0L)),
+    retL <- 1L+(verbose>0L)
+    t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(retL),
                                            FUN = function(dummy){
 
                                              # generate new data according to given fitted null-model
                                              # sort is not needed here, as it goes through the whole pipeline (factory method)
                                              ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
                                                                  y = rlang::exec(ranFun, !!! ranFunArgsY))
-                                             if (is.null(ts_boot)) return(rep(NA_real_, 1L+(verbose>0L)))
-
-                                             if (verbose > 0L)
-                                               c(ts_boot[["val"]], ts_boot[['fit0']][['convergence']]) else
-                                                 ts_boot[['val']]
-
+                                             if (is.null(ts_boot)) rep.int(NA_real_, times = retL) else
+                                                 c(ts_boot[['val']], ts_boot[['fit0']][['convergence']])[seq_len(retL)]
 
                                            }, future.seed = TRUE)
 
@@ -321,7 +319,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       cat('Proportion of model failures:', sprintf('%6.1f%%', 100L*length(which(is.na(fit0_conv)))/length(fit0_conv)), '\n')
       cat('Proportion of convergence= 0:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 0))/length(fit0_conv)), '\n')
       cat('Proportion of convergence=52:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 52))/length(fit0_conv)), '\n')
-      t0_dist <- t0_dist[1L,]
+      t0_dist <- t0_dist[1L,] #retain only ts_boot[['val']]
     }
     t0_dist <- t0_dist[is.finite(t0_dist)]
 
