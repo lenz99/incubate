@@ -6,6 +6,11 @@
 \usage{
 near(x, y, tol = .Machine$double.eps^0.4)
 }
+\arguments{
+\item{x}{numeric vector}
+
+\item{y}{numeric vector}
+}
 \description{
 Compare two numeric vectors
 }

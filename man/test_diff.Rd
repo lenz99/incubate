@@ -30,7 +30,7 @@ test_diff(
 
 \item{type}{character. Which type of tests to perform?}
 
-\item{verbose}{numeric. How many details are requested?}
+\item{verbose}{numeric. How many details are requested? Higher value means more details. 0=off, no details.}
 }
 \value{
 list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap

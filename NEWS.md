@@ -1,8 +1,14 @@
 
+# incubate 0.7.6
+* `test_diff`: do GOF-tests also for unrestricted model (e.g. `gof_pearson1`) besides for the restricted null model (renamed to `gof_pearson0`)
+
+# incubate 0.7.5
+* remove dependency on `dplyr`
+
 # incubate 0.7.4
 * add `bs_infer = 't0'` 
 * add +3 to degrees of freedom for t-quantiles in `bs_infer='t'` and `='t0'`
-* (these features were temporarily also released as 0.7.3)
+* version bump belated: these features were temporarily also released as 0.7.3
 
 # incubate 0.7.3
 * fixed mapping of bootstrap inference names for `boot`-package

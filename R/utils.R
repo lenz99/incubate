@@ -2,6 +2,8 @@
 # Utility functions used within this package
 
 #' Compare two numeric vectors
+#' @param x numeric vector
+#' @param y numeric vector
 #' @seealso `dplyr::near`
 near <- function (x, y, tol = .Machine$double.eps^0.4){
   abs(x - y) < tol

@@ -256,7 +256,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     #   1. fit0 has high value (=bad fit)
     #   2. fit1 has low value (=good fit)
     list(val = -2L * (fit1[["val"]] - fit0[["val"]]),
-         fit0 = fit0)
+         fit0 = fit0, fit1 = fit1)
   }
 
   # observed test statistic
@@ -265,6 +265,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     stop("Delay model failed for restricted null-model or free full model", call. = FALSE)
   }
   fit0 <- ts_obs[["fit0"]]
+  fit1 <- ts_obs[["fit1"]]
 
 
   # P-values based GOF-tests
@@ -274,16 +275,19 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   #+ and transform the observed data for both groups via cumulative distribution functions
 
   # spacings-based GOF-test
-  GOF_mo <- if (testMask[['gof_moran']]) test_GOF(delayFit = fit0, method = 'moran')
+  GOF_mo0 <- if (testMask[['gof_moran']]) test_GOF(delayFit = fit0, method = 'moran')
+  GOF_mo1 <- if (testMask[['gof_moran']]) test_GOF(delayFit = fit1, method = 'moran')
   #if (verbose > 0L) cat("Moran test stat: ", GOF_mo$statistic, "\n")
 
   # Pearson GOF-test based on Chi-square distribution.
   # under H0, expect counts according to uniform distribution
-  GOF_pears <- if (testMask[['gof_pearson']]) test_GOF(delayFit = fit0, method = 'pearson')
+  GOF_pears0 <- if (testMask[['gof_pearson']]) test_GOF(delayFit = fit0, method = 'pearson')
+  GOF_pears1 <- if (testMask[['gof_pearson']]) test_GOF(delayFit = fit1, method = 'pearson')
 
   # EDF-based GOF-test
   # Anderson-Darling (AD) test statistic, cf Stephens, Tests based on EDF Statistics p.101, (4.2)
-  GOF_ad <- if (testMask[['gof_ad']]) test_GOF(delayFit = fit0, method = 'AD')
+  GOF_ad0 <- if (testMask[['gof_ad']]) test_GOF(delayFit = fit0, method = 'AD')
+  GOF_ad1 <- if (testMask[['gof_ad']]) test_GOF(delayFit = fit1, method = 'AD')
 
 
 
@@ -333,7 +337,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
   ## P-value from Log-rank tests
   dat_2gr <- tibble::tibble(evtime = c(x,y),
-                            group = rep(c("x", "y"), times = c(length(x), length(y))))
+                            group = rep.int(c("x", "y"), times = c(length(x), length(y))))
   P_lr <- if (testMask[['lr']]) stats::pchisq(q = survival::survdiff(survival::Surv(evtime) ~ group, rho = 0, data = dat_2gr)$chisq,
                         df = 1L, lower.tail = FALSE)
   # Peto & Peto modified Gehan-Wilcoxon test
@@ -348,12 +352,19 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       R = if (testMask[['bootstrap']]) length(t0_dist),
       chisq_df_hat = chisq_df_hat,
       param = param,
-      P = purrr::compact(list(boot = P_boot,
-               gof_mo = as.vector(GOF_mo$p.value),
-               gof_pearson = as.vector(GOF_pears$p.value),
-               gof_ad = as.vector(GOF_ad$p.value),
-               lr = P_lr,
-               lr_pp = P_lr_pp))
+      P = purrr::compact(
+        list(
+          boot = P_boot,
+          gof_mo0 = as.vector(GOF_mo0$p.value),
+          gof_mo1 = as.vector(GOF_mo1$p.value),
+          gof_pearson0 = as.vector(GOF_pears0$p.value),
+          gof_pearson1 = as.vector(GOF_pears1$p.value),
+          gof_ad0 = as.vector(GOF_ad0$p.value),
+          gof_ad1 = as.vector(GOF_ad1$p.value),
+          lr = P_lr,
+          lr_pp = P_lr_pp
+        )
+      )
     )), class = "incubate_test")
 }
 
