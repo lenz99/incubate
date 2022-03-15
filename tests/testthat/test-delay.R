@@ -157,10 +157,10 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
 
   set.seed(20210506)
 
-  testres_P_H0 <- future.apply::future_vapply(X = seq(12), FUN.VALUE = double(1),
+  testres_P_H0 <- future.apply::future_vapply(X = seq(12), FUN.VALUE = double(1L),
                                               FUN = function(dummy) {
-    x <- 4 + rexp(13, rate = .07)
-    y <- 4 + rexp(11, rate = .07)
+    x <- rexp_delayed(13, delay = 4, rate = .07)
+    y <- rexp_delayed(11, delay = 4, rate = .07)
 
     # return P-value of bootstrap test
     Pval <- NA_real_
