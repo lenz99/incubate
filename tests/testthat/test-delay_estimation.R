@@ -1,3 +1,4 @@
+# mkuhn, 2021-04-07
 # testing the delay estimation,
 # in particular parameter estimates, convergence etc. from the model fit object
 
