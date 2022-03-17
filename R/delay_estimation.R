@@ -673,7 +673,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
   if (missing(parm)) parm <- pnames else
     if (is.numeric(parm)) parm <- pnames[parm]
-  parm <- intersect(pnames, parm)
+  parm <- intersect(pnames, parm) # in any case
 
   if (is.null(parm) || ! length(parm) || any(! nzchar(parm))) {
     warning('Invalid parameter name given in argument parm=', call. = FALSE)
@@ -691,34 +691,19 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   if (R < 999) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<999).',
                         call. = FALSE)
 
-  # get bootstrap distribution of coefficients from fitted model
-  ci <- if (useBoot) {
+  # get bootstrap data (i.e. coefficients) from fitted model to bootstrapped observations
+  btdt <- if (useBoot) {
     stopifnot(!twoGr) # for the time being only single group calls are supported!
-    bo <- boot::boot(data = object$data, statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distribution,
-                                                                                     method = object$method, bind = object$bind)),
-                     R = R, sim = bs_data, ran.gen = function(d, coe){
-                       ranFun <- getDist(object$distribution, type = "r")
-                       # arguments to the random function generation
-                       ranFunArgsX <- as.list(c(n=nObs[[1L]], coe))
+    boot::boot(data = object$data,
+               statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distribution,
+                                                           method = object$method, bind = object$bind)),
+               sim = bs_data, mle = coef(object), R = R,
+               ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
+                 ranFun <- getDist(object$distribution, type = "r")
+                 # arguments to the random function generation
+                 rlang::exec(ranFun, !!! as.list(c(n=nObs[[1L]], coe)))
+               })
 
-                       rlang::exec(ranFun, !!! ranFunArgsX)
-                     }, mle = coef(object))
-
-    # 'perc' just takes the quantiles, 'basic' uses quantiles of the difference to the observed value
-    bo_ci_type <- switch(bs_infer, quantile0 = 'perc', normal = 'norm', quantile = 'basic', stop('This boot.ci-type is not supported!'))
-
-    matrix(unlist(
-      purrr::map(seq_len(length.out = length(coef(object))), .f = ~ {
-        # the output of boot.ci can have different CIs as named matrix list entries
-        bo_ci <- boot::boot.ci(bo, index = ., conf = level, type = bo_ci_type)[[switch(bo_ci_type,
-                                                                                       norm = 'normal',
-                                                                                       perc = 'percent',
-                                                                                       bo_ci_type)]]
-        # depending on the CI-type: normal yields 3 columns, perc and others give 5 columns
-        stopifnot( is.matrix(bo_ci), NCOL(bo_ci) > 2L )
-        # the last two columns are always the lower and upper bound
-        bo_ci[, c(NCOL(bo_ci)-1L, NCOL(bo_ci))] })),
-      ncol = 2L, byrow = TRUE)
   } else {
     # own implementation: we inline data generation (simulate) and model fitting in one function
     # get coefficients from bootstrapped data
@@ -750,46 +735,69 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                       stop('Unkown bootstrap data generation type!')
     )
 
-    coefMat <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(length(cf)),
-                                           FUN = coefFun, future.seed = TRUE)
+    future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(length(cf)),
+                                FUN = coefFun, future.seed = TRUE)
 
     # more clear and shorter but less efficient!
-    # coefMat <-  future.apply::future_vapply(simulate(object, nsim = R), FUN.VALUE = double(length(cf)),
-    #                               FUN = function(da){
-    #                                 coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
-    #                               })
+    # future.apply::future_vapply(simulate(object, nsim = R), FUN.VALUE = double(length(cf)),
+    #                             FUN = function(da){
+    #                               coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
+    #                             })
 
     # EEE Idea: we could cache coefMat, for instance when we call confint with different bs_infer methods repeatedly
+  }
+
+  # do bootstrap inference on bootstrap data
+  ci <- if (useBoot) {
+    # 'perc' just takes the quantiles, 'basic' uses quantiles of the difference to the observed value
+    bo_ci_type <- switch(bs_infer,
+                         quantile0 = 'perc',
+                         quantile = 'basic',
+                         normal = 'norm',
+                         stop('This boot.ci-type is not supported!'))
+    matrix(unlist(
+      purrr::map(seq_len(length.out = length(coef(object))), .f = ~ {
+        # the output of boot.ci can have different CIs as named matrix list entries
+        ci_bo <- boot::boot.ci(btdt, index = ., conf = level, type = bo_ci_type)[[switch(bo_ci_type,
+                                                                                       norm = 'normal',
+                                                                                       perc = 'percent',
+                                                                                       bo_ci_type)]]
+        # depending on the CI-type: normal yields 3 columns, perc and others give 5 columns
+        stopifnot( is.matrix(ci_bo), NCOL(ci_bo) > 2L )
+        # the last two columns are always the lower and upper bound
+        ci_bo[, c(NCOL(ci_bo)-1L, NCOL(ci_bo))] })),
+      ncol = 2L, byrow = TRUE)
+  } else {
 
     # bootstrapped confidence limits
     # bias-correction for parametric bootstrap only!?
     #delayH_mle_bias <- mean(delay_mle_bs) - delayH_mle
     switch(bs_infer,
            quantile0 = {
-             t(apply(coefMat, 1L, stats::quantile, probs = a, na.rm = TRUE))
+             t(apply(btdt, 1L, stats::quantile, probs = a, na.rm = TRUE))
            },
            quantile = {
              # bias-corrected quantile-based CI
              # cf Davison, p28
              # vector - matrix: vector is expanded column-wise, and the row-dimension fits (=number of coefs)
-             2L * cf - t(apply(coefMat, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))
+             2L * cf - t(apply(btdt, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))
 
            },
            normal0 = {
-             t(c(1L, 1L) %o% .rowMeans(coefMat, m = length(cf), n = R) + stats::qnorm(a) %o% apply(coefMat, 1L, sd))
+             t(c(1L, 1L) %o% .rowMeans(btdt, m = length(cf), n = R) + stats::qnorm(a) %o% apply(btdt, 1L, sd))
            },
            normal = {
              ## bias-corrected normal-based CI
              ## ci_delay_mle <- delayH_mle - delayH_mle_bias + c(-1, 1) * qnorm(.975) * delayH_mle_sd
-             t(c(1L, 1L) %o% (2L * cf - .rowMeans(coefMat, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(coefMat, 1L, sd))
+             t(c(1L, 1L) %o% (2L * cf - .rowMeans(btdt, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(btdt, 1L, sd))
            },
            t0 = {
-             t(c(1L, 1L) %o% .rowMeans(coefMat, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(coefMat, 1L, sd))
+             t(c(1L, 1L) %o% .rowMeans(btdt, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(btdt, 1L, sd))
            },
            t = {
              # we actually estimate the variance quite accurately through the high number of bootstrap samples,
              #+ still we use a t-quantile to compensate the too low coverage when using qnorm, for the df we add 3L to be less conservative
-             t(c(1L, 1L) %o% (2L * cf - .rowMeans(coefMat, m = length(cf), n = R)) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(coefMat, 1L, sd))
+             t(c(1L, 1L) %o% (2L * cf - .rowMeans(btdt, m = length(cf), n = R)) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(btdt, 1L, sd))
            },
            stop('This type of bootstrap confidence interval is not supported!')
     )
