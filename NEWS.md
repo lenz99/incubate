@@ -1,3 +1,9 @@
+# incubate 0.9
+* confint: separate bootstrap data generation and inference step. This allows for more efficient confint-simulations.
+
+# incubate 0.8
+* enhance test-coverage for package
+* reorganize tests to better match the R-script
 
 # incubate 0.7.6
 * `test_diff`: do GOF-tests also for unrestricted model (e.g. `gof_pearson1`) besides for the restricted null model (renamed to `gof_pearson0`)

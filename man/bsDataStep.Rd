@@ -12,7 +12,7 @@ bsDataStep(object, bs_data = c("parametric", "ordinary"), R, useBoot = FALSE)
 \item{bs_data}{character. Which type of bootstrap method to generate data?}
 }
 \value{
-bootstrap data, either as matrix or of class \code{boot}
+bootstrap data, either as matrix or of class \code{boot} (depending on the \code{useBoot}-flag)
 }
 \description{
 Bootstrap data are here estimated coefficients from models fitted to bootstrap samples.
