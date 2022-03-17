@@ -643,7 +643,10 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' Bootstrap data are here estimated coefficients from models fitted to bootstrap samples.
 #' These bootstrap data are used to make bootstrap inference in the second step.
 #' It is an internal function, the main entry point is [confint.incubate_fit()].
-bsDataStep <- function(object, bs_data = c('ordinary', 'parametric'), R, useBoot = FALSE){
+#' @param object an `incubate_fit`-object
+#' @param bs_data character. Which type of bootstrap method to generate data?
+#' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
+bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE){
   bs_data <- match.arg(bs_data)
   twoGr <- isTRUE(object$twoGroup)
   useBoot <- isTRUE(useBoot)
@@ -758,10 +761,12 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   a <- c(a, 1L - a)
 
   # if not already provided get bootstrap data (i.e. coefficients) from fitted model to bootstrapped observations
-  bs_data <- if (genBootstrapData) bsDataStep(object = object, bs_data = bs_data, R = R, useBoot = useBoot)
-  stopifnot( ! is.character(bs_data))
-  if (R < 999) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<999).',
+  if (genBootstrapData) {
+    bs_data <- bsDataStep(object = object, bs_data = bs_data, R = R, useBoot = useBoot)
+    if (R < 999) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<999).',
                        call. = FALSE)
+  }
+  stopifnot( ! is.character(bs_data))
 
 
   # do bootstrap inference on bootstrap data

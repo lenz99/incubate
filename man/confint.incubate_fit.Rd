@@ -9,7 +9,7 @@
   parm,
   level = 0.95,
   R = 199L,
-  bs_data = c("ordinary", "parametric"),
+  bs_data,
   bs_infer = c("normal", "normal0", "t", "quantile0", "quantile"),
   useBoot = FALSE,
   ...
@@ -18,7 +18,7 @@
 \arguments{
 \item{R}{number of bootstrap replications}
 
-\item{bs_data}{character. Which type of bootstrap is requested?}
+\item{bs_data}{character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.}
 
 \item{bs_infer}{character. Which type of bootstrap inference is requested to generate the confidence interval?}
 
