@@ -688,7 +688,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
   R <- ceiling(R)
-  if (R < 1000) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<1000).',
+  if (R < 999) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<999).',
                         call. = FALSE)
 
   # get bootstrap distribution of coefficients from fitted model
