@@ -10,7 +10,7 @@
   level = 0.95,
   R = 199L,
   bs_data,
-  bs_infer = c("normal", "normal0", "t", "quantile0", "quantile"),
+  bs_infer = c("normal", "normal0", "quantile0", "quantile", "t", "t0"),
   useBoot = FALSE,
   ...
 )
