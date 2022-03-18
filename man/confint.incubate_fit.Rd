@@ -10,7 +10,8 @@
   level = 0.95,
   R = 199L,
   bs_data,
-  bs_infer = c("normal", "normal0", "quantile0", "quantile", "t", "t0"),
+  bs_infer = c("normal", "normal0", "lognormal", "quantile0", "quantile",
+    "logquantile", "t", "t0"),
   useBoot = FALSE,
   ...
 )
@@ -29,5 +30,6 @@ A matrix (or vector) with columns giving lower and upper confidence limits for e
 }
 \description{
 Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
+Optionally, there are also variants that use a log-transformation first.
 At least R=1000 bootstrap replications are recommended. Default are normal-based confidence intervals.
 }

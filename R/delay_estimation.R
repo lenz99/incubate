@@ -713,6 +713,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' Confidence intervals for parameters of MPS-model fits.
 #'
 #' Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
+#' Optionally, there are also variants that use a log-transformation first.
 #' At least R=1000 bootstrap replications are recommended. Default are normal-based confidence intervals.
 #' @param R number of bootstrap replications
 #' @param bs_data character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.
@@ -721,7 +722,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
-                                 bs_data, bs_infer = c('normal', 'normal0', 'quantile0', 'quantile', 't', 't0'), useBoot=FALSE, ...){
+                                 bs_data, bs_infer = c('normal', 'normal0', 'lognormal', 'quantile0', 'quantile', 'logquantile', 't', 't0'), useBoot=FALSE, ...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
@@ -813,6 +814,14 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
              2L * cf - t(apply(bs_data, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))
 
            },
+           logquantile = local({
+             bs_min <- apply(bs_data, 1L, min) - .15
+
+             ## bias-corrected normal-based CI after log-transformation
+             bs_min + exp(
+               2L * log(cf - bs_min) - log(t(apply(bs_data, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))-bs_min)
+             )
+           }),
            normal0 = {
              t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qnorm(a) %o% apply(bs_data, 1L, sd))
            },
@@ -821,6 +830,14 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
              ## ci_delay_mle <- delayH_mle - delayH_mle_bias + c(-1, 1) * qnorm(.975) * delayH_mle_sd
              t(c(1L, 1L) %o% (2L * cf - .rowMeans(bs_data, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data, 1L, sd))
            },
+           lognormal = local({
+             bs_min <- apply(bs_data, 1L, min) - .15
+             #bs_min[bs_min <= 0L] <- 0.00001
+             bs_data_h <- log(bs_data - bs_min)
+             ## bias-corrected normal-based CI after log-transformation
+             bs_min + exp(
+               t(c(1L, 1L) %o% (2L * log(cf - bs_min) - .rowMeans(bs_data_h, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data_h, 1L, sd)))
+           }),
            t0 = {
              t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, sd))
            },

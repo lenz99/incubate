@@ -1,3 +1,6 @@
+# incubate 0.9.1
+* confint: allow for log-transformation of bootstrapped coefficients
+
 # incubate 0.9
 * confint: separate bootstrap data generation and inference step. This allows for more efficient confint-simulations.
 
