@@ -512,7 +512,7 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
 print.incubate_fit <- function(x){
   coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
-                      "Fit a delayed {distribution} via {c('Maximum Product Spacing', 'Maximum Likelihood')[[1L+(method=='MLE')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
+                      "Fit a delayed {distribution} through {c('Maximum Spacing Estimation (MSE)', 'Maximum Likelihood Estimation (MLE)')[[1L+(method=='MLE')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
@@ -769,7 +769,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                        call. = FALSE)
   }
   stopifnot( ! is.vector(bs_data) && ! is.character(bs_data) )
-  # set R to the provided bs_data (in particular important when R is given)
+  # set R according to the provided bs_data (in particular important when R is given)
   R <- NCOL(bs_data)
 
 
