@@ -726,6 +726,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
   if (missing(bs_data)) bs_data <- 'parametric'
+  if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data, choices = c('parametric', 'ordinary'))
   twoGr <- isTRUE(object$twoGroup)
 
   useBoot <- isTRUE(useBoot)
@@ -766,7 +767,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
     if (R < 999) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<999).',
                        call. = FALSE)
   }
-  stopifnot( ! is.character(bs_data))
+  stopifnot( ! is.vector(bs_data) && ! is.character(bs_data) )
 
 
   # do bootstrap inference on bootstrap data
