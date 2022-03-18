@@ -728,6 +728,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   if (missing(bs_data)) bs_data <- 'parametric'
   if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data, choices = c('parametric', 'ordinary'))
   twoGr <- isTRUE(object$twoGroup)
+  nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
   useBoot <- isTRUE(useBoot)
 
@@ -768,6 +769,9 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                        call. = FALSE)
   }
   stopifnot( ! is.vector(bs_data) && ! is.character(bs_data) )
+  # set R to the provided bs_data (in particular important when R is given)
+  R <- NCOL(bs_data)
+
 
 
   # do bootstrap inference on bootstrap data
