@@ -719,10 +719,12 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @param bs_data character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
+#' @param logshift_delay numeric. Positive number how to shift delay fit distribution prior to take the log. It's subtracted from the minimum.
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
-                                 bs_data, bs_infer = c('normal', 'normal0', 'lognormal', 'quantile0', 'quantile', 'logquantile', 't', 't0'), useBoot=FALSE, ...){
+                                 bs_data, bs_infer = c('normal', 'normal0', 'lognormal', 'quantile0', 'quantile', 'logquantile', 't', 't0'),
+                                 useBoot=FALSE, logshift_delay = .01, ...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
@@ -780,7 +782,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   logshift <- purrr::set_names(rep.int(-.0001, length(cf)), nm = names(cf))
   # for delay, the transformation should be independent of the scale of delay.
   if (logshift && ('delay' %in% names(cf)))
-    logshift['delay'] <- min(if (useBoot) bs_data$t[,which('delay' == names(cf))] else bs_data['delay',], na.rm = TRUE) - .1
+    logshift['delay'] <- min(if (useBoot) bs_data$t[,which('delay' == names(cf))] else bs_data['delay',], na.rm = TRUE) - abs(logshift_delay)
 
 
   # do bootstrap inference on bootstrap data

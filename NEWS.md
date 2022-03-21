@@ -1,3 +1,5 @@
+# incubate 0.9.3
+* confint: parameterized logshift for delay, new default is 0.01
 
 # incubate 0.9.2
 * confint: log-transformation revisited: shift mainly for delay (and hardly a shift for the other parameters)

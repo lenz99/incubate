@@ -13,6 +13,7 @@
   bs_infer = c("normal", "normal0", "lognormal", "quantile0", "quantile",
     "logquantile", "t", "t0"),
   useBoot = FALSE,
+  logshift_delay = 0.01,
   ...
 )
 }
@@ -24,6 +25,8 @@
 \item{bs_infer}{character. Which type of bootstrap inference is requested to generate the confidence interval?}
 
 \item{useBoot}{logical. Delegate bootstrap confint calculation to the \code{boot}-package?}
+
+\item{logshift_delay}{numeric. Positive number how to shift delay fit distribution prior to take the log. It's subtracted from the minimum.}
 }
 \value{
 A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
