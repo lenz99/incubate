@@ -1,3 +1,8 @@
+
+# incubate 0.9.2
+* confint: log-transformation revisited: shift mainly for delay (and hardly a shift for the other parameters)
+* confint: extend test coverage to confint routines
+
 # incubate 0.9.1
 * confint: allow for log-transformation of bootstrapped coefficients
 

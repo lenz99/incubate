@@ -116,3 +116,25 @@ test_that("Fit delayed Weibull", {
   # expect a delay close to the minimum of the two true delay parameters
   expect_equal(coef_wb2b[1L], expected = c(delay = 5), tolerance = .02)
 })
+
+
+test_that('confidence intervals', {
+  testthat::skip_on_cran()
+  set.seed(1234)
+
+  obs_sim <- incubate::rexp_delayed(n = 29, delay = 5, rate = .3)
+
+  fm <- incubate::delay_model(x = obs_sim, distribution = 'expon')
+
+  bs_data <- incubate:::bsDataStep(fm, R = 1199, useBoot = FALSE)
+  # set up identical bs_data from boot-package
+  bs_data_bt <- incubate:::bsDataStep(fm, R = 3, useBoot = TRUE)
+  bs_data_bt$R <- NCOL(bs_data)
+  bs_data_bt$t <- t(bs_data)
+
+  # agreement of own implementation and boot-implementation
+  purrr::walk(.x = c('normal', 'lognormal', 'quantile', 'logquantile', 'quantile0'),
+              .f = ~expect_equal(confint(fm, bs_data = bs_data, bs_infer = .x),
+                                 confint(fm, bs_data = bs_data_bt, bs_infer = .x, useBoot = TRUE),
+                                 tolerance = .01))
+})

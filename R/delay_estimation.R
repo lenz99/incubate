@@ -731,7 +731,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   twoGr <- isTRUE(object$twoGroup)
   nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
-  useBoot <- isTRUE(useBoot)
+  useBoot <- isTRUE(useBoot) || inherits(bs_data, 'boot')
 
   genBootstrapData <- is.character(bs_data) && length(bs_data == 1L) && ! is.na(bs_data) && nzchar(bs_data)
   stopifnot( genBootstrapData || useBoot && inherits(bs_data, 'boot') || is.matrix(bs_data) )
@@ -739,7 +739,8 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   bs_infer <- match.arg(bs_infer)
 
   # check if we can really use boot
-  if ( useBoot && (!requireNamespace("boot", quietly = TRUE) || twoGr || !bs_infer %in% c('normal', 'quantile', 'quantile0')) ) {
+  if ( useBoot &&
+       (! requireNamespace("boot", quietly = TRUE) || twoGr || ! bs_infer %in% c('normal', 'lognormal', 'quantile', 'logquantile', 'quantile0')) ) {
     warning('Using own implementation as package', sQuote('boot'), 'is not available or scenario not implemented.',
             call. = FALSE)
     useBoot <- FALSE
@@ -770,27 +771,43 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                        call. = FALSE)
   }
   stopifnot( ! is.vector(bs_data) && ! is.character(bs_data) )
-  # set R according to the provided bs_data (in particular important when R is given)
+  # set R according to the provided bs_data (in particular important when R & bs_data object is given)
   R <- NCOL(bs_data)
 
+
+  logTransform <- isTRUE(startsWith(bs_infer, 'log'))
+  #logshift <- apply(bs_data, 1L, min) - .15
+  logshift <- purrr::set_names(rep.int(-.0001, length(cf)), nm = names(cf))
+  # for delay, the transformation should be independent of the scale of delay.
+  if (logshift && ('delay' %in% names(cf)))
+    logshift['delay'] <- min(if (useBoot) bs_data$t[,which('delay' == names(cf))] else bs_data['delay',], na.rm = TRUE) - .1
 
 
   # do bootstrap inference on bootstrap data
   ci <- if (useBoot) {
     stopifnot( inherits(bs_data, 'boot') )
-    # 'perc' just takes the quantiles, 'basic' uses quantiles of the difference to the observed value
-    bo_ci_type <- switch(bs_infer,
+
+    # 'perc' just takes the quantiles,
+    #+'basic' uses quantiles of the difference to the observed value (bias-correction)
+    ci_type <- switch(bs_infer,
                          quantile0 = 'perc',
-                         quantile = 'basic',
-                         normal = 'norm',
+                         quantile =,
+                         logquantile = 'basic',
+                         normal =,
+                         lognormal = 'norm',
                          stop('This boot.ci-type is not supported!'))
+
     matrix(unlist(
       purrr::map(seq_len(length.out = length(coef(object))), .f = ~ {
         # the output of boot.ci can have different CIs as named matrix list entries
-        ci_bo <- boot::boot.ci(bs_data, index = ., conf = level, type = bo_ci_type)[[switch(bo_ci_type,
+        ci_bo <- {if (logTransform)
+          boot::boot.ci(bs_data, index = ., conf = level, type = ci_type,
+                        h = function(t) log(t - logshift[[.]]), hdot = function(t) 1/(t - logshift[[.]]),
+                        hinv = function(t) exp(t) + logshift[[.]]) else
+            boot::boot.ci(bs_data, index = ., conf = level, type = ci_type)}[[switch(ci_type,
                                                                                        norm = 'normal',
                                                                                        perc = 'percent',
-                                                                                       bo_ci_type)]]
+                                                                                       ci_type)]]
         # depending on the CI-type: normal yields 3 columns, perc and others give 5 columns
         stopifnot( is.matrix(ci_bo), NCOL(ci_bo) > 2L )
         # the last two columns are always the lower and upper bound
@@ -815,11 +832,14 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
            },
            logquantile = local({
-             bs_min <- apply(bs_data, 1L, min) - .15
+             # #bs_min <- apply(bs_data, 1L, min) - .15
+             # bs_min <- purrr::set_names(rep.int(-.001, length(cf)), nm = names(cf))
+             # # for delay, the transformation should be independent of the scale of delay
+             # if ('delay' %in% names(bs_min)) bs_min['delay'] <- min(bs_data['delay',], na.rm = TRUE) - .1
 
              ## bias-corrected normal-based CI after log-transformation
-             bs_min + exp(
-               2L * log(cf - bs_min) - log(t(apply(bs_data, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))-bs_min)
+             logshift + exp(
+               2L * log(cf - logshift) - log(t(apply(bs_data, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))-logshift)
              )
            }),
            normal0 = {
@@ -831,12 +851,15 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
              t(c(1L, 1L) %o% (2L * cf - .rowMeans(bs_data, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data, 1L, sd))
            },
            lognormal = local({
-             bs_min <- apply(bs_data, 1L, min) - .15
-             #bs_min[bs_min <= 0L] <- 0.00001
-             bs_data_h <- log(bs_data - bs_min)
+             # #bs_min <- apply(bs_data, 1L, min) - .15
+             # bs_min <- purrr::set_names(rep.int(-.001, length(cf)), nm = names(cf))
+             # # for delay, the transformation should be independent of the scale of delay
+             # if ('delay' %in% names(bs_min)) bs_min['delay'] <- min(bs_data['delay',], na.rm = TRUE) - .1
+
+             bs_data_h <- log(bs_data - logshift)
              ## bias-corrected normal-based CI after log-transformation
-             bs_min + exp(
-               t(c(1L, 1L) %o% (2L * log(cf - bs_min) - .rowMeans(bs_data_h, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data_h, 1L, sd)))
+             logshift + exp(
+               t(c(1L, 1L) %o% (2L * log(cf - logshift) - .rowMeans(bs_data_h, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data_h, 1L, sd)))
            }),
            t0 = {
              t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, sd))
