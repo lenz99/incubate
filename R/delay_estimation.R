@@ -719,17 +719,18 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @param bs_data character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
-#' @param logshift_delay numeric. Positive number how to shift delay fit distribution prior to take the log. It's subtracted from the minimum.
+#' @param logshift_delay numeric. Positive number how to shift delay fit distribution prior to take the log. It's subtracted from the minimum. Default is .01
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                                  bs_data, bs_infer = c('normal', 'normal0', 'lognormal', 'quantile0', 'quantile', 'logquantile', 't', 't0'),
-                                 useBoot=FALSE, logshift_delay = .01, ...){
+                                 useBoot=FALSE, logshift_delay, ...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
   if (missing(bs_data)) bs_data <- 'parametric'
   if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data, choices = c('parametric', 'ordinary'))
+  if (missing(logshift_delay) || is.na(logshift_delay) || is.null(logshift_delay)) logshift_delay <- .01
   twoGr <- isTRUE(object$twoGroup)
   nObs <- if (twoGr) lengths(object$data) else length(object$data)
 

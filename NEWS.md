@@ -1,3 +1,6 @@
+# incubate 0.9.4
+* confint: logshift accepts also `NA` and `NULL`. Useful for simulation studies with optional logshift-setting.
+
 # incubate 0.9.3
 * confint: parameterized logshift for delay, new default is 0.01
 
