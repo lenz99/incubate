@@ -1,3 +1,7 @@
+
+# incubate 0.9.5
+* confint: redefine `logshift` to mean what is *added* to the argument of log, before it was subtracted. This meaning seems more natural.
+
 # incubate 0.9.4
 * confint: logshift accepts also `NA` and `NULL`. Useful for simulation studies with optional logshift-setting.
 

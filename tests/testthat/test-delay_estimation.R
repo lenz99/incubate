@@ -136,5 +136,12 @@ test_that('confidence intervals', {
   purrr::walk(.x = c('normal', 'lognormal', 'quantile', 'logquantile', 'quantile0'),
               .f = ~expect_equal(confint(fm, bs_data = bs_data, bs_infer = .x),
                                  confint(fm, bs_data = bs_data_bt, bs_infer = .x, useBoot = TRUE),
-                                 tolerance = .01))
+                                 tolerance = 1e-3))
+
+  logInfDF <- tidyr::expand_grid(bsi = c('lognormal', 'logquantile'),
+                                 logsh = c(.0001, .001, .01, .1, .2, .89, 1, 2, 10, 40))
+  purrr::walk2(.x = logInfDF$bsi, .y = logInfDF$logsh,
+              .f = ~expect_equal(confint(fm, bs_data = bs_data, bs_infer = .x, logshift_delay = .y),
+                                 confint(fm, bs_data = bs_data_bt, bs_infer = .x, logshift_delay = .y, useBoot = TRUE),
+                                 tolerance = 1e-3))
 })

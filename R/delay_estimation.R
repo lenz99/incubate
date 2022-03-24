@@ -732,6 +732,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   if (missing(bs_data)) bs_data <- 'parametric'
   if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data, choices = c('parametric', 'ordinary'))
   if (missing(logshift_delay) || is.na(logshift_delay) || is.null(logshift_delay)) logshift_delay <- .01
+  stopifnot( logshift_delay > 0L )
   twoGr <- isTRUE(object$twoGroup)
   nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
@@ -780,11 +781,11 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
 
   logTransform <- isTRUE(startsWith(bs_infer, 'log'))
-  #logshift <- apply(bs_data, 1L, min) - .15
-  logshift <- purrr::set_names(rep.int(-.0001, length(cf)), nm = names(cf))
-  # for delay, the transformation should be independent of the scale of delay.
+  # standard value for all parameters
+  logshift <- purrr::set_names(rep_len(.0001, length.out=length(cf)), nm = names(cf))
+  # for delay, the transformation needs to be independent of the scale of delay.
   if (logshift && ('delay' %in% names(cf)))
-    logshift['delay'] <- min(if (useBoot) bs_data$t[,which('delay' == names(cf))] else bs_data['delay',], na.rm = TRUE) - abs(logshift_delay)
+    logshift['delay'] <- -min(if (useBoot) bs_data$t[,which('delay' == names(cf))] else bs_data['delay',], na.rm = TRUE) + logshift_delay
 
 
   # do bootstrap inference on bootstrap data
@@ -806,8 +807,8 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
         # the output of boot.ci can have different CIs as named matrix list entries
         ci_bo <- {if (logTransform)
           boot::boot.ci(bs_data, index = ., conf = level, type = ci_type,
-                        h = function(t) log(t - logshift[[.]]), hdot = function(t) 1/(t - logshift[[.]]),
-                        hinv = function(t) exp(t) + logshift[[.]]) else
+                        h = function(t) log(t + logshift[[.]]), hdot = function(t) 1/(t + logshift[[.]]),
+                        hinv = function(t) exp(t) - logshift[[.]]) else
             boot::boot.ci(bs_data, index = ., conf = level, type = ci_type)}[[switch(ci_type,
                                                                                        norm = 'normal',
                                                                                        perc = 'percent',
@@ -842,8 +843,8 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
              # if ('delay' %in% names(bs_min)) bs_min['delay'] <- min(bs_data['delay',], na.rm = TRUE) - .1
 
              ## bias-corrected normal-based CI after log-transformation
-             logshift + exp(
-               2L * log(cf - logshift) - log(t(apply(bs_data, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))-logshift)
+             -logshift + exp(
+               2L * log(cf + logshift) - log(t(apply(bs_data, 1L, stats::quantile, probs = rev(a), na.rm = TRUE))+logshift)
              )
            }),
            normal0 = {
@@ -860,10 +861,10 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
              # # for delay, the transformation should be independent of the scale of delay
              # if ('delay' %in% names(bs_min)) bs_min['delay'] <- min(bs_data['delay',], na.rm = TRUE) - .1
 
-             bs_data_h <- log(bs_data - logshift)
+             bs_data_h <- log(bs_data + logshift)
              ## bias-corrected normal-based CI after log-transformation
-             logshift + exp(
-               t(c(1L, 1L) %o% (2L * log(cf - logshift) - .rowMeans(bs_data_h, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data_h, 1L, sd)))
+             -logshift + exp(
+               t(c(1L, 1L) %o% (2L * log(cf + logshift) - .rowMeans(bs_data_h, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data_h, 1L, sd)))
            }),
            t0 = {
              t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, sd))
