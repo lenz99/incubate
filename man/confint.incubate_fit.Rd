@@ -26,7 +26,7 @@
 
 \item{useBoot}{logical. Delegate bootstrap confint calculation to the \code{boot}-package?}
 
-\item{logshift_delay}{numeric. Positive number how to shift delay fit distribution prior to take the log. It's subtracted from the minimum. Default is .01}
+\item{logshift_delay}{numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01}
 }
 \value{
 A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.

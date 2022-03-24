@@ -638,13 +638,14 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
   }
 }
 
-#' Generate bootstrap data
+#' Generate bootstrap distribution of fitted coefficients
 #'
 #' Bootstrap data are here estimated coefficients from models fitted to bootstrap samples.
 #' These bootstrap data are used to make bootstrap inference in the second step.
 #' It is an internal function, the main entry point is [confint.incubate_fit()].
 #' @param object an `incubate_fit`-object
 #' @param bs_data character. Which type of bootstrap method to generate data?
+#' @param R integer. Number of bootstrapped model coefficient estimates
 #' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
 bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE){
   bs_data <- match.arg(bs_data)
@@ -719,7 +720,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @param bs_data character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
-#' @param logshift_delay numeric. Positive number how to shift delay fit distribution prior to take the log. It's subtracted from the minimum. Default is .01
+#' @param logshift_delay numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
