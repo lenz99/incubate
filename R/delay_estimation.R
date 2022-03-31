@@ -646,15 +646,29 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' @param object an `incubate_fit`-object
 #' @param bs_data character. Which type of bootstrap method to generate data?
 #' @param R integer. Number of bootstrapped model coefficient estimates
+#' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing. Default is 0.025
 #' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
-bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE){
+bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE, smd_factor = 0){
   bs_data <- match.arg(bs_data)
   twoGr <- isTRUE(object$twoGroup)
   useBoot <- isTRUE(useBoot)
+  stopifnot( is.numeric(smd_factor), length(smd_factor) == 1L, smd_factor >= 0L )
+  smooth_delay <- isTRUE(smd_factor > 0L)
+  if (bs_data != 'parametric' && smooth_delay) {
+    smooth_delay <- FALSE
+    smd_factor <- 0L
+    #XXX make smooth_delay work also for ordinary?!
+    warning('Smoothing of delay is only implemented for parametric bootstrap!')
+  }
+  # XXX make smooth_delay work also for Weibull?!
+  if (object$distribution == 'weibull' && smooth_delay) stop('Smoothing of delay is only implemented for the delayed exponential model!')
 
   nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
   R <- ceiling(R)
+
+  # smooth delay parameters
+  SMD_DIV <- 3
 
   if (useBoot) {
     stopifnot(!twoGr) # for the time being only single group calls are supported!
@@ -664,7 +678,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
                  ranFun <- getDist(object$distribution, type = "r")
-                 # arguments to the random function generation
+                 if (smooth_delay){
+                   coe[['delay']] <- abs(rnorm(1L, mean = coe[['delay']], sd = min(coe[['delay']]/SMD_DIV, smd_factor/coe[['rate']])))
+                 }
                  rlang::exec(ranFun, !!! as.list(c(n=nObs[[1L]], coe)))
                })
 
@@ -684,11 +700,20 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                         # generate data from the fitted model
                         # for performance reasons, we 'inline' the simulate code, cf test_diff
                         ranFun <- getDist(object$distribution, type = "r")
+
                         # arguments to the random function generation
                         ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
                         ranFunArgsY <- if (twoGr) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
 
+
                         function(dummy){
+                          if (smooth_delay){
+                            #densFun <- getDist(object$distribution, type = 'd') #more generally, use density at delay+small value?
+                            ranFunArgsX[['delay']] <- abs(rnorm(1L, mean = ranFunArgsX[['delay']], sd = min(ranFunArgsX[['delay']]/SMD_DIV, smd_factor/ranFunArgsX[['rate']])))
+                            if (twoGr) ranFunArgsY[['delay']] <- abs(rnorm(1L, mean = ranFunArgsY[['delay']],
+                                                                           sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/ranFunArgsY[['rate']])))
+                          }
+
                           # cf simulate (but inlined here for performance reasons)
                           x <- rlang::exec(ranFun, !!! ranFunArgsX)
                           y <- if (twoGr) rlang::exec(ranFun, !!! ranFunArgsY)
@@ -721,11 +746,12 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
 #' @param logshift_delay numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01
+#' @param smd_factor numeric. How much should the delay parameter be smoothed? Only supported for parametric bootstrap.
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                                  bs_data, bs_infer = c('normal', 'normal0', 'lognormal', 'quantile0', 'quantile', 'logquantile', 't', 't0'),
-                                 useBoot=FALSE, logshift_delay, ...){
+                                 useBoot=FALSE, logshift_delay, smd_factor = 0,...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
@@ -771,7 +797,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
   # if not already provided get bootstrap data (i.e. coefficients) from fitted model to bootstrapped observations
   if (genBootstrapData) {
-    bs_data <- bsDataStep(object = object, bs_data = bs_data, R = R, useBoot = useBoot)
+    bs_data <- bsDataStep(object = object, bs_data = bs_data, R = R, useBoot = useBoot, smd_factor = smd_factor)
     if (R < 999) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<999).',
                        call. = FALSE)
   }

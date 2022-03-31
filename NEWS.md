@@ -1,4 +1,7 @@
 
+# incubate 0.9.6
+* confint: add option to smooth delay for parametric bootstrap & delayed exponential model
+
 # incubate 0.9.5
 * confint: redefine `logshift` to mean what is *added* to the argument of log, before it was subtracted. This meaning seems more natural.
 

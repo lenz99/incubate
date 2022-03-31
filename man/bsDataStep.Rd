@@ -4,7 +4,13 @@
 \alias{bsDataStep}
 \title{Generate bootstrap distribution of fitted coefficients}
 \usage{
-bsDataStep(object, bs_data = c("parametric", "ordinary"), R, useBoot = FALSE)
+bsDataStep(
+  object,
+  bs_data = c("parametric", "ordinary"),
+  R,
+  useBoot = FALSE,
+  smd_factor = 0
+)
 }
 \arguments{
 \item{object}{an \code{incubate_fit}-object}
@@ -12,6 +18,8 @@ bsDataStep(object, bs_data = c("parametric", "ordinary"), R, useBoot = FALSE)
 \item{bs_data}{character. Which type of bootstrap method to generate data?}
 
 \item{R}{integer. Number of bootstrapped model coefficient estimates}
+
+\item{smd_factor}{numeric. smooth-delay factor: influence the amount of smoothing. Default is 0.025}
 }
 \value{
 bootstrap data, either as matrix or of class \code{boot} (depending on the \code{useBoot}-flag)

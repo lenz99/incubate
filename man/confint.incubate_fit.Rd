@@ -14,6 +14,7 @@
     "logquantile", "t", "t0"),
   useBoot = FALSE,
   logshift_delay,
+  smd_factor = 0,
   ...
 )
 }
@@ -27,6 +28,8 @@
 \item{useBoot}{logical. Delegate bootstrap confint calculation to the \code{boot}-package?}
 
 \item{logshift_delay}{numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01}
+
+\item{smd_factor}{numeric. How much should the delay parameter be smoothed? Only supported for parametric bootstrap.}
 }
 \value{
 A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
