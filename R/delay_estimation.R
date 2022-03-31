@@ -777,7 +777,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   }
   stopifnot( ! is.vector(bs_data) && ! is.character(bs_data) )
   # set R according to the provided bs_data (in particular important when R & bs_data object is given)
-  R <- NCOL(bs_data)
+  R <- if (useBoot) bs_data[['R']] else NCOL(bs_data)
 
 
   logTransform <- isTRUE(startsWith(bs_infer, 'log'))
