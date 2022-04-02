@@ -679,7 +679,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
                  ranFun <- getDist(object$distribution, type = "r")
                  if (smooth_delay){
-                   coe[['delay']] <- abs(rnorm(1L, mean = coe[['delay']], sd = min(coe[['delay']]/SMD_DIV, smd_factor/coe[['rate']])))
+                   # use rectified normal
+                   coe[['delay']] <- abs(coe[['delay']] - max(0L, rnorm(1L, mean = 0L, sd = min(coe[['delay']]/SMD_DIV, smd_factor/coe[['rate']]))))
                  }
                  rlang::exec(ranFun, !!! as.list(c(n=nObs[[1L]], coe)))
                })
@@ -709,9 +710,11 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                         function(dummy){
                           if (smooth_delay){
                             #densFun <- getDist(object$distribution, type = 'd') #more generally, use density at delay+small value?
-                            ranFunArgsX[['delay']] <- abs(rnorm(1L, mean = ranFunArgsX[['delay']], sd = min(ranFunArgsX[['delay']]/SMD_DIV, smd_factor/ranFunArgsX[['rate']])))
-                            if (twoGr) ranFunArgsY[['delay']] <- abs(rnorm(1L, mean = ranFunArgsY[['delay']],
-                                                                           sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/ranFunArgsY[['rate']])))
+                            # use rectified Gaussian
+                            ranFunArgsX[['delay']] <- abs(ranFunArgsX[['delay']] - max(0L, rnorm(1L, mean = 0L,
+                                                                                             sd = min(ranFunArgsX[['delay']]/SMD_DIV, smd_factor/ranFunArgsX[['rate']]))))
+                            if (twoGr) ranFunArgsY[['delay']] <- abs(ranFunArgsY[['delay']] - max(0L, rnorm(1L, mean = 0L,
+                                                                                                        sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/ranFunArgsY[['rate']]))))
                           }
 
                           # cf simulate (but inlined here for performance reasons)

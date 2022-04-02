@@ -1,4 +1,7 @@
 
+# incubate 0.9.7
+* confint: smooth delay for parametric bootstrap & delayed exponential model via rectified Gaussian (instead of normal Gaussian)
+
 # incubate 0.9.6
 * confint: add option to smooth delay for parametric bootstrap & delayed exponential model
 
