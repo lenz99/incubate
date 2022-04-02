@@ -741,12 +741,12 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
 #' Optionally, there are also variants that use a log-transformation first.
 #' At least R=1000 bootstrap replications are recommended. Default are normal-based confidence intervals.
-#' @param R number of bootstrap replications
+#' @param R number of bootstrap replications. Used only if not `bs_data`-object is provided.
 #' @param bs_data character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
 #' @param logshift_delay numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01
-#' @param smd_factor numeric. How much should the delay parameter be smoothed? Only supported for parametric bootstrap.
+#' @param smd_factor numeric. How much should the delay parameter be smoothed? Only supported for parametric bootstrap. And only used if no `bs_data`- object is provided.
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
