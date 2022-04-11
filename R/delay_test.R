@@ -421,16 +421,16 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' Given an effect size and a sample size `n` it simulates the power.
 #' The more power simulation rounds (parameter `nPowerSim=`) the more densely the space of data according to the specified model is sampled.
 #'
-#' @param eff list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for each of the two groups.
-#' @param param character. Parameter name for which to simulate the power.
+#' @param eff list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for two groups.
+#' @param param character. Parameter name(s) for which to simulate the power.
 #' @param n integer. Number of observations per group for the power simulation. Can be two different numbers, control group and then treatment group.
 #' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80%.
-#' @param R integer. Number of bootstrap samples to assess difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which is enough for power analysis.
+#' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which is enough for power analysis.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
-                       eff = stop("Provide parameters for each group (reference group first) that reflect the effect!"),
-                       n, sig.level = 0.05, nPowerSim = 16e2, R = 2e2){
+                       eff = stop("Provide parameters for both group that reflect the effect!"),
+                       n, sig.level = 0.05, nPowerSim = 1600, R = 201){
 
   distribution <- match.arg(distribution)
   ranFun <- getDist(distribution, type = "r")
@@ -441,11 +441,11 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
   stopifnot( length(sig.level) == 1L, is.numeric(sig.level), is.finite(sig.level) )
   stopifnot( is.numeric(n), length(n) > 0L, length(n) <= 2L, all(is.finite(n) & n >= 1L) )
   stopifnot( length(nPowerSim) == 1L, is.numeric(nPowerSim), nPowerSim >= 3L )
-  stopifnot( length(R) == 1L, is.numeric(R), R >= 5L )
+  stopifnot( length(R) == 1L, is.numeric(R), R >= 3L )
   nPowerSim <- ceiling(nPowerSim)
   R <- ceiling(R)
 
-  if (length(n) == 1L) n <- rep(n, 2L)
+  if (length(n) == 1L) n <- rep_len(n, 2L)
 
   n_ctrl <- n[[1L]]
   n_trtm <- n[[2L]]
@@ -466,7 +466,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
 
 
   # repeatedly test for difference in parameter on bootstrapped data
-  P_dist <- future.apply::future_vapply(X = seq(nPowerSim), FUN.VALUE = double(1L),
+  P_dist <- future.apply::future_vapply(X = seq_len(nPowerSim), FUN.VALUE = double(1L),
                                         FUN = function(dummy) {
                                           # generate data according to chosen model
                                           #+and with the specified effect
@@ -495,14 +495,12 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
   if ( length(P_dist) < 100L )
     warning("Low resultion for power estimate.")
 
-  # structure(
+  # structure(, class = "sscn")
   list(id = "delayed:2groups", name = "Difference in delayed model for time-to-event data in two groups",
        distribution = distribution, param = param,
        eff = eff, sig.level = sig.level, n = n, N = sum(n),
        P_dist = P_dist, ##debug
        power = if (length(P_dist)) sum(P_dist < sig.level) / length(P_dist) else NA_real_
   )
-  #   , class = "sscn"
-  # )
 }
 
