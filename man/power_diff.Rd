@@ -7,23 +7,31 @@
 power_diff(
   distribution = c("exponential", "weibull"),
   param = "delay",
+  test = c("bootstrap", "pearson", "moran", "ad", "lr", "lr_pp"),
   eff = stop("Provide parameters for both group that reflect the effect!"),
-  n,
+  n = NULL,
+  r = 1,
   sig.level = 0.05,
+  power = NULL,
   nPowerSim = 1600,
-  R = 201
+  R = 201,
+  nRange = c(5, 100)
 )
 }
 \arguments{
 \item{param}{character. Parameter name(s) for which to simulate the power.}
 
+\item{test}{character. Which test to apply to calculate power for?}
+
 \item{eff}{list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for two groups.}
 
-\item{n}{integer. Number of observations per group for the power simulation. Can be two different numbers, control group and then treatment group.}
+\item{n}{integer. Number of observations per group for the power simulation.}
+
+\item{r}{positive numeric. Ratio of both groups sizes, ny / nx. Default value is 1, balanced group sizes.}
 
 \item{nPowerSim}{integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80\%.}
 
-\item{R}{integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around \code{R=200} gives a resolution of 0.5\% which is enough for power analysis.}
+\item{R}{integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around \code{R=200} gives a resolution of 0.5\% which might be enough for power analysis.}
 }
 \value{
 List of results of power simulation. Or \code{NULL} in case of errors.

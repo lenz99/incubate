@@ -184,7 +184,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
-                      ties = c('equidist', 'density', 'random'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr'),
+                      ties = c('equidist', 'density', 'random'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr', 'lr_pp'),
                       verbose = 0) {
   STRICT <- TRUE #keep only conv=0 model fits?
   distribution <- match.arg(distribution)
@@ -196,17 +196,18 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   stopifnot( is.character(param), length(param) >= 1L, nzchar(param) )
 
   # bitmask for test types
-  testMask <- purrr::set_names(logical(6L), nm = c('bootstrap', 'gof_moran', 'gof_pearson', 'gof_ad', 'lr', 'lr_pp'))
+  testMask <- purrr::set_names(logical(6L), nm = c('bootstrap', 'pearson', 'moran', 'ad', 'lr', 'lr_pp'))
 
   switch(EXPR = type,
          all = { testMask <- testMask | TRUE },
-         # bootstrap + LR-tests (for stankovic results) #XXX better use flags: doBootstrap=, doGOF=, doLR=?!
+         # bootstrap + LR-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLR=?!
          bootstrap = {testMask[c('bootstrap', 'lr', 'lr_pp')] <- TRUE},
-         gof = {testMask[grepl('gof_', names(testMask), fixed = TRUE)] <- TRUE},
-         moran = {testMask['gof_moran'] <- TRUE},
-         pearson = {testMask['gof_pearson'] <- TRUE},
-         ad = {testMask['gof_ad'] <- TRUE},
-         lr = {testMask[grepl('lr', names(testMask), fixed = TRUE)] <- TRUE},
+         gof = {testMask[c('pearson', 'moran', 'ad')] <- TRUE},
+         moran = {testMask['moran'] <- TRUE},
+         pearson = {testMask['pearson'] <- TRUE},
+         ad = {testMask['ad'] <- TRUE},
+         lr = {testMask['lr'] <- TRUE},
+         lr_pp = {testMask['lr_pp'] <- TRUE},
          stop('This type of tests is not supported!')
   )
 
@@ -275,19 +276,19 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   #+ and transform the observed data for both groups via cumulative distribution functions
 
   # spacings-based GOF-test
-  GOF_mo0 <- if (testMask[['gof_moran']]) test_GOF(delayFit = fit0, method = 'moran')
-  GOF_mo1 <- if (testMask[['gof_moran']]) test_GOF(delayFit = fit1, method = 'moran')
+  GOF_mo0 <- if (testMask[['moran']]) test_GOF(delayFit = fit0, method = 'moran')
+  GOF_mo1 <- if (testMask[['moran']]) test_GOF(delayFit = fit1, method = 'moran')
   #if (verbose > 0L) cat("Moran test stat: ", GOF_mo$statistic, "\n")
 
   # Pearson GOF-test based on Chi-square distribution.
   # under H0, expect counts according to uniform distribution
-  GOF_pears0 <- if (testMask[['gof_pearson']]) test_GOF(delayFit = fit0, method = 'pearson')
-  GOF_pears1 <- if (testMask[['gof_pearson']]) test_GOF(delayFit = fit1, method = 'pearson')
+  GOF_pears0 <- if (testMask[['pearson']]) test_GOF(delayFit = fit0, method = 'pearson')
+  GOF_pears1 <- if (testMask[['pearson']]) test_GOF(delayFit = fit1, method = 'pearson')
 
   # EDF-based GOF-test
   # Anderson-Darling (AD) test statistic, cf Stephens, Tests based on EDF Statistics p.101, (4.2)
-  GOF_ad0 <- if (testMask[['gof_ad']]) test_GOF(delayFit = fit0, method = 'AD')
-  GOF_ad1 <- if (testMask[['gof_ad']]) test_GOF(delayFit = fit1, method = 'AD')
+  GOF_ad0 <- if (testMask[['ad']]) test_GOF(delayFit = fit0, method = 'AD')
+  GOF_ad1 <- if (testMask[['ad']]) test_GOF(delayFit = fit1, method = 'AD')
 
 
 
@@ -346,7 +347,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
 
   structure(
-    purrr::compact(list(#fit0 = fit0, fit1 = fit1, ##debug
+    purrr::compact(list(
+      #fit0 = fit0, fit1 = fit1, ##for debugging only
       t_obs = ts_obs[["val"]],
       testDist = t0_dist,
       R = if (testMask[['bootstrap']]) length(t0_dist),
@@ -354,13 +356,13 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       param = param,
       P = purrr::compact(
         list(
-          boot = P_boot,
-          gof_mo0 = as.vector(GOF_mo0$p.value),
-          gof_mo1 = as.vector(GOF_mo1$p.value),
-          gof_pearson0 = as.vector(GOF_pears0$p.value),
-          gof_pearson1 = as.vector(GOF_pears1$p.value),
-          gof_ad0 = as.vector(GOF_ad0$p.value),
-          gof_ad1 = as.vector(GOF_ad1$p.value),
+          bootstrap = P_boot,
+          moran = as.vector(GOF_mo0$p.value),
+          moran1 = as.vector(GOF_mo1$p.value),
+          pearson = as.vector(GOF_pears0$p.value),
+          pearson1 = as.vector(GOF_pears1$p.value),
+          ad = as.vector(GOF_ad0$p.value),
+          ad1 = as.vector(GOF_ad1$p.value),
           lr = P_lr,
           lr_pp = P_lr_pp
         )
@@ -373,7 +375,7 @@ print.incubate_test <- function(x, ...){
   params <- paste(x$param, collapse = ' & ')
   cat('Test for difference in parameter ', params, 'between two groups.\n')
   cat('Alternative hypothesis: ', params, 'are different between the two groups.\n')
-  P_boot_str <- if (is.numeric(x$P$boot)) format.pval(x$P$boot) else '-'
+  P_boot_str <- if (is.numeric(x$P$bootstrap)) format.pval(x$P$bootstrap) else '-'
   cat('Parametric Bootstrap P-value: ', P_boot_str)
   cat('\n')
 }
@@ -390,9 +392,11 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
   }
 
   if (missing(title)) title <- glue::glue('Distribution of test statistic under H0 for parameter {dQuote(x$param)}')
-  if (missing(subtitle)) subtitle <- glue::glue('Sampling distribution, based on {length(teststat)} parametric bootstrap draws. ',
-                                                'Bootstrap P-value = {format.pval(x$P$boot, eps = 1e-3)}')
+  if (missing(subtitle) && ! is.null(x$P$bootstrap)){
+    subtitle <- glue::glue('Sampling distribution, based on {length(teststat)} parametric bootstrap draws. ',
+                           'Bootstrap P-value = {format.pval(x$P$bootstrap, eps = 1e-3)}')
   #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
+  }
 
 
   p <- ggplot2::ggplot(tibble::tibble(teststat = teststat),
@@ -423,84 +427,142 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #'
 #' @param eff list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for two groups.
 #' @param param character. Parameter name(s) for which to simulate the power.
-#' @param n integer. Number of observations per group for the power simulation. Can be two different numbers, control group and then treatment group.
+#' @param test character. Which test to apply to calculate power for?
+#' @param n integer. Number of observations per group for the power simulation.
+#' @param r positive numeric. Ratio of both groups sizes, ny / nx. Default value is 1, balanced group sizes.
 #' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80%.
-#' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which is enough for power analysis.
+#' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which might be enough for power analysis.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
+                       test = c('bootstrap', 'pearson', 'moran', 'ad', 'lr', 'lr_pp'),
                        eff = stop("Provide parameters for both group that reflect the effect!"),
-                       n, sig.level = 0.05, nPowerSim = 1600, R = 201){
+                       n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
+                       nRange = c(5, 100)){
 
+  tol <- .001
   distribution <- match.arg(distribution)
+  test <- match.arg(test)
   ranFun <- getDist(distribution, type = "r")
   par_names <- getDist(distribution, type = "param")
   param <- match.arg(param, choices = par_names)
 
-  stopifnot( is.list(eff), length(eff) == 2L )
-  stopifnot( length(sig.level) == 1L, is.numeric(sig.level), is.finite(sig.level) )
-  stopifnot( is.numeric(n), length(n) > 0L, length(n) <= 2L, all(is.finite(n) & n >= 1L) )
+  stopifnot( is.null(n) || (is.numeric(n) && length(n) == 1L && is.finite(n) ))
+  stopifnot( is.null(power) || (is.numeric(power) && length(power) == 1L && power > 0L && power < 1L ))
+  if (is.null(n) + is.null(power) != 1L) stop('Either set `n=NULL` or `power=NULL`!')
+
+  stopifnot( length(sig.level) == 1L, is.numeric(sig.level), is.finite(sig.level), sig.level > 0L, sig.level < 1L )
+  stopifnot(is.numeric(r), length(r) == 1L, r > 0L)
   stopifnot( length(nPowerSim) == 1L, is.numeric(nPowerSim), nPowerSim >= 3L )
   stopifnot( length(R) == 1L, is.numeric(R), R >= 3L )
+  stopifnot( length(nRange) == 2L, is.numeric(nRange), nRange[[1L]] > 1L, nRange[[2L]] > nRange[[1L]] )
   nPowerSim <- ceiling(nPowerSim)
   R <- ceiling(R)
 
-  if (length(n) == 1L) n <- rep_len(n, 2L)
+  stopifnot( is.list(eff), length(eff) == 2L )
+  parx <- eff[[1L]]
+  pary <- eff[[2L]]
 
-  n_ctrl <- n[[1L]]
-  n_trtm <- n[[2L]]
+  stopifnot( is.numeric(parx), is.numeric(pary) )
+  stopifnot( length(parx) == length(par_names), length(pary) == length(par_names))
+  parx <- purrr::set_names(parx, par_names)
+  pary <- purrr::set_names(pary, par_names)
 
 
-  if (any(n < length(par_names))){
-    warning("Too few observations to fit parameters.")
-    return(invisible(NULL))
+  simulatePower <- function(nx, ny, R){
+    nx <- ceiling(nx); ny <- ceiling(ny)
+
+    # repeatedly test for difference in parameter on bootstrapped data
+    P_dist <- future.apply::future_vapply(X = seq_len(nPowerSim), FUN.VALUE = double(1L),
+                                          FUN = function(dummy) {
+                                            # generate data according to chosen model
+                                            #+and with the specified effect
+                                            datx <- purrr::exec(ranFun, !!! c(n=nx, parx))
+                                            daty <- purrr::exec(ranFun, !!! c(n=ny, pary))
+
+                                            P_val <- NA_real_
+                                            try(expr = {
+                                              P_val <- purrr::pluck(test_diff(x = datx, y = daty,
+                                                                              distribution = distribution, param = param,
+                                                                              type = test, R = R),
+                                                                    "P", test, .default = NA_real_)
+                                            }, silent = TRUE)
+                                            P_val
+                                          }, future.seed = TRUE)
+
+
+    P_dist <- P_dist[is.finite(P_dist)]
+
+    if ( !length(P_dist) ){
+      warning("No valid power simulation results.")
+      return(invisible(NULL))
+    }
+
+    if ( length(P_dist) < 100L )
+      warning("Low resultion for power estimate.")
+
+    if (length(P_dist))
+      sum(P_dist < sig.level) / length(P_dist) else
+        NA_real_
   }
 
-  par_ctrl <- eff[[1L]]
-  par_trtm <- eff[[2L]]
 
-  stopifnot( is.numeric(par_ctrl), is.numeric(par_trtm) )
-  stopifnot( length(par_ctrl) == length(par_names), length(par_trtm) == length(par_names))
-  par_ctrl <- purrr::set_names(par_ctrl, par_names)
-  par_trtm <- purrr::set_names(par_trtm, par_names)
+  nx <- ny <- -1
+  powerGrid <- NULL
+  if (is.null(power)){
+    nx <- ceiling(n)
+    ny <- ceiling(r * n)
+    if ( nx < length(par_names) || ny < length(par_names) ){
+      warning("Too few observations to fit parameters.")
+      return(invisible(NULL))
+    }
+
+    power <- simulatePower(nx = nx, ny = ny, R = R)
+  } else {
+    stopifnot( is.null(n) )
+
+    nx_cand <- unique(ceiling(seq.int(from = nRange[[1L]], to = nRange[[2L]], length.out = 5L)))
+    pow_cand <- rep_len(-1, length.out = length(nx_cand))
+    for (i in seq_along(nx_cand)) {
+      nxc <- nx_cand[[i]]
+      pow_cand[[i]] <- simulatePower(nx = nxc, ny = nxc * r, R = R)
+
+      if (pow_cand[[i]] >= power - tol) break
+    }
+
+    if (i == 1L){
+      warning('Smallest allowed n already exceeds requested power!')
+    }
+    if (pow_cand[[length(nx_cand)]] > -1 && pow_cand[[length(nx_cand)]] < power - tol){
+      warning('Failed to reach requested power with maximally allowed n: ', nx_cand[[length(nx_cand)]],
+              ' yields a power of ', pow_cand[[length(nx_cand)]])
+    }
+      nx <- ceiling(nx_cand[[i]])
+      ny <- ceiling(nx_cand[[i]] * r)
+      power <- pow_cand[[i]]
 
 
-  # repeatedly test for difference in parameter on bootstrapped data
-  P_dist <- future.apply::future_vapply(X = seq_len(nPowerSim), FUN.VALUE = double(1L),
-                                        FUN = function(dummy) {
-                                          # generate data according to chosen model
-                                          #+and with the specified effect
-                                          dat_ctrl <- purrr::exec(ranFun, !!! c(n=n_ctrl, par_ctrl))
-                                          dat_trtm <- purrr::exec(ranFun, !!! c(n=n_trtm, par_trtm))
+    powerGrid <- tibble::tibble(
+      nx = nx_cand[pow_cand > 0],
+      ny = ceiling(nx * r),
+      power = pow_cand[pow_cand > 0]
+    )
+    # nSol <- stats::uniroot(function(n) simulatePower(nx = n, ny = n * r, R = R) - power,
+    #                     interval = nRange, tol = .0001, extendInt = "upX")
+    # nx <- nSol$root
+    # ny <- r * nx
+    # power <- nSol$f.root + power
 
-                                          # if (is.null(fit_ctrl) || is.null(fit_trtm) ||
-                                          #     fit_ctrl$convergence > 0L || fit_trtm$convergence > 0L ) NA else
-                                          P_val <- NA_real_
-                                          try(expr = {
-                                            P_val <- purrr::pluck(test_diff(x = dat_ctrl, y = dat_trtm,
-                                                                            distribution = distribution, param = param, R = R, type = 'bootstrap'),
-                                                                  "P", "boot", .default = NA_real_)
-                                          }, silent = TRUE)
-                                          P_val
-                                        }, future.seed = TRUE)
-
-
-  P_dist <- P_dist[is.finite(P_dist)]
-
-  if ( !length(P_dist) ){
-    warning("No valid power simulation results.")
-    return(invisible(NULL))
   }
 
-  if ( length(P_dist) < 100L )
-    warning("Low resultion for power estimate.")
-
-  # structure(, class = "sscn")
-  list(id = "delayed:2groups", name = "Difference in delayed model for time-to-event data in two groups",
+  list(name = "Difference in delayed model for time-to-event data in two groups",
        distribution = distribution, param = param,
-       eff = eff, sig.level = sig.level, n = n, N = sum(n),
-       P_dist = P_dist, ##debug
-       power = if (length(P_dist)) sum(P_dist < sig.level) / length(P_dist) else NA_real_
-  )
+       test = test,
+       eff = eff, sig.level = sig.level,
+       nx = nx, ny = ny, N = nx + ny,
+       #P_dist = P_dist, ##debug
+       powerGrid = powerGrid,
+       power = power
+  ) %>% purrr::compact()
 }
 

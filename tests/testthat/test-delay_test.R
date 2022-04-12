@@ -10,15 +10,15 @@ test_that('Structure of test objects.', {
 
   expect_s3_class(ted_d, class = 'incubate_test')
   expect_identical(names(ted_d), c('t_obs', 'testDist', 'R', 'chisq_df_hat', 'param', 'P'))
-  expect_type(ted_d$P$boot, type = 'double')
-  expect_lte(ted_d$P$boot, expected = 1L)
-  expect_gte(ted_d$P$boot, expected = 0L)
+  expect_type(ted_d$P$bootstrap, type = 'double')
+  expect_lte( ted_d$P$bootstrap, expected = 1L)
+  expect_gte( ted_d$P$bootstrap, expected = 0L)
 })
 
 test_that('GOF-test on single-group exponentials', {
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
-  future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 1L))
+  future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 2L))
 
   # GOF-tests on true exponential data with varying sample size, delay and rate
   # results in a matrix of dimension #scenarios x #replications
@@ -73,7 +73,7 @@ test_that("Test difference in delay for two exponential fits", {
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
 
-  future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 1L))
+  future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 2L))
 
   set.seed(12345)
   x <- rexp_delayed(13L, delay = 11, rate = .05)
@@ -81,34 +81,36 @@ test_that("Test difference in delay for two exponential fits", {
 
   # increasing effect
   te_diff_delays <- purrr::map(purrr::set_names(c(0, 9, 19)),
-                               ~ test_diff(x = x + .x, y = y, param = "delay", R = 399))
+                               ~ test_diff(x = x + .x, y = y, param = "delay", type = 'bootstrap', R = 399))
+
+  te_diff_delays_P_bs <- purrr::map_dbl(te_diff_delays, ~ purrr::chuck(., "P", "bootstrap"))
 
   # null model (no effect) has a high P-value
-  expect_gt(purrr::chuck(te_diff_delays, "0", "P", "boot"), expected = .1)
+  expect_gt(te_diff_delays_P_bs[['0']], expected = .1)
 
   # the bigger the effect (=difference in delay) the smaller the P-value
-  expect_true(all(diff(purrr::map_dbl(te_diff_delays, ~ purrr::chuck(., "P", "boot"))) < 0L))
+  expect_true(all(diff(te_diff_delays_P_bs) < 0L))
   # negative correlation betw effect size and P-values
   expect_lt(cor(x = as.integer(names(te_diff_delays)),
-                y = purrr::map_dbl(te_diff_delays, ~ purrr::chuck(., "P", "boot"))),
-            expected = -.66)
+                y = te_diff_delays_P_bs),
+            expected = -.67)
 
   #test effect of sample size: increase n and power goes up.
   set.seed(123456)
   # data with difference in delay by 2.5 time units
   #+but different sample sizes
   xs <- purrr::map(purrr::set_names(c(9, 20, 32, 37)),
-                   ~ 6.5 + rexp(., rate = .07))
+                   ~ rexp_delayed(., delay = 6.5, rate = .07))
 
   ys <- purrr::map(purrr::set_names(c(10, 19, 30, 38)),
-                   ~ 9 + rexp(., rate = .07))
+                   ~ rexp_delayed(., delay = 9, rate = .07))
 
   te_diff_delays_n <- purrr::map2(.x = xs, .y = ys,
-                                  .f = ~ suppressWarnings(test_diff(x = .x, y = .y, param = "delay", R = 399)))
+                                  .f = ~ suppressWarnings(test_diff(x = .x, y = .y, param = "delay", type = 'bootstrap', R = 399)))
 
   expect_lt(cor(x = as.integer(names(te_diff_delays_n)),
-                y = purrr::map_dbl(te_diff_delays_n, ~ purrr::chuck(., "P", "boot"))),
-            expected = -.66)
+                y = purrr::map_dbl(te_diff_delays_n, ~ purrr::chuck(., "P", "bootstrap"))),
+            expected = -.67)
 
   future::plan(future::sequential)
 })
@@ -124,24 +126,24 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
 
   set.seed(20210506)
 
-  testres_P_H0 <- future.apply::future_vapply(X = seq(12), FUN.VALUE = double(1L),
+  testres_P_H0 <- future.apply::future_vapply(X = seq_len(21L), FUN.VALUE = double(1L),
                                               FUN = function(dummy) {
                                                 x <- rexp_delayed(13, delay = 4, rate = .07)
-                                                y <- rexp_delayed(11, delay = 4, rate = .07)
+                                                y <- rexp_delayed(11, delay = 4, rate = .1)
 
                                                 # return P-value of bootstrap test
                                                 Pval <- NA_real_
-                                                try(Pval <- purrr::chuck(test_diff(x = x, y = y, param = "delay", distribution = "exp", R = 201), "P", "boot"),
+                                                try(Pval <- purrr::chuck(test_diff(x = x, y = y, param = "delay", distribution = "exp", R = 301),
+                                                                         "P", "bootstrap"),
                                                     silent = TRUE)
 
                                                 Pval
                                               }, future.seed = TRUE)
 
-  # drop failed tests (i.e. P=NA) because of trouble in `optim`
   testres_P_H0 <- testres_P_H0[is.finite(testres_P_H0)]
 
   # KS-test does not reject H0: uniform distribution
-  expect_gt(suppressWarnings(stats::ks.test(x = testres_P_H0, "punif")$p.value), expected = .2)
+  expect_gt(suppressWarnings(stats::ks.test(x = testres_P_H0, y = "punif")$p.value), expected = .2)
 
   future::plan(sequential)
 

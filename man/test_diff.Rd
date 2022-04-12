@@ -11,7 +11,7 @@ test_diff(
   param = "delay",
   R = 400,
   ties = c("equidist", "density", "random"),
-  type = c("all", "bootstrap", "gof", "moran", "pearson", "ad", "lr"),
+  type = c("all", "bootstrap", "gof", "moran", "pearson", "ad", "lr", "lr_pp"),
   verbose = 0
 )
 }

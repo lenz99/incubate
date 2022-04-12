@@ -1,4 +1,8 @@
 
+# incubate 0.9.8
+* `test_diff`: change name of P-values (within object)
+* `power_diff`: allow to specify power and do iterative computation
+
 # incubate 0.9.7
 * confint: smooth delay for parametric bootstrap & delayed exponential model via rectified Gaussian (instead of normal Gaussian)
 
