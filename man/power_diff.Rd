@@ -23,11 +23,11 @@ power_diff(
 
 \item{test}{character. Which test to use for this power estimation?}
 
-\item{eff}{list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for two groups.}
+\item{eff}{list. The two list elements contain the model parameters (as understood by the delay-distribution functions provided by this package) for the two groups.}
 
 \item{n}{integer. Number of observations per group for the power simulation or \code{NULL} when n is to be estimated for a given power.}
 
-\item{r}{positive numeric. Ratio of both groups sizes, ny / nx. Default value is 1, balanced group sizes.}
+\item{r}{numeric. Ratio of both groups sizes, ny / nx. Default value is 1, i.e., balanced group sizes. Must be positive.}
 
 \item{power}{numeric. \code{NULL} when power is to be estimated for a given sample size or a desired power is specified (and \code{n} is estimated).}
 

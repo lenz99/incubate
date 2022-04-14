@@ -1,0 +1,28 @@
+#"Survival(Time), created by Plot Digitizer, 2.6.9"
+#"Date: 24/08/2021, 23:50:30"
+#
+Time,Survival,n,Group,Colour
+33.9409,0.8333,6,CTRL,black
+35.9254,0.6667,6,CTRL,black
+36.9654,0.1667,6,CTRL,black
+42.0326,0.0000,6,CTRL,black
+34.9981,0.875,8,Anti-E7,green
+37.9917,0.750,8,Anti-E7,green
+41.9969,0.625,8,Anti-E7,green
+46.9798,0.250,8,Anti-E7,green
+54.9829,0.125,8,Anti-E7,green
+61.9748,0.000,8,Anti-E7,green
+37.9365,0.875,8,Anti-VEGF,purple
+39.9668,0.750,8,Anti-VEGF,purple
+45.9469,0.625,8,Anti-VEGF,purple
+51.0187,0.375,8,Anti-VEGF,purple
+51.9411,0.250,8,Anti-VEGF,purple
+57.9695,0.125,8,Anti-VEGF,purple
+61.9266,0.000,8,Anti-VEGF,purple
+44.9694,0.875,8,Combo,beige
+47.9629,0.750,8,Combo,beige
+53.8950,0.625,8,Combo,beige
+57.9074,0.375,8,Combo,beige
+58.9742,0.250,8,Combo,beige
+60.8602,0.125,8,Combo,beige
+61.8783,0.000,8,Combo,beige
