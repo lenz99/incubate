@@ -422,23 +422,35 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 
 #' Power simulation function for a two-group comparison of the delay parameter.
 #'
-#' Given an effect size and a sample size `n` it simulates the power.
+#' There are two ways of operation:
+#' 1. `power=NULL` Given sample size `n` it simulates the power.
+#' 2. `n=NULL` Given a power an iterative search is started to find a suitable `n` within a specified range.
+#'
+#' In any case, the distribution, the parameters that are tested for, the type of test and the effect size (`eff=`) need to be specified.
 #' The more power simulation rounds (parameter `nPowerSim=`) the more densely the space of data according to the specified model is sampled.
 #'
-#' @param eff list of length 2. Model parameters (as understood by the delay-distribution functions provided by this package) for two groups.
+#' Note that this second modus (when `n` is estimated) is computationally quite heavy.
+#' The iterative search for `n` uses some heuristics and the estimated sample size might actually give a different power-level.
+#' It is important to check the stated power in the output. The search algorithm comes to results closer to the power aimed at
+#' when the admissible range for sample size (`nRange=`) is chosen sensibly.
+#' In case the estimated sample size and the achieved power is too high it might pay off to rerun the function with an adapted admissible range.
+#'
+#' @param eff list. The two list elements contain the model parameters (as understood by the delay-distribution functions provided by this package) for the two groups.
 #' @param param character. Parameter name(s) for which to simulate the power.
-#' @param test character. Which test to apply to calculate power for?
-#' @param n integer. Number of observations per group for the power simulation.
-#' @param r positive numeric. Ratio of both groups sizes, ny / nx. Default value is 1, balanced group sizes.
+#' @param test character. Which test to use for this power estimation?
+#' @param n integer. Number of observations per group for the power simulation or `NULL` when n is to be estimated for a given power.
+#' @param power numeric. `NULL` when power is to be estimated for a given sample size or a desired power is specified (and `n` is estimated).
+#' @param r numeric. Ratio of both groups sizes, ny / nx. Default value is 1, i.e., balanced group sizes. Must be positive.
 #' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80%.
 #' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which might be enough for power analysis.
+#' @param nRange integer. Admissible range for sample size when power is pre-specified and sample size is requested.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
                        test = c('bootstrap', 'pearson', 'moran', 'ad', 'lr', 'lr_pp'),
                        eff = stop("Provide parameters for both group that reflect the effect!"),
                        n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
-                       nRange = c(5, 100)){
+                       nRange = c(5, 50)){
 
   tol <- .001
   distribution <- match.arg(distribution)
@@ -469,11 +481,11 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
   pary <- purrr::set_names(pary, par_names)
 
 
-  simulatePower <- function(nx, ny, R){
+  simulatePower <- function(nx, ny, B = nPowerSim, R){
     nx <- ceiling(nx); ny <- ceiling(ny)
 
     # repeatedly test for difference in parameter on bootstrapped data
-    P_dist <- future.apply::future_vapply(X = seq_len(nPowerSim), FUN.VALUE = double(1L),
+    P_dist <- future.apply::future_vapply(X = seq_len(B), FUN.VALUE = double(1L),
                                           FUN = function(dummy) {
                                             # generate data according to chosen model
                                             #+and with the specified effect
@@ -504,12 +516,15 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
     if (length(P_dist))
       sum(P_dist < sig.level) / length(P_dist) else
         NA_real_
-  }
+  } #fun
 
 
   nx <- ny <- -1
   powerGrid <- NULL
+
   if (is.null(power)){
+
+    # easy case: estimate power once!
     nx <- ceiling(n)
     ny <- ceiling(r * n)
     if ( nx < length(par_names) || ny < length(par_names) ){
@@ -517,52 +532,122 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
       return(invisible(NULL))
     }
 
-    power <- simulatePower(nx = nx, ny = ny, R = R)
+    power <- simulatePower(nx = nx, ny = ny, B = nPowerSim, R = R)
+
   } else {
+
+    # estimate n for specified power
     stopifnot( is.null(n) )
 
-    nx_cand <- unique(ceiling(seq.int(from = nRange[[1L]], to = nRange[[2L]], length.out = 5L)))
-    pow_cand <- rep_len(-1, length.out = length(nx_cand))
-    for (i in seq_along(nx_cand)) {
-      nxc <- nx_cand[[i]]
-      pow_cand[[i]] <- simulatePower(nx = nxc, ny = nxc * r, R = R)
+    Bmax1 <- 200L
+    Rmax1 <- 100L
+    B1 <- min(Bmax1, nPowerSim)
+    R1 <- min(Rmax1, R)
+    i2 <- -1L
 
-      if (pow_cand[[i]] >= power - tol) break
-    }
+    # 1st iteration
+    nx_cand1 <- unique(ceiling(seq.int(from = nRange[[1L]], to = nRange[[2L]], length.out = 5L)))
+    NBR_CAND1 <- length(nx_cand1)
+    pow_cand1 <- rep_len(-1, length.out = NBR_CAND1)
 
-    if (i == 1L){
-      warning('Smallest allowed n already exceeds requested power!')
-    }
-    if (pow_cand[[length(nx_cand)]] > -1 && pow_cand[[length(nx_cand)]] < power - tol){
-      warning('Failed to reach requested power with maximally allowed n: ', nx_cand[[length(nx_cand)]],
-              ' yields a power of ', pow_cand[[length(nx_cand)]])
-    }
-      nx <- ceiling(nx_cand[[i]])
-      ny <- ceiling(nx_cand[[i]] * r)
-      power <- pow_cand[[i]]
+    # if single n remain, return the power for it (no search for n necessary)
+    if (NBR_CAND1 == 1L) return(power_diff(distribution, param, test, eff,
+                                           n = nx_cand1[[1L]], power = NULL,
+                                           r = r, sig.level = sig.level,nPowerSim = nPowerSim, R = R))
 
 
+    for (i1 in seq_along(nx_cand1)) {
+      nxc <- nx_cand1[[i1]]
+      pow_cand1[[i1]] <- simulatePower(nx = nxc, ny = nxc * r, B = B1, R = R1)
+
+      if (pow_cand1[[i1]] >= power - tol) break
+    } #rof
+
+    # store preliminary power estimates
     powerGrid <- tibble::tibble(
-      nx = nx_cand[pow_cand > 0],
+      nx = nx_cand1[pow_cand1 > 0],
       ny = ceiling(nx * r),
-      power = pow_cand[pow_cand > 0]
+      power = pow_cand1[pow_cand1 > 0],
+      iter = 1L,
+      B = B1,
+      R = R1
     )
-    # nSol <- stats::uniroot(function(n) simulatePower(nx = n, ny = n * r, R = R) - power,
-    #                     interval = nRange, tol = .0001, extendInt = "upX")
-    # nx <- nSol$root
-    # ny <- r * nx
-    # power <- nSol$f.root + power
+
+    if (NROW(powerGrid) <= 1L) {
+      stop('Failed to find power estimates within specified range!')
+    }
+
+    REFINE <- TRUE #NROW(powerGrid) >= 2L
+
+    # check first iteration
+    if (i1 == 1L){
+      warning('Smallest allowed n already exceeds requested power!')
+      REFINE <- FALSE
+    }
+
+    # check last iteration
+    if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 && pow_cand1[[NBR_CAND1]] < power - tol){
+      warning(glue::glue('Failed to reach requested power with maximally allowed n: {nx_cand1[[NBR_CAND1]]} ',
+              'yields a power of {scales::percent(pow_cand1[[NBR_CAND1]], accuracy = .1)}.'))
+      REFINE <- FALSE
+    }
+
+
+    if (!REFINE){
+      nx <- ceiling(nx_cand1[[i1]])
+      ny <- ceiling(nx_cand1[[i1]] * r)
+      power <- if (B1 < nPowerSim || R1 < R) stats::weighted.mean(x = c(pow_cand1[[i1]], simulatePower(nx, ny, B = nPowerSim, R = R)), w = c(B1, nPowerSim)) else
+        pow_cand1[[i1]]
+    } else {
+      powerMod <- if (NROW(powerGrid) == 2L) lm(power ~ nx, data = powerGrid) else lm(power ~ poly(nx, 2), data = powerGrid)
+      powerPred <- tibble::tibble(nx = seq.int(from = nRange[[1L]], to = nRange[[2L]], by = 1L),
+                                  predpower = predict(powerMod, newdata = data.frame(nx = nx)),
+                                  diffpower = predpower - power)
+      # examine close neighbourhood of predicted best n
+      powerPredInd <- intersect(seq_len(NROW(powerPred)), c(-1, 0, 1) + which.max(powerPred$diffpower >= 0L))
+
+
+      nx_cand2 <- powerPred$nx[powerPredInd]
+      NBR_CAND2 <- length(nx_cand2)
+      pow_cand2 <- rep_len(-1, length.out = NBR_CAND2)
+
+      for (i2 in seq_along(nx_cand2)){
+        nxc <- nx_cand2[[i2]]
+        pow_cand2[[i2]] <- simulatePower(nx = nxc, ny = nxc * r, B = nPowerSim, R = R)
+
+      } #rof
+
+      powerGrid2 <- tibble::tibble(
+        nx = nx_cand2[pow_cand2 > 0],
+        ny = ceiling(nx * r),
+        power = pow_cand2[pow_cand2 > 0],
+        iter = 2L,
+        B = nPowerSim,
+        R = R)
+
+      stopifnot( any(powerGrid2$power >= power - tol) )
+      nx <- powerGrid2$nx[which.max(powerGrid2$power >= power - tol)]
+      ny <- ceiling(nx * r)
+      power <- powerGrid2$power[which(powerGrid2$nx == nx)]
+
+      # store 2nd round (refinement) power estimates
+      powerGrid <- rbind(powerGrid, powerGrid2)
+
+    }
+    stopifnot( nx > 0L, ny > 0L, power > 0L)
 
   }
 
   list(name = "Difference in delayed model for time-to-event data in two groups",
-       distribution = distribution, param = param,
+       distribution = distribution,
+       param = param,
        test = test,
-       eff = eff, sig.level = sig.level,
+       eff = eff,
+       sig.level = sig.level,
        nx = nx, ny = ny, N = nx + ny,
        #P_dist = P_dist, ##debug
        powerGrid = powerGrid,
-       power = power
-  ) %>% purrr::compact()
+       power = power) %>%
+    purrr::compact()
 }
 
