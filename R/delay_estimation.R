@@ -605,8 +605,9 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
   p +
     ggplot2::stat_ecdf(pad=TRUE) +
     ggplot2::xlim(0L, NA) +
-    ggplot2::labs(x = "Time", y = "Cumulative prop. of events") +
-    ggplot2::labs(title = title, subtitle = subtitle) +
+    ggplot2::labs(x = 'Time', y = 'Cumulative prop. of events',
+                  col = 'Group',
+                  title = title, subtitle = subtitle) +
     ggplot2::scale_y_reverse()
 }
 
