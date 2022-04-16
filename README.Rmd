@@ -80,10 +80,10 @@ To install its latest **released version** use from within an R-session:
 remotes::install_gitlab("imb-dev/incubate")
 ```
 
-To install a specific version, add the version tag after the name, separated by a `@`, e.g. to install `incubate` in version `v0.2` use
+To install a specific version, add the version tag after the name, separated by a `@`, e.g. to install `incubate` in version `v1.0` use
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate@v0.2")
+remotes::install_gitlab("imb-dev/incubate@v1.0")
 ```
 
 The suffix `@develop` points to the latest **development version** from Gitlab.

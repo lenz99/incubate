@@ -32,9 +32,10 @@ plot(fm)
 ``` r
 # confidence interval for delay-parameters
 confint(fm, parm = c('delay.x', 'delay.y'))
-#>              2.5%    97.5%
-#> delay.x 0.9002049 1.148961
-#> delay.y 1.0850495 1.867758
+#>            2.5%  97.5%
+#> delay.x 0.98069 1.2925
+#> delay.y 1.45697 2.1287
+
 # test on difference in delay, using only R=75 bootstrap draws
 delay_test <- test_diff(x, y, R = 75)
 plot(delay_test)
@@ -74,10 +75,10 @@ remotes::install_gitlab("imb-dev/incubate")
 ```
 
 To install a specific version, add the version tag after the name,
-separated by a `@`, e.g. to install `incubate` in version `v0.2` use
+separated by a `@`, e.g. to install `incubate` in version `v1.0` use
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate@v0.2")
+remotes::install_gitlab("imb-dev/incubate@v1.0")
 ```
 
 The suffix `@develop` points to the latest **development version** from
