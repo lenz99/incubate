@@ -13,8 +13,8 @@
   bs_infer = c("normal", "normal0", "lognormal", "quantile0", "quantile",
     "logquantile", "t", "t0"),
   useBoot = FALSE,
-  logshift_delay,
-  smd_factor = 0,
+  logshift_delay = 3,
+  smd_factor = 0.1,
   ...
 )
 }

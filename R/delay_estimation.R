@@ -670,6 +670,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
   # smooth delay parameters
   SMD_DIV <- 3
+  SMD_MINRATE <- .03
 
   if (useBoot) {
     stopifnot(!twoGr) # for the time being only single group calls are supported!
@@ -681,7 +682,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                  ranFun <- getDist(object$distribution, type = "r")
                  if (smooth_delay){
                    # use rectified normal
-                   coe[['delay']] <- abs(coe[['delay']] - max(0L, rnorm(1L, mean = 0L, sd = min(coe[['delay']]/SMD_DIV, smd_factor/coe[['rate']]))))
+                   coe[['delay']] <- abs(coe[['delay']] - max(0L, rnorm(1L, mean = 0L,
+                                                                        sd = min(coe[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + coe[['rate']])))))
                  }
                  rlang::exec(ranFun, !!! as.list(c(n=nObs[[1L]], coe)))
                })
@@ -713,9 +715,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                             #densFun <- getDist(object$distribution, type = 'd') #more generally, use density at delay+small value?
                             # use rectified Gaussian
                             ranFunArgsX[['delay']] <- abs(ranFunArgsX[['delay']] - max(0L, rnorm(1L, mean = 0L,
-                                                                                             sd = min(ranFunArgsX[['delay']]/SMD_DIV, smd_factor/ranFunArgsX[['rate']]))))
+                                                                                             sd = min(ranFunArgsX[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsX[['rate']])))))
                             if (twoGr) ranFunArgsY[['delay']] <- abs(ranFunArgsY[['delay']] - max(0L, rnorm(1L, mean = 0L,
-                                                                                                        sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/ranFunArgsY[['rate']]))))
+                                                                                                        sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsY[['rate']])))))
                           }
 
                           # cf simulate (but inlined here for performance reasons)
@@ -754,15 +756,15 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
-                                 bs_data, bs_infer = c('normal', 'normal0', 'lognormal', 'quantile0', 'quantile', 'logquantile', 't', 't0'),
-                                 useBoot=FALSE, logshift_delay, smd_factor = 0,...){
+                                 bs_data, bs_infer = c('logquantile', 'quantile', 'quantile0', 'lognormal', 'normal', 'normal0', 't', 't0'),
+                                 useBoot=FALSE, logshift_delay = 3, smd_factor = 0.1,...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
-  stopifnot(is.numeric(R), length(R) == 1L, R > 0L)
+  stopifnot(is.numeric(R), length(R) == 1L, R > 0)
   if (missing(bs_data)) bs_data <- 'parametric'
   if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data, choices = c('parametric', 'ordinary'))
-  if (missing(logshift_delay) || is.na(logshift_delay) || is.null(logshift_delay)) logshift_delay <- .01
-  stopifnot( logshift_delay > 0L )
+  stopifnot(logshift_delay > 0, smd_factor >= 0)
+
   twoGr <- isTRUE(object$twoGroup)
   nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
