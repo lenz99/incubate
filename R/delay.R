@@ -3,6 +3,10 @@
 
 
 #' Density of delayed exponential distribution.
+#' @param x numeric. Values for which to get the density.
+#' @param delay numeric. The delay, must be non-negative.
+#' @param rate numeric. The event rate, must be non-negative.
+#' @param ... further arguments to `stats::dexp`
 #' @export
 dexp_delayed <- function(x, delay, rate = 1, ...) dexp(x = x - delay, rate = rate, ...)
 #' @export
@@ -11,6 +15,11 @@ pexp_delayed <- function(q, delay, rate = 1, ...) pexp(q = q - delay, rate = rat
 rexp_delayed <- function(n, delay, rate = 1) rexp(n = n, rate = rate) + delay
 
 #' Density of delayed Weibull distribution
+#' @param x numeric. Values for which to get the density.
+#' @param delay numeric. The delay, must be non-negative.
+#' @param shape numeric. Shape parameter, must be positive.
+#' @param scale numeric. Scale parameter (inverse of rate), must be positive.
+#' @param ... further arguments to `stats::deweibull`
 #' @export
 dweib_delayed <- function(x, delay, shape, scale = 1, ...) dweibull(x = x - delay, shape = shape, scale = scale, ...)
 #' @export
@@ -21,9 +30,9 @@ rweib_delayed <- function(n, delay, shape, scale = 1) rweibull(n = n, shape = sh
 
 
 #' Get delay distribution function
-#' @param distribution character[1]. delay distribution.
-#' @param type character[1]. type of function, cdf: cumulative distribution function, density or random function
-#' @param twoGroup logical[1]. Do we have two groups?
+#' @param distribution character(1). delay distribution.
+#' @param type character(1). type of function, cdf: cumulative distribution function, density or random function
+#' @param twoGroup logical(1). Do we have two groups?
 #' @param bind character. Names of parameters that are bind between the two groups.
 #' @return selected distribution function or parameter names
 getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", "prob", "density", "random", "param"),

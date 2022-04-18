@@ -1,6 +1,6 @@
 Package: incubate
 Title: Parametric Time-To-Event Analysis With Variable Incubation Phases
-Version: 1.1.0
+Version: 1.1.0.9000
 Date: 2022-04-14
 Authors@R: 
     person(given = "Matthias",
@@ -21,10 +21,13 @@ Imports:
     MASS,
     purrr (>= 0.3),
     rlang (>= 0.4),
+    stats,
+    survival,
     tibble
 Suggests:
     boot,
     cowplot,
+    future.callr,
     knitr,
     testthat (>= 3.0.0)
 RoxygenNote: 7.1.2

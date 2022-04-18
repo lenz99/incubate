@@ -24,14 +24,14 @@ geomSpaceFactory(
 
 \item{ties}{character. How to handle ties within data of a group.}
 
-\item{pars}{parameter vector.}
-
-\item{aggregated}{logical. For two group case, if \code{FALSE} return individual mean log cum-diffs per group}
+\item{verbose}{integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.}
 }
 \value{
 objective function
 negative maximum spacing estimation objective function.
 Estimate parameters by minimizing this function.
+\code{pars} is the parameter vector.
+\code{aggregated} is logical floag. For two group case, \code{FALSE} returns individual mean log cum-diffs per group
 }
 \description{
 Negative or infinite values are discarded.

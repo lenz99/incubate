@@ -6,6 +6,15 @@
 \usage{
 dexp_delayed(x, delay, rate = 1, ...)
 }
+\arguments{
+\item{x}{numeric. Values for which to get the density.}
+
+\item{delay}{numeric. The delay, must be non-negative.}
+
+\item{rate}{numeric. The event rate, must be non-negative.}
+
+\item{...}{further arguments to \code{stats::dexp}}
+}
 \description{
 Density of delayed exponential distribution.
 }

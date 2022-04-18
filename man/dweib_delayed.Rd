@@ -6,6 +6,17 @@
 \usage{
 dweib_delayed(x, delay, shape, scale = 1, ...)
 }
+\arguments{
+\item{x}{numeric. Values for which to get the density.}
+
+\item{delay}{numeric. The delay, must be non-negative.}
+
+\item{shape}{numeric. Shape parameter, must be positive.}
+
+\item{scale}{numeric. Scale parameter (inverse of rate), must be positive.}
+
+\item{...}{further arguments to \code{stats::deweibull}}
+}
 \description{
 Density of delayed Weibull distribution
 }

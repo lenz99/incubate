@@ -4,10 +4,14 @@
 \alias{coef.incubate_fit}
 \title{Coefficients of a delay-model fit.}
 \usage{
-\method{coef}{incubate_fit}(object, group = NULL)
+\method{coef}{incubate_fit}(object, group = NULL, ...)
 }
 \arguments{
+\item{object}{object that is a \code{incubate_fit}}
+
 \item{group}{character string to request the canonical parameter for one group}
+
+\item{...}{further arguments, currently not used.}
 }
 \value{
 named coefficient vector

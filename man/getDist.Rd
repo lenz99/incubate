@@ -12,11 +12,11 @@ getDist(
 )
 }
 \arguments{
-\item{distribution}{character\link{1}. delay distribution.}
+\item{distribution}{character(1). delay distribution.}
 
-\item{type}{character\link{1}. type of function, cdf: cumulative distribution function, density or random function}
+\item{type}{character(1). type of function, cdf: cumulative distribution function, density or random function}
 
-\item{twoGroup}{logical\link{1}. Do we have two groups?}
+\item{twoGroup}{logical(1). Do we have two groups?}
 
 \item{bind}{character. Names of parameters that are bind between the two groups.}
 }

@@ -4,6 +4,7 @@
 #' Compare two numeric vectors
 #' @param x numeric vector
 #' @param y numeric vector
+#' @param tol numeric. Numerical tolerance level for comparison.
 #' @seealso `dplyr::near`
 near <- function (x, y, tol = .Machine$double.eps^0.4){
   abs(x - y) < tol
@@ -11,7 +12,8 @@ near <- function (x, y, tol = .Machine$double.eps^0.4){
 
 #' Estimate rounding error based on given sample of metric values
 #' The idea is to check at which level of rounding the sample values do not change.
-#' @param roundDigits integer. which level of rounding to test? Negative numbers round to corresponding powers of 10
+#' @param obs numeric. Metric values from a sample to estimate the corresponding rounding error
+#' @param roundDigits integer. Which level of rounding to test? Negative numbers round to corresponding powers of 10
 #' @param maxObs integer. How many observations to consider at most? If the provided sample has more observations a sub-sample is used.
 #' @return estimated rounding error
 estimRoundingError <- function(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100L) {

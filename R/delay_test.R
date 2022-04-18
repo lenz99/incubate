@@ -175,9 +175,9 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 #'
 #' @param x data from reference/control group.
 #' @param y data from the treatment group.
-#' @param distribution character[1]. Name of the parametric delay distribution to use.
+#' @param distribution character(1). Name of the parametric delay distribution to use.
 #' @param param character. Names of parameters to test difference for. Default value is `'delay'`.
-#' @param R numeric[1]. Number of bootstrap samples to evaluate the distribution of the test statistic.
+#' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param type character. Which type of tests to perform?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
@@ -435,12 +435,14 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' when the admissible range for sample size (`nRange=`) is chosen sensibly.
 #' In case the estimated sample size and the achieved power is too high it might pay off to rerun the function with an adapted admissible range.
 #'
+#' @param distribution character. Which assumed distribution is used for the power calculation.
 #' @param eff list. The two list elements contain the model parameters (as understood by the delay-distribution functions provided by this package) for the two groups.
 #' @param param character. Parameter name(s) for which to simulate the power.
 #' @param test character. Which test to use for this power estimation?
 #' @param n integer. Number of observations per group for the power simulation or `NULL` when n is to be estimated for a given power.
 #' @param power numeric. `NULL` when power is to be estimated for a given sample size or a desired power is specified (and `n` is estimated).
 #' @param r numeric. Ratio of both groups sizes, ny / nx. Default value is 1, i.e., balanced group sizes. Must be positive.
+#' @param sig.level numeric. Significance level. Default is 0.05.
 #' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80%.
 #' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which might be enough for power analysis.
 #' @param nRange integer. Admissible range for sample size when power is pre-specified and sample size is requested.

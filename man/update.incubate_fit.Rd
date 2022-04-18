@@ -2,12 +2,21 @@
 % Please edit documentation in R/delay_estimation.R
 \name{update.incubate_fit}
 \alias{update.incubate_fit}
-\title{Refit a MPS-fit with specified optimization arguments.
+\title{Refit an \code{incubate_fit}-object with specified optimization arguments.
 If more things need to be changed use \code{delay_model}.}
 \usage{
 \method{update}{incubate_fit}(object, optim_args, verbose = 0, ...)
 }
+\arguments{
+\item{object}{\code{incubate_fit}-object}
+
+\item{optim_args}{optimization arguments}
+
+\item{verbose}{integer flag. Requested verbosity during \code{delay_fit}}
+
+\item{...}{further arguments, currently not used.}
+}
 \description{
-Refit a MPS-fit with specified optimization arguments.
+Refit an \code{incubate_fit}-object with specified optimization arguments.
 If more things need to be changed use \code{delay_model}.
 }

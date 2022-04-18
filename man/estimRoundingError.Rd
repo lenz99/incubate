@@ -8,7 +8,9 @@ The idea is to check at which level of rounding the sample values do not change.
 estimRoundingError(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100L)
 }
 \arguments{
-\item{roundDigits}{integer. which level of rounding to test? Negative numbers round to corresponding powers of 10}
+\item{obs}{numeric. Metric values from a sample to estimate the corresponding rounding error}
+
+\item{roundDigits}{integer. Which level of rounding to test? Negative numbers round to corresponding powers of 10}
 
 \item{maxObs}{integer. How many observations to consider at most? If the provided sample has more observations a sub-sample is used.}
 }

@@ -19,6 +19,12 @@
 )
 }
 \arguments{
+\item{object}{object of class \code{incubate_fit}}
+
+\item{parm}{character. Which parameters to get confidence interval for?}
+
+\item{level}{numeric. Which is the requested confidence level for the interval? Default value is 0.95}
+
 \item{R}{number of bootstrap replications. Used only if not \code{bs_data}-object is provided.}
 
 \item{bs_data}{character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.}
@@ -30,6 +36,8 @@
 \item{logshift_delay}{numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01}
 
 \item{smd_factor}{numeric. How much should the delay parameter be smoothed? Only supported for parametric bootstrap. And only used if no \code{bs_data}- object is provided.}
+
+\item{...}{further arguments, currently not used.}
 }
 \value{
 A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.

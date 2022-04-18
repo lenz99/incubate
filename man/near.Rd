@@ -10,6 +10,8 @@ near(x, y, tol = .Machine$double.eps^0.4)
 \item{x}{numeric vector}
 
 \item{y}{numeric vector}
+
+\item{tol}{numeric. Numerical tolerance level for comparison.}
 }
 \description{
 Compare two numeric vectors

@@ -1,8 +1,14 @@
 
 #' Extract the parameters for the specified group.
+#'
+#' For a one-group setting or when `group=NULL` it simply returns the given parameter.
 #' This is an internal helper function
 #' used in `coef.incubate_fit` and in the factory method `geomSpaceFactory` below
 #' @param par named parameters (as simple vector or as list both work)
+#' @param group character. Which group to extract parameters for?
+#' @param twoGr flag. Is it a two-group setting?
+#' @param oNames character. Original parameter names from distribution.
+#' @param bind character. Which parameters are bind together in a two-group setting?
 #' @return parameter vector for the relevant group
 getPars <- function(par, group = "x", twoGr, oNames, bind) {
   if ( ! twoGr || is.null(group) ) return(par)
@@ -27,6 +33,7 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
 #' @param distribution character(1). delayed distribution family
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param ties character. How to handle ties within data of a group.
+#' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
 #' @return objective function
 geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL,
                              ties=c('equidist', 'density', 'random', 'none'), verbose = 0L) {
@@ -327,8 +334,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   #' negative maximum spacing estimation objective function.
   #' Estimate parameters by minimizing this function.
-  #' @param pars parameter vector.
-  #' @param aggregated logical. For two group case, if `FALSE` return individual mean log cum-diffs per group
+  #' `pars` is the parameter vector.
+  #' `aggregated` is logical floag. For two group case, `FALSE` returns individual mean log cum-diffs per group
   negMSE <- function(pars, aggregated = TRUE){
     stopifnot( length(par_names) == length(pars) )
     pars <- purrr::set_names(pars, par_names)
@@ -509,7 +516,7 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
 }
 
 #' @export
-print.incubate_fit <- function(x){
+print.incubate_fit <- function(x, ...){
   coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
                       "Fit a delayed {distribution} through {c('Maximum Spacing Estimation (MSE)', 'Maximum Likelihood Estimation (MLE)')[[1L+(method=='MLE')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
@@ -519,10 +526,12 @@ print.incubate_fit <- function(x){
 }
 
 #' Coefficients of a delay-model fit.
+#' @param object object that is a `incubate_fit`
 #' @param group character string to request the canonical parameter for one group
+#' @param ... further arguments, currently not used.
 #' @return named coefficient vector
 #' @export
-coef.incubate_fit <- function(object, group = NULL){
+coef.incubate_fit <- function(object, group = NULL, ...){
   #stopifnot( inherits(object, "incubate_fit") )
 
   getPars(object[["par"]], group = group, twoGr = object[["twoGroup"]],
@@ -537,8 +546,12 @@ summary.incubate_fit <- function(object, ...){
   print(object)
 }
 
-#' Refit a MPS-fit with specified optimization arguments.
+#' Refit an `incubate_fit`-object with specified optimization arguments.
 #' If more things need to be changed use `delay_model`.
+#' @param object `incubate_fit`-object
+#' @param optim_args optimization arguments
+#' @param verbose integer flag. Requested verbosity during `delay_fit`
+#' @param ... further arguments, currently not used.
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
@@ -612,9 +625,10 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 }
 
 #' Simulate Data from Fitted Model
-#' @param object MPS-fit object
+#' @param object object of class `incubate_fit`
 #' @param nsim number of simulations
 #' @param seed currently unused! XXX
+#' @param ... Further arguments, currently unused.
 #' @return list of simulated data
 #' @export
 simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
@@ -647,6 +661,7 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' @param object an `incubate_fit`-object
 #' @param bs_data character. Which type of bootstrap method to generate data?
 #' @param R integer. Number of bootstrapped model coefficient estimates
+#' @param useBoot flag. Do you want to use the boot-package? Default value is `FALSE`.
 #' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing. Default is 0.025
 #' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
 bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE, smd_factor = 0){
@@ -747,12 +762,16 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
 #' Optionally, there are also variants that use a log-transformation first.
 #' At least R=1000 bootstrap replications are recommended. Default are normal-based confidence intervals.
+#' @param object object of class `incubate_fit`
+#' @param parm character. Which parameters to get confidence interval for?
+#' @param level numeric. Which is the requested confidence level for the interval? Default value is 0.95
 #' @param R number of bootstrap replications. Used only if not `bs_data`-object is provided.
 #' @param bs_data character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
 #' @param logshift_delay numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01
 #' @param smd_factor numeric. How much should the delay parameter be smoothed? Only supported for parametric bootstrap. And only used if no `bs_data`- object is provided.
+#' @param ... further arguments, currently not used.
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
@@ -816,7 +835,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   # standard value for all parameters
   logshift <- purrr::set_names(rep_len(.0001, length.out=length(cf)), nm = names(cf))
   # for delay, the transformation needs to be independent of the scale of delay.
-  if (logshift && ('delay' %in% names(cf)))
+  if (logTransform && ('delay' %in% pnames))
     logshift['delay'] <- -min(if (useBoot) bs_data$t[,which('delay' == names(cf))] else bs_data['delay',], na.rm = TRUE) + logshift_delay
 
 

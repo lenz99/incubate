@@ -20,11 +20,11 @@ test_diff(
 
 \item{y}{data from the treatment group.}
 
-\item{distribution}{character\link{1}. Name of the parametric delay distribution to use.}
+\item{distribution}{character(1). Name of the parametric delay distribution to use.}
 
 \item{param}{character. Names of parameters to test difference for. Default value is \code{'delay'}.}
 
-\item{R}{numeric\link{1}. Number of bootstrap samples to evaluate the distribution of the test statistic.}
+\item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 
 \item{ties}{character. How to handle ties in data vector of a group?}
 

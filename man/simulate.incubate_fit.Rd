@@ -7,11 +7,13 @@
 \method{simulate}{incubate_fit}(object, nsim = 1, seed = NULL, ...)
 }
 \arguments{
-\item{object}{MPS-fit object}
+\item{object}{object of class \code{incubate_fit}}
 
 \item{nsim}{number of simulations}
 
 \item{seed}{currently unused! XXX}
+
+\item{...}{Further arguments, currently unused.}
 }
 \value{
 list of simulated data

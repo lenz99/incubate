@@ -19,6 +19,8 @@ power_diff(
 )
 }
 \arguments{
+\item{distribution}{character. Which assumed distribution is used for the power calculation.}
+
 \item{param}{character. Parameter name(s) for which to simulate the power.}
 
 \item{test}{character. Which test to use for this power estimation?}
@@ -28,6 +30,8 @@ power_diff(
 \item{n}{integer. Number of observations per group for the power simulation or \code{NULL} when n is to be estimated for a given power.}
 
 \item{r}{numeric. Ratio of both groups sizes, ny / nx. Default value is 1, i.e., balanced group sizes. Must be positive.}
+
+\item{sig.level}{numeric. Significance level. Default is 0.05.}
 
 \item{power}{numeric. \code{NULL} when power is to be estimated for a given sample size or a desired power is specified (and \code{n} is estimated).}
 

@@ -105,7 +105,7 @@ test_that("Fit delayed Weibull", {
 
   # fit model for two groups with binding
   set.seed(20210430)
-  fd_wb2b <- incubate::delay_model(x = rweib_delayed(n=37, delay = 7, shape = .8, scale = 3),
+  fd_wb2b <- delay_model(x = rweib_delayed(n=37, delay = 7, shape = .8, scale = 3),
                                    y = rweib_delayed(n=51, delay = 5, shape = 1.2, scale = 1.5),
                                    distribution = "weib", bind = "delay")
 
@@ -122,9 +122,10 @@ test_that('confidence intervals', {
   testthat::skip_on_cran()
   set.seed(1234)
 
-  obs_sim <- incubate::rexp_delayed(n = 29, delay = 5, rate = .3)
 
-  fm <- incubate::delay_model(x = obs_sim, distribution = 'expon')
+  obs_sim <- rexp_delayed(n = 29, delay = 5, rate = .3)
+
+  fm <- delay_model(x = obs_sim, distribution = 'expon')
 
   bs_data <- incubate:::bsDataStep(fm, R = 1199, useBoot = FALSE)
   # set up identical bs_data from boot-package
@@ -134,12 +135,14 @@ test_that('confidence intervals', {
 
   # agreement of own implementation and boot-implementation
   purrr::walk(.x = c('normal', 'lognormal', 'quantile', 'logquantile', 'quantile0'),
-              .f = ~expect_equal(confint(fm, bs_data = bs_data, bs_infer = .x),
-                                 confint(fm, bs_data = bs_data_bt, bs_infer = .x, useBoot = TRUE),
-                                 tolerance = 1e-3))
+              .f = ~ {
+                ci_own <- confint(fm, bs_data = bs_data, bs_infer = .x)
+                ci_boot <- confint(fm, bs_data = bs_data_bt, bs_infer = .x, useBoot = TRUE)
+                expect_equal(ci_own, ci_boot, tolerance = 1e-3)})
 
-  logInfDF <- tidyr::expand_grid(bsi = c('lognormal', 'logquantile'),
-                                 logsh = c(.0001, .001, .01, .1, .2, .89, 1, 2, 10, 40))
+  logInfDF <- expand.grid(bsi = c('lognormal', 'logquantile'),
+                          logsh = c(.0001, .001, .01, .1, .2, .89, 1, 2, 10, 40),
+                          KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
   purrr::walk2(.x = logInfDF$bsi, .y = logInfDF$logsh,
               .f = ~expect_equal(confint(fm, bs_data = bs_data, bs_infer = .x, logshift_delay = .y),
                                  confint(fm, bs_data = bs_data_bt, bs_infer = .x, logshift_delay = .y, useBoot = TRUE),

@@ -2,20 +2,26 @@
 % Please edit documentation in R/delay_estimation.R
 \name{getPars}
 \alias{getPars}
-\title{Extract the parameters for the specified group.
-This is an internal helper function
-used in \code{coef.incubate_fit} and in the factory method \code{geomSpaceFactory} below}
+\title{Extract the parameters for the specified group.}
 \usage{
 getPars(par, group = "x", twoGr, oNames, bind)
 }
 \arguments{
 \item{par}{named parameters (as simple vector or as list both work)}
+
+\item{group}{character. Which group to extract parameters for?}
+
+\item{twoGr}{flag. Is it a two-group setting?}
+
+\item{oNames}{character. Original parameter names from distribution.}
+
+\item{bind}{character. Which parameters are bind together in a two-group setting?}
 }
 \value{
 parameter vector for the relevant group
 }
 \description{
-Extract the parameters for the specified group.
+For a one-group setting or when \code{group=NULL} it simply returns the given parameter.
 This is an internal helper function
 used in \code{coef.incubate_fit} and in the factory method \code{geomSpaceFactory} below
 }

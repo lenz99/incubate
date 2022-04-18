@@ -18,12 +18,12 @@ test_that('Structure of test objects.', {
 test_that('GOF-test on single-group exponentials', {
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
-  future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 2L))
+  future::plan(future.callr::callr, workers = 3L)
 
   # GOF-tests on true exponential data with varying sample size, delay and rate
   # results in a matrix of dimension #scenarios x #replications
   fitting_expos <- future.apply::future_replicate(n = 467L, simplify = FALSE, expr = {
-    scenarios <- tidyr::expand_grid(n = c(10, 25, 50), delay = c(0, 5, 15), rate = c(.01, .2, .4, 1, 1.5, 4))
+    scenarios <- expand.grid(n = c(10, 25, 50), delay = c(0, 5, 15), rate = c(.01, .2, .4, 1, 1.5, 4))
     # fit exponential models with varying n, delay and rate
     purrr::pmap(.l = scenarios,
                 .f = ~ delay_model(x = rexp_delayed(n = ..1, delay = ..2, rate = ..3),
@@ -73,7 +73,7 @@ test_that("Test difference in delay for two exponential fits", {
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
 
-  future::plan(future.callr::callr, workers = parallelly::availableCores(omit = 2L))
+  future::plan(future.callr::callr, workers = 3L)
 
   set.seed(12345)
   x <- rexp_delayed(13L, delay = 11, rate = .05)
@@ -122,7 +122,7 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
 
-  plan(future.callr::callr, workers = parallelly::availableCores(omit = 1L))
+  plan(future.callr::callr, workers = 3L)
 
   set.seed(20210506)
 
@@ -145,7 +145,7 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
   # KS-test does not reject H0: uniform distribution
   expect_gt(suppressWarnings(stats::ks.test(x = testres_P_H0, y = "punif")$p.value), expected = .2)
 
-  future::plan(sequential)
+  future::plan(future::sequential)
 
 })
 
