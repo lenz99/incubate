@@ -134,7 +134,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
            if (twoGr){
              A2 <- paste(signif(A2, 4), collapse = ' and ')
              # use Liptak to bring both P-values of AD-tests per group together
-             p_val <- pnorm(sum(sqrt(nObs) * qnorm(p_val)) / sqrt(sum(nObs)))
+             p_val <- stats::pnorm(sum(sqrt(nObs) * stats::qnorm(p_val)) / sqrt(sum(nObs)))
            }
 
            statist <- c(`A^2` = A2)
@@ -243,7 +243,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       newparsc[which(newparsc > 1e8)] <- 1e8
       fit1oa[['control']][['parscale']] <- newparsc
 
-      fit1 <- update(fit1, optim_args = fit1oa)
+      fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
       if (is.null(fit1) || fit0[['val']] < fit1[['val']]) return(invisible(NULL))
     }# fi bad fit1
@@ -380,6 +380,7 @@ print.incubate_test <- function(x, ...){
   cat('\n')
 }
 
+
 #' @export
 plot.incubate_test <- function(x, y, title, subtitle, ...){
   stopifnot(inherits(x, "incubate_test"))
@@ -400,7 +401,7 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 
 
   p <- ggplot2::ggplot(tibble::tibble(teststat = teststat),
-                       mapping = ggplot2::aes(x = teststat, y = ggplot2::after_stat(density))) +
+                       mapping = ggplot2::aes_(x = ~teststat, y = ~ggplot2::after_stat(density))) +
     ggplot2::geom_histogram(bins = 11L + ceiling(sqrt(length(teststat))))
 
   # extract maximum density value
@@ -447,6 +448,7 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which might be enough for power analysis.
 #' @param nRange integer. Admissible range for sample size when power is pre-specified and sample size is requested.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
+#' @importFrom rlang .data
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
                        test = c('bootstrap', 'pearson', 'moran', 'ad', 'lr', 'lr_pp'),
@@ -598,15 +600,16 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
     if (!REFINE){
       nx <- ceiling(nx_cand1[[i1]])
       ny <- ceiling(nx_cand1[[i1]] * r)
-      power <- if (B1 < nPowerSim || R1 < R) stats::weighted.mean(x = c(pow_cand1[[i1]], simulatePower(nx, ny, B = nPowerSim, R = R)), w = c(B1, nPowerSim)) else
-        pow_cand1[[i1]]
+      power <- if (B1 < nPowerSim || R1 < R) stats::weighted.mean(x = c(pow_cand1[[i1]], simulatePower(nx, ny, B = nPowerSim, R = R)),
+                                                                  w = c(B1, nPowerSim)) else
+                                                                    pow_cand1[[i1]]
     } else {
-      powerMod <- if (NROW(powerGrid) == 2L) lm(power ~ nx, data = powerGrid) else lm(power ~ poly(nx, 2), data = powerGrid)
+      powerMod <- if (NROW(powerGrid) == 2L) stats::lm(power ~ nx, data = powerGrid) else stats::lm(power ~ poly(nx, 2), data = powerGrid)
       powerPred <- tibble::tibble(nx = seq.int(from = nRange[[1L]], to = nRange[[2L]], by = 1L),
-                                  predpower = predict(powerMod, newdata = data.frame(nx = nx)),
-                                  diffpower = predpower - power)
+                                  predpower = stats::predict.lm(powerMod, newdata = data.frame(nx = nx)),
+                                  diffpower = .data$predpower - power)
       # examine close neighbourhood of predicted best n
-      powerPredInd <- intersect(seq_len(NROW(powerPred)), c(-1, 0, 1) + which.max(powerPred$diffpower >= 0L))
+      powerPredInd <- intersect(seq_len(NROW(powerPred)), c(-1L, 0L, 1L) + which.max(powerPred$diffpower >= 0L))
 
 
       nx_cand2 <- powerPred$nx[powerPredInd]
@@ -640,16 +643,18 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
 
   }
 
-  list(name = "Difference in delayed model for time-to-event data in two groups",
-       distribution = distribution,
-       param = param,
-       test = test,
-       eff = eff,
-       sig.level = sig.level,
-       nx = nx, ny = ny, N = nx + ny,
-       #P_dist = P_dist, ##debug
-       powerGrid = powerGrid,
-       power = power) %>%
-    purrr::compact()
+  purrr::compact(
+    list(name = "Difference in delayed model for time-to-event data in two groups",
+         distribution = distribution,
+         param = param,
+         test = test,
+         eff = eff,
+         sig.level = sig.level,
+         nx = nx, ny = ny, N = nx + ny,
+         #P_dist = P_dist, ##debug
+         powerGrid = powerGrid,
+         power = power
+    )
+  )
 }
 

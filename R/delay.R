@@ -2,31 +2,70 @@
 # delay distribution functions
 
 
-#' Density of delayed exponential distribution.
-#' @param x numeric. Values for which to get the density.
+#' Delayed exponential distribution
+#'
+#' Density, distribution function, quantile function and random generation for the delayed exponential distribution with rate `rate`.
+#'
+#' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
+#' @param x A numeric vector of values for which to get the density.
+#' @param q A numeric vector of quantile values.
+#' @param p A numeric vector of probabilities.
+#' @param n integer. Number of random observations requested.
 #' @param delay numeric. The delay, must be non-negative.
 #' @param rate numeric. The event rate, must be non-negative.
-#' @param ... further arguments to `stats::dexp`
-#' @export
-dexp_delayed <- function(x, delay, rate = 1, ...) dexp(x = x - delay, rate = rate, ...)
-#' @export
-pexp_delayed <- function(q, delay, rate = 1, ...) pexp(q = q - delay, rate = rate, ...)
-#' @export
-rexp_delayed <- function(n, delay, rate = 1) rexp(n = n, rate = rate) + delay
+#' @param ... further arguments to, e.g., `stats::dexp`
+#' @keywords distribution
+#' @name DelayedExponential
+NULL
 
-#' Density of delayed Weibull distribution
-#' @param x numeric. Values for which to get the density.
+#' @rdname DelayedExponential
+#' @export
+dexp_delayed <- function(x, delay, rate = 1, ...) stats::dexp(x = x - delay, rate = rate, ...)
+#' @rdname DelayedExponential
+#' @export
+pexp_delayed <- function(q, delay, rate = 1, ...) stats::pexp(q = q - delay, rate = rate, ...)
+#' @rdname DelayedExponential
+#' @export
+qexp_delayed <- function(p, delay, rate = 1, ...) delay + stats::qexp(p = p, rate = rate, ...)
+#' @rdname DelayedExponential
+#' @export
+rexp_delayed <- function(n, delay, rate = 1) delay + stats::rexp(n = n, rate = rate)
+
+#' Delayed Weibull distribution
+#'
+#' @description
+#' Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters
+#' like the Weibull functions in `stats`:
+#' * `delay`
+#' * `shape`
+#' * `scale` (inverse of rate)
+#'
+#' @details
+#' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
+#' @param x A numeric vector of values for which to get the density.
+#' @param q A numeric vector of quantile values.
+#' @param p A numeric vector of probabilities.
+#' @param n integer. Number of random observations requested.
 #' @param delay numeric. The delay, must be non-negative.
 #' @param shape numeric. Shape parameter, must be positive.
 #' @param scale numeric. Scale parameter (inverse of rate), must be positive.
-#' @param ... further arguments to `stats::deweibull`
+#' @param ... further arguments to, e.g., `stats::dweibull`
+#' @keywords distribution
+#' @name DelayedWeibull
+NULL
+
+#' @rdname DelayedWeibull
 #' @export
-dweib_delayed <- function(x, delay, shape, scale = 1, ...) dweibull(x = x - delay, shape = shape, scale = scale, ...)
+dweib_delayed <- function(x, delay, shape, scale = 1, ...) stats::dweibull(x = x - delay, shape = shape, scale = scale, ...)
+#' @rdname DelayedWeibull
 #' @export
-pweib_delayed <- function(q, delay, shape, scale = 1, ...) pweibull(q = q - delay, shape = shape, scale = scale, ...)
-#{cat(sprintf('min: %.3f, delay: %.3f — shape: %.2f — scale: %.2f\n', min(q), delay, shape, scale)); }
+pweib_delayed <- function(q, delay, shape, scale = 1, ...) stats::pweibull(q = q - delay, shape = shape, scale = scale, ...)
+#' @rdname DelayedWeibull
 #' @export
-rweib_delayed <- function(n, delay, shape, scale = 1) rweibull(n = n, shape = shape, scale = scale) + delay
+qweib_delayed <- function(p, delay, shape, scale = 1, ...) delay + stats::qweibull(p = p, shape = shape, scale = scale, ...)
+#' @rdname DelayedWeibull
+#' @export
+rweib_delayed <- function(n, delay, shape, scale = 1) delay + stats::rweibull(n = n, shape = shape, scale = scale)
 
 
 #' Get delay distribution function

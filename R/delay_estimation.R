@@ -113,10 +113,10 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
         while (endInd < length(tiesDiffInd) && tiesDiffInd[endInd+1L] == tiesDiffInd[endInd] + 1L) {endInd <- endInd+1L}
         #include adjacent index to complete tie-group
         obsInd <- c(tiesDiffInd[startInd:endInd], tiesDiffInd[endInd]+1L)
-        stopifnot( sd(obs[obsInd]) == 0L ) #check: tie-group
+        stopifnot( stats::sd(obs[obsInd]) == 0L ) #check: tie-group
         obs[obsInd] <- obs[obsInd] + if (ties == 'random') {
           # sort ensures that data after tie-break is still sorted from small to large
-          sort(runif(n = length(obsInd), min = -rr, max = +rr)) } else {
+          sort(stats::runif(n = length(obsInd), min = -rr, max = +rr)) } else {
             # ties == 'equidist'
             # use evenly spaced observations to break tie as proposed by Cheng (1989) on Moran test statistic
             #+They first use the ties = 'density' approach for initial estimation of parameters for Moran's statistic
@@ -170,7 +170,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
                       obs_f <- obs[max(1L, floor(length(obs)*.02)):ceiling(length(obs)*.95)] #assume sorted data
                       start_y <- log(-log(1-(seq_along(obs_f)-.3)/(length(obs_f)+.4)))
                       # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
-                      start_shape <- cor(log(obs_f), start_y) * sd(start_y) / sd(log(obs_f))
+                      start_shape <- stats::cor(log(obs_f), start_y) * stats::sd(start_y) / stats::sd(log(obs_f))
                       start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
 
 
@@ -348,10 +348,8 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       #because the parameters should be optimized within group.
       #merged data lead to frequent non-convergence or visually bad fits
       res <- c(mean(getCumDiffs(pars, group = "x")), mean(getCumDiffs(pars, group = "y")))
-      if (aggregated)
-        weighted.mean(res, w = c(length(x), length(y)))
-      else
-        res
+
+      if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
     }
 
   }
@@ -530,6 +528,7 @@ print.incubate_fit <- function(x, ...){
 #' @param group character string to request the canonical parameter for one group
 #' @param ... further arguments, currently not used.
 #' @return named coefficient vector
+#' @importFrom stats coef
 #' @export
 coef.incubate_fit <- function(object, group = NULL, ...){
   #stopifnot( inherits(object, "incubate_fit") )
@@ -552,6 +551,7 @@ summary.incubate_fit <- function(object, ...){
 #' @param optim_args optimization arguments
 #' @param verbose integer flag. Requested verbosity during `delay_fit`
 #' @param ... further arguments, currently not used.
+#' @importFrom stats update
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
@@ -591,16 +591,16 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
     grNames <- names(x[["data"]])
 
     p <- ggplot2::ggplot(data = tibble::enframe(unlist(x[["data"]]), name = "group"),
-                         mapping = ggplot2::aes(x = value, col = substr(x = group, 1L, 1L))) +
+                         mapping = ggplot2::aes_(x = ~value, col = ~substr(x = group, 1L, 1L))) +
       # add estimated delay model(s)
-      purrr::map(grNames,
+      purrr::map(.x = grNames,
                  .f = ~ ggplot2::geom_function(mapping = ggplot2::aes(col = .x), inherit.aes = FALSE,
                                                fun = cumFun,
                                                args = coef(x, group = .x), linetype = "dashed"))
   } else {
     grNames <- "x"
     p <- ggplot2::ggplot(data = tibble::tibble(value=x[["data"]]),
-                         mapping = ggplot2::aes(x = value)) +
+                         mapping = ggplot2::aes_(x = ~value)) +
       # add estimated delay model
       ggplot2::geom_function(inherit.aes = FALSE,
                              fun = cumFun,
@@ -608,7 +608,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
   }
 
 
-  if (missing(title)) title <- glue::glue_data(x, "Fitted {distribution} delay {c('model', 'models')[1+twoGroup]}")
+  if (missing(title)) title <- glue::glue_data(x, "Fitted {distribution} delay {c('model', 'models')[1L+twoGroup]}")
   if (missing(subtitle)) subtitle <- paste(purrr::map_chr(grNames,
                                                           ~ paste(names(coef(x, group = .)), signif(coef(x, group = .), 4),
                                                                   sep = ": ", collapse = ", ")),
@@ -624,12 +624,9 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
     ggplot2::scale_y_reverse()
 }
 
-#' Simulate Data from Fitted Model
-#' @param object object of class `incubate_fit`
-#' @param nsim number of simulations
-#' @param seed currently unused! XXX
-#' @param ... Further arguments, currently unused.
-#' @return list of simulated data
+
+#' @importFrom stats simulate
+#' @describeIn simulate Simulate from an `incubate`-model of class `incubate_fit`
 #' @export
 simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
   stopifnot( inherits(object, 'incubate_fit'))
@@ -697,8 +694,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                  ranFun <- getDist(object$distribution, type = "r")
                  if (smooth_delay){
                    # use rectified normal
-                   coe[['delay']] <- abs(coe[['delay']] - max(0L, rnorm(1L, mean = 0L,
-                                                                        sd = min(coe[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + coe[['rate']])))))
+                   coe[['delay']] <- abs(coe[['delay']] - max(0L, stats::rnorm(1L, mean = 0L,
+                                                                               sd = min(coe[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + coe[['rate']])))))
                  }
                  rlang::exec(ranFun, !!! as.list(c(n=nObs[[1L]], coe)))
                })
@@ -729,10 +726,10 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           if (smooth_delay){
                             #densFun <- getDist(object$distribution, type = 'd') #more generally, use density at delay+small value?
                             # use rectified Gaussian
-                            ranFunArgsX[['delay']] <- abs(ranFunArgsX[['delay']] - max(0L, rnorm(1L, mean = 0L,
-                                                                                             sd = min(ranFunArgsX[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsX[['rate']])))))
-                            if (twoGr) ranFunArgsY[['delay']] <- abs(ranFunArgsY[['delay']] - max(0L, rnorm(1L, mean = 0L,
-                                                                                                        sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsY[['rate']])))))
+                            ranFunArgsX[['delay']] <- abs(ranFunArgsX[['delay']] - max(0L, stats::rnorm(1L, mean = 0L,
+                                                                                                        sd = min(ranFunArgsX[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsX[['rate']])))))
+                            if (twoGr) ranFunArgsY[['delay']] <- abs(ranFunArgsY[['delay']] - max(0L, stats::rnorm(1L, mean = 0L,
+                                                                                                                   sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsY[['rate']])))))
                           }
 
                           # cf simulate (but inlined here for performance reasons)
@@ -899,12 +896,12 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
              )
            }),
            normal0 = {
-             t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qnorm(a) %o% apply(bs_data, 1L, sd))
+             t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qnorm(a) %o% apply(bs_data, 1L, stats::sd))
            },
            normal = {
              ## bias-corrected normal-based CI
              ## ci_delay_mle <- delayH_mle - delayH_mle_bias + c(-1, 1) * qnorm(.975) * delayH_mle_sd
-             t(c(1L, 1L) %o% (2L * cf - .rowMeans(bs_data, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data, 1L, sd))
+             t(c(1L, 1L) %o% (2L * cf - .rowMeans(bs_data, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data, 1L, stats::sd))
            },
            lognormal = local({
              # #bs_min <- apply(bs_data, 1L, min) - .15
@@ -915,15 +912,15 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
              bs_data_h <- log(bs_data + logshift)
              ## bias-corrected normal-based CI after log-transformation
              -logshift + exp(
-               t(c(1L, 1L) %o% (2L * log(cf + logshift) - .rowMeans(bs_data_h, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data_h, 1L, sd)))
+               t(c(1L, 1L) %o% (2L * log(cf + logshift) - .rowMeans(bs_data_h, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data_h, 1L, stats::sd)))
            }),
            t0 = {
-             t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, sd))
+             t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, stats::sd))
            },
            t = {
              # we actually estimate the variance quite accurately through the high number of bootstrap samples,
              #+ still we use a t-quantile to compensate the too low coverage when using qnorm, for the df we add 3L to be less conservative
-             t(c(1L, 1L) %o% (2L * cf - .rowMeans(bs_data, m = length(cf), n = R)) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, sd))
+             t(c(1L, 1L) %o% (2L * cf - .rowMeans(bs_data, m = length(cf), n = R)) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, stats::sd))
            },
            stop('This type of bootstrap confidence interval is not supported!')
     )
