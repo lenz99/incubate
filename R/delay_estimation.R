@@ -67,7 +67,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       obs <- obs[-ind_neg]
     }# fi
 
-    # drop NA and ±Inf & sort
+    # drop NA and +/-Inf & sort
     obs <- sort(obs[is.finite(obs)])
 
     if (!length(obs)) {
@@ -100,7 +100,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
       }
 
       # rounding radius can't be wider than smallest observed diff.
-      # plogis to mitigate the effect of sample size: the larger the sample the more we can «trust» the observed minimal diff
+      # plogis to mitigate the effect of sample size: the larger the sample the more we can 'trust' the observed minimal diff
       # obs[1L] = min(obs) = diff of minimal obs with 0
       rr <- .5 * min(stats::plogis(q = length(obs), scale = 11) * diffobs[which(diffobs > 0L)],
                      # rounding precision here

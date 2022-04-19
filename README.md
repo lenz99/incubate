@@ -58,8 +58,8 @@ plan(multisession, workers = 4)
 
 That’s it. You do *not* have to change any function calls. `incubate` is
 `future`-aware. Consult the [`future`-package on
-CRAN](https://cran.r-project.org/web/packages/future/) for more
-information about futures and about supported computation plans.
+CRAN](https://CRAN.R-project.org/package=future) for more information
+about futures and about supported computation plans.
 
 When you are done with the heavy computing, it is best practice to
 release the parallel connections via `plan(sequential)`.

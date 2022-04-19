@@ -1,4 +1,28 @@
 
+# incubate 1.1.2
+* small changes for CRAN-warnings
+* test: bigger data set for delay estimation
+
+# incubate 1.1.1
+* Fix errors/warnings from check
+    * document every function parameter
+    * S3-methods have right parameters
+    * specify package name for external functions (e.g., from `stats`)
+    * global variables (use `.data` and `aes_`)
+* add `cran-comments.md` file
+
+# incubate 1.1.0
+* confint: use better default values
+* confint: when using bootstrap smoothing for delay, make sure the smoothing keeps limited for tiny estimated rates lambda (see `SMD_MINRATE`)
+* bug fix: `plot.incubate_fit` has legible colour legend title
+
+# incubate 1.0.0
+* data: add experimental data `stankovic` from a publication Stankovic et al EGFL7 enhances surface expression of integrin doi:10.15252/emmm.201708420 (2018) as example data set
+* This version of package is also published at <https://zenodo.org/record/6462382>
+
+# incubate 0.9.9
+* `power_diff`: improve heuristics in iterative search for sample size, given power
+
 # incubate 0.9.8
 * `test_diff`: change name of P-values (within object)
 * `power_diff`: allow to specify power and do iterative computation
@@ -98,5 +122,5 @@
 
 # incubate 0.0.2
 * initial start as a move out from package `sscn` (git history is not moved along, though)
-* 'Try' to make code more robust: add `try` code at lower level, directly at where `optim` is called.
+* code robustness: add `try` code at lower level, directly at where `optim` is called.
 

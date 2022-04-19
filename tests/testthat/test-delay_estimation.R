@@ -3,25 +3,29 @@
 # in particular parameter estimates, convergence etc. from the model fit object
 
 test_that("Fit delayed Exponentials", {
-  # from a call to 9 + rexp(13, rate = 0.5)
+  # from a call to rexp_delayed(16, delay = 9, rate = 0.5)
   xx <- c(9.37584220431745, 9.43687826953828, 9.44079428166151, 9.63324003852904,
+          9.6421,
           9.76594032067806, 9.80526794679463, 9.90732720028609, 10.3573373407125,
+          10.371,
           10.596041733315, 10.6229753642434, 11.1074129025543, 11.5750403608287,
+          11.849,
           16.3800762999327)
 
   fd_exp <- delay_model(xx, distribution = "expon")
   coef_exp <- coef(fd_exp)
 
+  expect_identical(length(fd_exp$data), expected = 16L)
   # optim does converge properly now for this data vector!
   expect_identical(fd_exp$convergence, expected = 0L) # used to be 52L
 
-  expect_equal(coef_exp[1L], expected = c(delay = 9), tolerance = .03)
-  expect_equal(coef_exp[2L], expected = c(rate = 0.5), tolerance = .3)
+  expect_equal(coef_exp[[1L]], expected = 9, tolerance = .04)
+  expect_equal(coef_exp[[2L]], expected = 0.5, tolerance = .4)
 
-  set.seed(20210429)
-  yy <- rexp_delayed(21L, delay = 10.5, rate = .9)
+  set.seed(20220419)
+  yy <- rexp_delayed(23L, delay = 10, rate = .8)
 
-  fd_exp2 <- delay_model(x = xx, y = yy, distribution = "exp")
+  fd_exp2 <- delay_model(x = xx, y = yy, distribution = "expon")
   coef_exp2 <- coef(fd_exp2)
 
   expect_identical(fd_exp2[["convergence"]], expected = 0L)
@@ -29,20 +33,20 @@ test_that("Fit delayed Exponentials", {
 
 
   # bind delay
-  fd_exp2b <- delay_model(x = xx, y = yy, distribution = "exp", bind = "delay")
+  fd_exp2b <- delay_model(x = xx, y = yy, distribution = "expon", bind = "delay")
   coef_exp2b <- coef(fd_exp2b)
 
   expect_identical(fd_exp2b[["convergence"]], expected = 0L)
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
-  expect_equal(as.numeric(coef_exp2b[1L]),
+  expect_equal(coef_exp2b[[1L]],
                expected = min(coef_exp2[grepl(pattern = "delay", names(coef_exp2), fixed = TRUE)]),
                tolerance = .01)
 
   # bind delay + rate
-  fd_exp2c <- delay_model(x = xx, y = yy, distribution = "exp", bind = c("delay", "rate"))
+  fd_exp2c <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("delay", "rate"))
   coef_exp2c <- coef(fd_exp2c)
 
-  fd_exp3 <- delay_model(x = c(xx, yy), distribution = "exp")
+  fd_exp3 <- delay_model(x = c(xx, yy), distribution = "expon")
   coef_exp3 <- coef(fd_exp3)
 
   expect_identical(length(coef_exp3), length(coef_exp2c))
