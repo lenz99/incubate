@@ -13,5 +13,5 @@
 #'   \item{Group}{Experimental group identifier}
 #'   \item{Colour}{Colour used in the Stankovic publication to mark this group}
 #' }
-#' @source Dudvarski Stanković N, Bicker F, Keller S, et al. EGFL7 enhances surface expression of integrin a5b1 to promote angiogenesis in malignant brain tumors. EMBO Mol Med. 2018;10(9):e8420. doi:10.15252/emmm.201708420 \url{https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6127886/}
+#' @source Dudvarski Stankovic N, Bicker F, Keller S, et al. EGFL7 enhances surface expression of integrin a5b1 to promote angiogenesis in malignant brain tumors. EMBO Mol Med. 2018;10(9):e8420. doi:10.15252/emmm.201708420 \url{https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6127886/}
 "stankovic"

@@ -1,3 +1,7 @@
+
+# incubate 1.1.4
+* doc: small improvements
+
 # incubate 1.1.3
 * README: better intro text and more text for example
 

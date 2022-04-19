@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{geomSpaceFactory}
 \alias{geomSpaceFactory}
-\title{Factory method for negative maximum spacing estimation objective function.}
+\title{Factory Method for Negative Maximum Spacing Estimation (MSE) Objective Function}
 \usage{
 geomSpaceFactory(
   x,
@@ -27,12 +27,12 @@ geomSpaceFactory(
 \item{verbose}{integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.}
 }
 \value{
-objective function
-negative maximum spacing estimation objective function.
-Estimate parameters by minimizing this function.
-\code{pars} is the parameter vector.
-\code{aggregated} is logical floag. For two group case, \code{FALSE} returns individual mean log cum-diffs per group
+An R-function that returns the negative MSE criterion for given choice of model parameters.
 }
 \description{
-Negative or infinite values are discarded.
+Given the observed data this factory method produces an MSE objective function implementation
+which is the negative of the MSE-criterion H.
+}
+\details{
+From the observations, negative or infinite values are discarded.
 }

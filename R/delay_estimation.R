@@ -25,16 +25,21 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
   c(par.gr, par[bind])[oNames]
 }
 
-#' Factory method for negative maximum spacing estimation objective function.
+#' Factory Method for Negative Maximum Spacing Estimation (MSE) Objective Function
 #'
-#' Negative or infinite values are discarded.
+#' Given the observed data this factory method produces an MSE objective function implementation
+#' which is the negative of the MSE-criterion H.
+#'
+#' @details
+#' From the observations, negative or infinite values are discarded.
+#'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
 #' @param distribution character(1). delayed distribution family
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param ties character. How to handle ties within data of a group.
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
-#' @return objective function
+#' @return An R-function that returns the negative MSE criterion for given choice of model parameters.
 geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL,
                              ties=c('equidist', 'density', 'random', 'none'), verbose = 0L) {
 
@@ -332,10 +337,10 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
   }# fn getCumDiffs
 
 
-  #' negative maximum spacing estimation objective function.
-  #' Estimate parameters by minimizing this function.
-  #' `pars` is the parameter vector.
-  #' `aggregated` is logical floag. For two group case, `FALSE` returns individual mean log cum-diffs per group
+  # negative maximum spacing estimation objective function.
+  # Estimate parameters by minimizing this function.
+  # `pars` a the parameter vector.
+  # `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
   negMSE <- function(pars, aggregated = TRUE){
     stopifnot( length(par_names) == length(pars) )
     pars <- purrr::set_names(pars, par_names)

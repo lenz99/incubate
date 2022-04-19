@@ -3,7 +3,7 @@
 \docType{package}
 \name{incubate}
 \alias{incubate}
-\title{incubate. Delay estimation.}
+\title{Incubate Package}
 \description{
-Estimation and statistical test on delay in time-to-event analyses.
+Estimation and statistical tests on parameters in parametric time-to-event analyses with delay.
 }
