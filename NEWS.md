@@ -1,3 +1,5 @@
+# incubate 1.1.3
+* README: better intro text and more text for example
 
 # incubate 1.1.2
 * small changes for CRAN-warnings
