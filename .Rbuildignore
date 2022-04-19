@@ -4,3 +4,4 @@
 ^README\.Rmd$
 ^scratch$
 ^data-raw$
+^cran-comments\.md$
