@@ -6,42 +6,63 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-Parametric time-to-event analysis where groups show an incubation period
-with different hazard.
+In survival analysis, one sometimes encounters situations where events
+only start to occur after a certain delay since entry time and this
+delay varies for different treatments or groups. While parametric delay
+models, like the three-parameter Weibull distribution, might adequately
+describe this process the estimation of delay via standard maximum
+likelihood is severely biased in small samples. The R-package `incubate`
+employs an alternative estimation method called *maximum spacing
+estimation (MSE)* to estimate delay and other parameters in a one or two
+group setting. Building on MSE, `incubate` can
+
+1.  calculate confidence intervals for these model parameters *and*
+2.  compare the survival experience of two groups within this
+    statistical model with respect to model parameters.
 
 ## Example
 
-With `incubate`, you can statistically compare the survival experience
-of two groups with respect to delay and other parameters.
+The `incubate`-package provides the delayed exponential distribution as
+special case of the delayed Weibull distribution. We draw random samples
+corresponding to two groups with different model parameters.
 
 ``` r
 library(incubate)
 
 # simulate data from exponential distribution with delay
-x <- rexp_delayed(n = 13, delay = 1.1)
-y <- rexp_delayed(n = 11, delay = 1.6)
+x <- rexp_delayed(n = 13, delay = 1.0, rate = 0.8)
+y <- rexp_delayed(n = 11, delay = 1.5, rate = 1.2)
+```
 
-# fit delay model 
+We use the model function `delay_model` to fit a exponential model with
+delay to both groups and show the model fit.
+
+``` r
 fm <- delay_model(x, y)
 
 plot(fm)
 ```
 
-<img src="man/figures/README-example-1.png" width="60%" style="display: block; margin: auto;" />
+<img src="man/figures/README-example_fit-1.png" width="60%" style="display: block; margin: auto;" />
+
+Inference on the model parameters is possible through `confint` for
+bootstrap confidence intervals and `delay_test` for parameter
+comparisons in a two group setting.
 
 ``` r
 # confidence interval for delay-parameters
 confint(fm, parm = c('delay.x', 'delay.y'))
 #>            2.5%  97.5%
-#> delay.x 0.98069 1.2925
-#> delay.y 1.45697 2.1287
+#> delay.x 0.85443 1.2627
+#> delay.y 1.37808 1.9318
 
-# test on difference in delay, using only R=75 bootstrap draws
-delay_test <- test_diff(x, y, R = 75)
+# test on difference in delay
+# for real applications use R>=1000 bootrap draws
+delay_test <- test_diff(x, y, R = 100)
 plot(delay_test)
 ```
 
-<img src="man/figures/README-example-2.png" width="60%" style="display: block; margin: auto;" />
+<img src="man/figures/README-example_inf-1.png" width="60%" style="display: block; margin: auto;" />
 
 ## Parallel computation
 
@@ -66,9 +87,13 @@ release the parallel connections via `plan(sequential)`.
 
 ## Installation
 
-The `incubate` package is hosted publicly at
-[Gitlab](https://gitlab.com/imb-dev/incubate). To install its latest
-**released version** use from within an R-session:
+The `incubate` package is found on CRAN and is developed at a [Gitlab
+repository](https://gitlab.com/imb-dev/incubate).
+
+Use `install.packages` to install `incubate` from CRAN as usual.
+
+To install its **latest version** from the main branch on Gitlab use the
+following R-code:
 
 ``` r
 remotes::install_gitlab("imb-dev/incubate")
