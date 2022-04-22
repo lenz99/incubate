@@ -16,6 +16,9 @@ If more things need to be changed use \code{delay_model}.}
 
 \item{...}{further arguments, currently not used.}
 }
+\value{
+The updated fitted object of class \code{incubate_fit}
+}
 \description{
 Refit an \code{incubate_fit}-object with specified optimization arguments.
 If more things need to be changed use \code{delay_model}.

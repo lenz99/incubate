@@ -6,7 +6,7 @@
 \alias{pweib_delayed}
 \alias{qweib_delayed}
 \alias{rweib_delayed}
-\title{Delayed Weibull distribution}
+\title{The Delayed Weibull Distribution}
 \usage{
 dweib_delayed(x, delay, shape, scale = 1, ...)
 
@@ -25,7 +25,7 @@ rweib_delayed(n, delay, shape, scale = 1)
 
 \item{scale}{numeric. Scale parameter (inverse of rate), must be positive.}
 
-\item{...}{further arguments to, e.g., \code{stats::dweibull}}
+\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Weibull]{stats::dweibull()}}}
 
 \item{q}{A numeric vector of quantile values.}
 
@@ -33,9 +33,15 @@ rweib_delayed(n, delay, shape, scale = 1)
 
 \item{n}{integer. Number of random observations requested.}
 }
+\value{
+\code{dweib_delayed} gives the density, \code{pweib_delayed} gives the distribution function, \code{qweib_delayed} gives the quantile function,
+and \code{rweib_delayed} generates a pseudo-random sample from the delayed Weibull distribution.
+
+The length of the result is determined by \code{n} for \code{rweib_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions.
+}
 \description{
 Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters
-like the Weibull functions in \code{stats}:
+as in the Weibull functions in \code{stats}:
 \itemize{
 \item \code{delay}
 \item \code{shape}
@@ -44,5 +50,7 @@ like the Weibull functions in \code{stats}:
 }
 \details{
 Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the \code{stats}-package.
+
+The numerical arguments other than \code{n} are recycled to the length of the result. Only the first elements of the logical arguments are used.
 }
 \keyword{distribution}

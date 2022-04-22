@@ -556,6 +556,7 @@ summary.incubate_fit <- function(object, ...){
 #' @param optim_args optimization arguments
 #' @param verbose integer flag. Requested verbosity during `delay_fit`
 #' @param ... further arguments, currently not used.
+#' @return The updated fitted object of class `incubate_fit`
 #' @importFrom stats update
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){

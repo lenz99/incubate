@@ -2,18 +2,26 @@
 # delay distribution functions
 
 
-#' Delayed exponential distribution
+#' The Delayed Exponential Distribution
 #'
+#' @description
 #' Density, distribution function, quantile function and random generation for the delayed exponential distribution with rate `rate`.
 #'
+#' @details
 #' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
+#' The numerical arguments other than `n` are recycled to the length of the result. Only the first elements of the logical arguments are used.
+#'
 #' @param x A numeric vector of values for which to get the density.
 #' @param q A numeric vector of quantile values.
 #' @param p A numeric vector of probabilities.
 #' @param n integer. Number of random observations requested.
 #' @param delay numeric. The delay, must be non-negative.
 #' @param rate numeric. The event rate, must be non-negative.
-#' @param ... further arguments to, e.g., `stats::dexp`
+#' @param ... further arguments are passed on to the underlying non-delayed function, e.g., [stats::dexp()]
+#' @return `dexp_delayed` gives the density, `pexp_delayed` gives the distribution function, `qexp_delayed` gives the quantile function,
+#' and `rexp_delayed` generates a pseudo-random sample from the delayed exponential distribution.
+#'
+#' The length of the result is determined by `n` for `rexp_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions.
 #' @keywords distribution
 #' @name DelayedExponential
 NULL
@@ -31,17 +39,21 @@ qexp_delayed <- function(p, delay, rate = 1, ...) delay + stats::qexp(p = p, rat
 #' @export
 rexp_delayed <- function(n, delay, rate = 1) delay + stats::rexp(n = n, rate = rate)
 
-#' Delayed Weibull distribution
+
+#' The Delayed Weibull Distribution
 #'
 #' @description
 #' Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters
-#' like the Weibull functions in `stats`:
+#' as in the Weibull functions in `stats`:
 #' * `delay`
 #' * `shape`
 #' * `scale` (inverse of rate)
 #'
 #' @details
 #' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
+#'
+#' The numerical arguments other than `n` are recycled to the length of the result. Only the first elements of the logical arguments are used.
+#'
 #' @param x A numeric vector of values for which to get the density.
 #' @param q A numeric vector of quantile values.
 #' @param p A numeric vector of probabilities.
@@ -49,7 +61,11 @@ rexp_delayed <- function(n, delay, rate = 1) delay + stats::rexp(n = n, rate = r
 #' @param delay numeric. The delay, must be non-negative.
 #' @param shape numeric. Shape parameter, must be positive.
 #' @param scale numeric. Scale parameter (inverse of rate), must be positive.
-#' @param ... further arguments to, e.g., `stats::dweibull`
+#' @param ... further arguments are passed on to the underlying non-delayed function, e.g., [stats::dweibull()]
+#' @return `dweib_delayed` gives the density, `pweib_delayed` gives the distribution function, `qweib_delayed` gives the quantile function,
+#' and `rweib_delayed` generates a pseudo-random sample from the delayed Weibull distribution.
+#'
+#' The length of the result is determined by `n` for `rweib_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions.
 #' @keywords distribution
 #' @name DelayedWeibull
 NULL

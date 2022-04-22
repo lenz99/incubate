@@ -6,7 +6,7 @@
 \alias{pexp_delayed}
 \alias{qexp_delayed}
 \alias{rexp_delayed}
-\title{Delayed exponential distribution}
+\title{The Delayed Exponential Distribution}
 \usage{
 dexp_delayed(x, delay, rate = 1, ...)
 
@@ -23,7 +23,7 @@ rexp_delayed(n, delay, rate = 1)
 
 \item{rate}{numeric. The event rate, must be non-negative.}
 
-\item{...}{further arguments to, e.g., \code{stats::dexp}}
+\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Exponential]{stats::dexp()}}}
 
 \item{q}{A numeric vector of quantile values.}
 
@@ -31,10 +31,17 @@ rexp_delayed(n, delay, rate = 1)
 
 \item{n}{integer. Number of random observations requested.}
 }
+\value{
+\code{dexp_delayed} gives the density, \code{pexp_delayed} gives the distribution function, \code{qexp_delayed} gives the quantile function,
+and \code{rexp_delayed} generates a pseudo-random sample from the delayed exponential distribution.
+
+The length of the result is determined by \code{n} for \code{rexp_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions.
+}
 \description{
 Density, distribution function, quantile function and random generation for the delayed exponential distribution with rate \code{rate}.
 }
 \details{
 Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the \code{stats}-package.
+The numerical arguments other than \code{n} are recycled to the length of the result. Only the first elements of the logical arguments are used.
 }
 \keyword{distribution}
