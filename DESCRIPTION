@@ -1,7 +1,7 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.1.5
-Date: 2022-04-22
+Version: 1.1.6
+Date: 2022-04-27
 Authors@R: 
     person(given = "Matthias",
            family = "Kuhn",
@@ -14,7 +14,7 @@ Description: Fit parametric models for time-to-event data that show an initial
     specific method of MSE (maximum spacing estimation) is used for parameter
     estimation. Bootstrap confidence intervals for parameters and significance
     tests in a two group setting are provided.
-License: MIT + file LICENSE
+License: LGPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)

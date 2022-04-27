@@ -1,4 +1,10 @@
 
+# incubate 1.1.6
+* use LGPL-licence
+
+# incubate 1.1.5
+* doc: further improvements (document all return values)
+
 # incubate 1.1.4
 * doc: small improvements
 
