@@ -2,12 +2,10 @@
 This is a resubmission. In this version I have:
 
 * Provided a paragraph at the Description-field in DESCRIPTION
-
-* More clearly identified the copyright holders in the LICENSE files.
-
-* Documented missing return values of exported functions
-
-* Version bump for this resubmission
+* Use LGPL licence (as this appears a better match, also after consulting colleagues). Dropped unnecessary separate licence file.
+* No reference to vague statement 'incubate package authors'. I am the only author of this package.
+* Documented all return values of exported functions
+* Version bump for this resubmission to v1.1.6 (previous CRAN re-submission v1.1.5 got archived)
 
 
 ## R CMD check results
