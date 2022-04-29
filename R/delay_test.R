@@ -187,6 +187,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
                       ties = c('equidist', 'density', 'random'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr', 'lr_pp'),
                       verbose = 0) {
   STRICT <- TRUE #keep only conv=0 model fits?
+  TOL_CRIT <- 1e-6
   distribution <- match.arg(distribution)
   ties <- match.arg(ties)
   type <- match.arg(type)
@@ -217,7 +218,6 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   # High values of the test statistic speak in favour of H1:
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y) {
-    #fit0 <- fit1 <- NULL
     fit0 <- delay_model(x = x, y = y, distribution = distribution, method = 'MSE', ties = ties, bind = param)
     fit1 <- delay_model(x = x, y = y, distribution = distribution, method = 'MSE', ties = ties)
 
@@ -226,7 +226,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     # if more restricted model fit0 yields better fit (=lower criterion) than more general fit1
     #+we are in trouble, possibly due to non-convergence, e.g. convergence code 52
     #+we refit the general fit1 again using parameter-values from fit0
-    if ( fit0[['val']] < fit1[['val']] ){
+    if ( fit0[['val']] + TOL_CRIT < fit1[['val']] ){
       warning('Restricted model with better fit than unrestricted model.', call. = FALSE)
       # re-run fit1 with start values based on fitted parameters of reduced model fit0
       fit1oa <- attr(fit1[['objFun']], 'optim_args', exact = TRUE)
@@ -245,7 +245,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
-      if (is.null(fit1) || fit0[['val']] < fit1[['val']]) return(invisible(NULL))
+      if (is.null(fit1) || fit0[['val']] + TOL_CRIT < fit1[['val']]) return(invisible(NULL))
     }# fi bad fit1
 
     # convergence of re-fits?
@@ -320,10 +320,13 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
                                            }, future.seed = TRUE)
 
     if (verbose > 0L){
+      stopifnot( NROW(t0_dist) == 2L )
       fit0_conv <- t0_dist[2L,]
-      cat('Proportion of model failures:', sprintf('%6.1f%%', 100L*length(which(is.na(fit0_conv)))/length(fit0_conv)), '\n')
-      cat('Proportion of convergence= 0:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 0))/length(fit0_conv)), '\n')
-      cat('Proportion of convergence=52:', sprintf('%6.1f%%', 100L*length(which(fit0_conv == 52))/length(fit0_conv)), '\n')
+      cat(glue::glue(
+        'Proportion of model failures: {scales::percent(length(which(is.na(fit0_conv)))/length(fit0_conv), accuracy = .1)}',
+        'Proportion of conv =  0: {scales::percent(length(which(fit0_conv == 0))/ length(fit0_conv), accuracy = .1)}',
+        'Proportion of conv = 52: {scales::percent(length(which(fit0_conv == 52))/length(fit0_conv), accuracy = .1)}\n',
+        .sep = '\n'))
       t0_dist <- t0_dist[1L,] #retain only ts_boot[['val']]
     }
     t0_dist <- t0_dist[is.finite(t0_dist)]
