@@ -2,6 +2,7 @@
 # Utility functions used within this package
 
 #' Compare two numeric vectors
+#' Input `x` and `y` are recycled to get common length.
 #' @param x numeric vector
 #' @param y numeric vector
 #' @param tol numeric. Numerical tolerance level for comparison.

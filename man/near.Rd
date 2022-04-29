@@ -2,7 +2,8 @@
 % Please edit documentation in R/utils.R
 \name{near}
 \alias{near}
-\title{Compare two numeric vectors}
+\title{Compare two numeric vectors
+Input \code{x} and \code{y} are recycled to get common length.}
 \usage{
 near(x, y, tol = .Machine$double.eps^0.4)
 }
@@ -15,6 +16,7 @@ near(x, y, tol = .Machine$double.eps^0.4)
 }
 \description{
 Compare two numeric vectors
+Input \code{x} and \code{y} are recycled to get common length.
 }
 \seealso{
 \code{dplyr::near}
