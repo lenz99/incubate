@@ -251,7 +251,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     # convergence of re-fits?
     # keep also fits with error-code 52: in my tests all those fits *looked* actually OK..
     # XXX try harder for non-convergence when testStat is called for the first time (to have basis model)
-    if ( STRICT && (fit0[['convergence']] != 0 || fit1[['convergence']] != 0) ) return(invisible(NULL))
+    if ( STRICT && (purrr::chuck(fit0, 'optimizer', 'convergence') != 0 || purrr::chuck(fit1, 'optimizer', 'convergence') != 0) ) return(invisible(NULL))
 
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
@@ -315,7 +315,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
                                              ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
                                                                  y = rlang::exec(ranFun, !!! ranFunArgsY))
                                              if (is.null(ts_boot)) rep.int(NA_real_, times = retL) else
-                                                 c(ts_boot[['val']], ts_boot[['fit0']][['convergence']])[seq_len(retL)]
+                                                 c(ts_boot[['val']],
+                                                   purrr::chuck(ts_boot, 'fit0', 'optimizer', 'convergence'))[seq_len(retL)]
 
                                            }, future.seed = TRUE)
 

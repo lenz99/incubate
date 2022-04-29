@@ -16,27 +16,29 @@ test_that("Fit delayed Exponentials", {
   coef_exp <- coef(fd_exp)
 
   expect_identical(length(fd_exp$data), expected = 16L)
-  # optim does converge properly now for this data vector!
-  expect_identical(fd_exp$convergence, expected = 0L) # used to be 52L
+  # optim converges properly for this data vector!
+  # convergence=51 is warning from L-BFGS-B
+  # convergence=52 is error from L-BFGS-B
+  expect_identical(purrr::chuck(fd_exp, 'optimizer', 'convergence'), expected = 0L)
 
   expect_equal(coef_exp[[1L]], expected = 9, tolerance = .04)
   expect_equal(coef_exp[[2L]], expected = 0.5, tolerance = .4)
 
-  set.seed(20220419)
-  yy <- rexp_delayed(23L, delay = 10, rate = .8)
+  set.seed(20220429)
+  yy <- rexp_delayed(27L, delay = 10.2, rate = .9)
 
   fd_exp2 <- delay_model(x = xx, y = yy, distribution = "expon")
   coef_exp2 <- coef(fd_exp2)
 
-  expect_identical(fd_exp2[["convergence"]], expected = 0L)
-  expect_equal(as.numeric(coef_exp2[1:2]), expected = as.numeric(coef_exp), tolerance = .002)
+  expect_identical(purrr::chuck(fd_exp2, 'optimizer', 'convergence'), expected = 0L)
+  expect_equal(as.numeric(coef_exp2[1:2]), expected = as.numeric(coef_exp), tolerance = .01)
 
 
   # bind delay
   fd_exp2b <- delay_model(x = xx, y = yy, distribution = "expon", bind = "delay")
   coef_exp2b <- coef(fd_exp2b)
 
-  expect_identical(fd_exp2b[["convergence"]], expected = 0L)
+  expect_identical(purrr::chuck(fd_exp2b, 'optimizer', 'convergence'), expected = 0L)
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
   expect_equal(coef_exp2b[[1L]],
                expected = min(coef_exp2[grepl(pattern = "delay", names(coef_exp2), fixed = TRUE)]),
@@ -69,7 +71,7 @@ test_that("Fit delayed Weibull", {
   fd_maxFl <- incubate::delay_model(maxFloodLvl, distribution = "weib")
   coef_maxFl <- coef(fd_maxFl)
 
-  expect_identical(fd_maxFl$convergence, expected = 0L)
+  expect_identical(purrr::chuck(fd_maxFl, 'optimizer', 'convergence'), expected = 0L)
   expect_equal(coef_maxFl[1L], expected = c(delay=0.244), tolerance = .01)
   expect_equal(coef_maxFl[2L], expected = c(shape=1.310), tolerance = .01)
   expect_equal(coef_maxFl[3L], expected = c(scale=.202),  tolerance = .01)
@@ -89,7 +91,7 @@ test_that("Fit delayed Weibull", {
   objFun_poll <- fd_poll$objFun
   coef_poll <- coef(fd_poll)
 
-  expect_identical(fd_poll$convergence, expected = 0L)
+  expect_identical(purrr::chuck(fd_poll, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_poll), expected = 3L)
   expect_lt(objFun_poll(coef_poll), expected = 3.75)
   expect_equal(coef_poll, expected = c(delay=1085, shape=0.95, scale=6562), tolerance = .001)
@@ -98,7 +100,7 @@ test_that("Fit delayed Weibull", {
   fd_wb2 <- incubate::delay_model(x = maxFloodLvl, y = pollution, distribution = "weib")
   coef_wb2 <- coef(fd_wb2)
 
-  expect_identical(fd_wb2[["convergence"]], expected = 0L)
+  expect_identical(purrr::chuck(fd_wb2, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_wb2), expected = 2L*3L)
   expect_equal(as.numeric(coef_wb2[1L]), expected = as.numeric(coef_maxFl[1L]), tolerance = .001)
   expect_equal(as.numeric(coef_wb2[2L]), expected = as.numeric(coef_maxFl[2L]), tolerance = .001)
@@ -115,7 +117,7 @@ test_that("Fit delayed Weibull", {
 
   coef_wb2b <- coef(fd_wb2b)
 
-  expect_identical(fd_wb2b[["convergence"]], expected = 0L)
+  expect_identical(purrr::chuck(fd_wb2b, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_wb2b), expected = 2L*3L-1L) #delay is bound
   # expect a delay close to the minimum of the two true delay parameters
   expect_equal(coef_wb2b[1L], expected = c(delay = 5), tolerance = .02)

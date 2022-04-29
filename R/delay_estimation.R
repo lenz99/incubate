@@ -482,7 +482,7 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
         #objFun = objFun, ### neg. log-lik as objective function?!
         par = c(delay = min(x), rate = 1/(mean(x) - min(x))),
         val = - length(x) * ( log(mean(x) - min(x)) + 1L ), ## think here: taken from profiled likelihood. Is it generally correct?
-        convergence = 0L
+        optimizer = list(convergence = 0L, message = 'analytic solution for MLE'),
       ), class = "incubate_fit"))
   } # MLE
 
@@ -499,10 +499,13 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
   oNames <- getDist(distribution, type = 'param')
   data_tr <- purrr::exec(getDist(distribution, type = "cdf"),
                          !!! c(list(q=x), getPars(par = optObj$par, group = 'x', twoGr = twoGr, oNames = oNames, bind = bind)))
-  if (twoGr) data_tr <-
-    list(x = data_tr,
-         y = purrr::exec(getDist(distribution, type = "cdf"),
-                         !!! c(list(q=y), getPars(par = optObj$par, group = 'y', twoGr = twoGr, oNames = oNames, bind = bind))))
+  if (twoGr){
+    data_tr <-
+      list(x = data_tr,
+           y = purrr::exec(getDist(distribution, type = "cdf"),
+                           !!! c(list(q=y), getPars(par = optObj$par, group = 'y', twoGr = twoGr, oNames = oNames, bind = bind))))
+  }
+
   structure(
     list(
       data = if (twoGr) list(x = x, y = y) else x,
@@ -514,7 +517,8 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
       objFun = objFun,
       par = optObj$par,
       val = optObj$value, ##objFun(optObj$par),
-      convergence = optObj$convergence
+      optimizer = optObj[c('convergence', 'message', 'counts')]
+
     ), class = "incubate_fit")
 }
 
@@ -577,7 +581,7 @@ update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
       objFun = objFun,
       par = optObj$par,
       val = optObj$value, ##objFun(optObj$par),
-      convergence = optObj$convergence
+      optimizer = optObj[c('convergence', 'message', 'counts')]
     ), class = "incubate_fit")
 }
 
