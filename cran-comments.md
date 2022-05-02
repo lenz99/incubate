@@ -1,11 +1,9 @@
 ## Resubmission
-This is a resubmission. In this version I have:
+This is a resubmission since a test failed on M1-Macs. In this version I have:
 
-* Provided a paragraph at the Description-field in DESCRIPTION
-* Use LGPL licence (as this appears a better match, also after consulting colleagues). Dropped unnecessary separate licence file.
-* No reference to vague statement 'incubate package authors'. I am the only author of this package.
-* Documented all return values of exported functions
-* Version bump for this resubmission to v1.1.6 (previous CRAN re-submission v1.1.5 got archived)
+* make test data set more robust so that it passes on all platforms, in particular on M1-Macs.
+* provide URL-field in DESCRIPTION for development-homepage
+* Version bump for this resubmission to v1.1.7
 
 
 ## R CMD check results
@@ -14,9 +12,9 @@ There were no ERRORs or WARNINGs.
 There was 1 NOTE:
 
 * checking CRAN incoming feasibility ... NOTE
-  Maintainer: 'Matthias Kuhn <matthias.kuhn@tu-dresden.de>' New submission
+  Maintainer: 'Matthias Kuhn <matthias.kuhn@tu-dresden.de>' Days since last update: 3
 
-  This is indeed the first submission of this package to CRAN.
+  This is my resubmission to fix test errors on M1-Macs.
 
 
 ## Downstream dependencies

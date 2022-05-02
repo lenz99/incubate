@@ -1,4 +1,8 @@
 
+# incubate 1.1.7
+* more robust test that passes also on Apple-silicon
+* doc: add homepage in DESCRIPTION
+
 # incubate 1.1.6
 * use LGPL-licence
 

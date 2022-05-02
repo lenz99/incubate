@@ -8,6 +8,7 @@
 #' @importFrom glue glue
 #' @importFrom MASS boxcox
 #' @importFrom purrr chuck
+#' @importFrom scales label_percent
 #' @importFrom survival Surv
 #' @importFrom tibble tibble
 #' @name incubate

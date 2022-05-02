@@ -450,7 +450,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"), method = c('MSE', 'MLE'), bind=NULL,
+delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, distribution = c("exponential", "weibull"), method = c('MSE', 'MLE'), bind=NULL,
                         ties=c('equidist', 'density', 'random'), optim_args=NULL, verbose = 0) {
 
   # unpack x if it is a list of two vectors
@@ -482,8 +482,8 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
         #objFun = objFun, ### neg. log-lik as objective function?!
         par = c(delay = min(x), rate = 1/(mean(x) - min(x))),
         val = - length(x) * ( log(mean(x) - min(x)) + 1L ), ## think here: taken from profiled likelihood. Is it generally correct?
-        optimizer = list(convergence = 0L, message = 'analytic solution for MLE'),
-      ), class = "incubate_fit"))
+        optimizer = list(convergence = 0L, message = 'analytic solution for MLE')),
+      class = "incubate_fit"))
   } # MLE
 
   objFun <- geomSpaceFactory(x = x, y = y, distribution = distribution, bind = bind, ties = ties, verbose = verbose)
@@ -517,9 +517,8 @@ delay_model <- function(x, y = NULL, distribution = c("exponential", "weibull"),
       objFun = objFun,
       par = optObj$par,
       val = optObj$value, ##objFun(optObj$par),
-      optimizer = optObj[c('convergence', 'message', 'counts')]
-
-    ), class = "incubate_fit")
+      optimizer = optObj[c('convergence', 'message', 'counts')]),
+    class = "incubate_fit")
 }
 
 #' @export
