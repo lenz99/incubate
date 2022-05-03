@@ -53,6 +53,6 @@ pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6K, subset = Group != 'TMD
 
 stankovic <- dplyr::bind_rows(fig6J=fig6J, fig6K=fig6K, .id = 'figure')
 # save as one dataframe, including column 'figure' to describe source
-saveRDS(stankovic, file = 'stankovic_fig6JK_U87.rds')
+#saveRDS(stankovic, file = 'stankovic_fig6JK_U87.rds')
 
 #usethis::use_data(stankovic, overwrite = FALSE)
