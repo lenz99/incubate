@@ -1,4 +1,7 @@
 
+# incubate 1.1.8
+* correct URL for bug reports in DESCRIPTION
+
 # incubate 1.1.7
 * more robust test that passes also on Apple-silicon
 * doc: add homepage in DESCRIPTION
