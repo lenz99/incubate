@@ -36,8 +36,8 @@ Suggests:
     future.callr,
     knitr,
     testthat (>= 3.0.0)
-URL: https://gitlab.com/imb-dev/incubate
-BugReports: https://gitlab.com/imb-dev/incubate/issues
+URL: https://gitlab.com/imb-dev/incubate/
+BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
 RoxygenNote: 7.1.2
 Config/testthat/edition: 3
 Depends: 
