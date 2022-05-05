@@ -72,7 +72,7 @@ To switch on parallel computation, e.g. for bootstrap parameter tests or power s
 For instance, do the following to activate four R-sessions in the background of your local computer for computer-intensive tasks in `incubate`:
 
 ```{r future_setup, echo=TRUE, eval=FALSE}
-library(future)
+library("future")
 plan(multisession, workers = 4)
 ```
 
@@ -80,18 +80,14 @@ That's it. You do *not* have to change any function calls. `incubate` is `future
 Consult the [`future`-package on CRAN](https://CRAN.R-project.org/package=future) for more information about futures and about supported computation plans.
 
 When you are done with the heavy computing, it is best practice to release the parallel connections via `plan(sequential)`.
-```{r future_teardown, echo=FALSE, eval=FALSE}
-library(future)
-plan(sequential)
-```
-
 
 
 ## Installation
 
-The `incubate` package is found on CRAN and is developed at a [Gitlab repository](https://gitlab.com/imb-dev/incubate).
+The `incubate` package is found on [CRAN](https://cran.r-project.org/package=incubate)
+and development happens at [Gitlab](https://gitlab.com/imb-dev/incubate).
 
-Use `install.packages` to install `incubate` from CRAN as usual.
+Use `install.packages` to install `incubate` from CRAN as usual, i.e., `install.packages('incubate')` should do.
 
 To install its **latest version** from the main branch on Gitlab use the following R-code:
 

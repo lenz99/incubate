@@ -73,7 +73,7 @@ in the background of your local computer for computer-intensive tasks in
 `incubate`:
 
 ``` r
-library(future)
+library("future")
 plan(multisession, workers = 4)
 ```
 
@@ -87,10 +87,12 @@ release the parallel connections via `plan(sequential)`.
 
 ## Installation
 
-The `incubate` package is found on CRAN and is developed at a [Gitlab
-repository](https://gitlab.com/imb-dev/incubate).
+The `incubate` package is found on
+[CRAN](https://cran.r-project.org/package=incubate) and development
+happens at [Gitlab](https://gitlab.com/imb-dev/incubate).
 
-Use `install.packages` to install `incubate` from CRAN as usual.
+Use `install.packages` to install `incubate` from CRAN as usual, i.e.,
+`install.packages('incubate')` should do.
 
 To install its **latest version** from the main branch on Gitlab use the
 following R-code:
