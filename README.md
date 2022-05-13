@@ -88,7 +88,7 @@ release the parallel connections via `plan(sequential)`.
 ## Installation
 
 The `incubate` package is found on
-[CRAN](https://cran.r-project.org/package=incubate) and development
+[CRAN](https://CRAN.R-project.org/package=incubate) and development
 happens at [Gitlab](https://gitlab.com/imb-dev/incubate).
 
 Use `install.packages` to install `incubate` from CRAN as usual, i.e.,

@@ -1,14 +1,16 @@
 # mkuhn, 2021-10-11
 # Utility functions used within this package
 
-#' Compare two numeric vectors
-#' Input `x` and `y` are recycled to get common length.
-#' @param x numeric vector
-#' @param y numeric vector
-#' @param tol numeric. Numerical tolerance level for comparison.
-#' @seealso `dplyr::near`
-near <- function (x, y, tol = .Machine$double.eps^0.4){
-  abs(x - y) < tol
+
+#' Format a number as percentage.
+#'
+#' Internal helper function that is not exported.
+#' @param x numeric vector to be formated as percentage
+#' @param digits requested number of decimal digits of the percentage
+#' @return number formatted as percentage character
+as_percent <- function(x, digits = 1) {
+  stopifnot( is.numeric(digits) )
+  sprintf(fmt = paste0('%.', as.integer(digits),'f%%', x*100))
 }
 
 #' Estimate rounding error based on given sample of metric values
@@ -35,7 +37,6 @@ estimRoundingError <- function(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100
   if (all(abs(obs) < .1)) obs <- 1L + obs
 
   rDigInd <- purrr::map_lgl(.x = roundDigits,
-                            .f = ~all(near(x = obs, y = round(obs, digits = .x),
-                                           tol = 2L * 10L**min(-2L, -.x-1L))) )
+                            .f = ~all(abs(obs - round(obs, digits = .x)) < 2L * 10L**min(-2L, -.x-1L)) )
   10L**-if (!any(rDigInd)) max(roundDigits)+1L else if (all(rDigInd)) min(roundDigits)-1L else roundDigits[which.max(rDigInd)]
 }

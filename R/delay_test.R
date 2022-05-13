@@ -324,9 +324,9 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       stopifnot( NROW(t0_dist) == 2L )
       fit0_conv <- t0_dist[2L,]
       cat(glue::glue(
-        'Proportion of model failures: {scales::percent(length(which(is.na(fit0_conv)))/length(fit0_conv), accuracy = .1)}',
-        'Proportion of conv =  0: {scales::percent(length(which(fit0_conv == 0))/ length(fit0_conv), accuracy = .1)}',
-        'Proportion of conv = 52: {scales::percent(length(which(fit0_conv == 52))/length(fit0_conv), accuracy = .1)}\n',
+        'Proportion of model failures: {as_percent(length(which(is.na(fit0_conv)))/length(fit0_conv))}',
+        'Proportion of conv =  0: {as_percent(length(which(fit0_conv == 0))/ length(fit0_conv))}',
+        'Proportion of conv = 52: {as_percent(length(which(fit0_conv == 52))/length(fit0_conv))}\n',
         .sep = '\n'))
       t0_dist <- t0_dist[1L,] #retain only ts_boot[['val']]
     }
@@ -388,6 +388,12 @@ print.incubate_test <- function(x, ...){
 #' @export
 plot.incubate_test <- function(x, y, title, subtitle, ...){
   stopifnot(inherits(x, "incubate_test"))
+
+  if (!requireNamespace("ggplot2", quietly = TRUE)){
+    warning('Package \'ggplot2\' must be installed to get plots.',
+            call. = FALSE)
+    return(invisible(NULL))
+  }
 
   teststat <- x[["testDist"]]
 
@@ -596,7 +602,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
     # check last iteration
     if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 && pow_cand1[[NBR_CAND1]] < power - tol){
       warning(glue::glue('Failed to reach requested power with maximally allowed n: {nx_cand1[[NBR_CAND1]]} ',
-              'yields a power of {scales::percent(pow_cand1[[NBR_CAND1]], accuracy = .1)}.'))
+              'yields a power of {as_percent(pow_cand1[[NBR_CAND1]])}.'))
       REFINE <- FALSE
     }
 

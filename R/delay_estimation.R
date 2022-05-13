@@ -589,6 +589,12 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
   stopifnot( inherits(x, "incubate_fit") )
   # parameter y comes from the plot-generic. y is not used here.
 
+  if (!requireNamespace("ggplot2", quietly = TRUE)){
+    warning('Package \'ggplot2\' must be installed to get plots.',
+            call. = FALSE)
+    return(invisible(NULL))
+  }
+
   cumFun <- getDist(x[["distribution"]], type = "cdf")
 
   p <- grNames <- NULL

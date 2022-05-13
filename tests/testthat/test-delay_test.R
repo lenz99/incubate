@@ -122,7 +122,7 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
 
-  plan(future.callr::callr, workers = 3L)
+  future::plan(future.callr::callr, workers = 3L)
 
   set.seed(20210506)
 

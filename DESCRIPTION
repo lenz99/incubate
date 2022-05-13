@@ -21,19 +21,17 @@ Roxygen: list(markdown = TRUE)
 Imports:
     future (>= 1.21),
     future.apply (>= 1.6),
-    ggplot2 (>= 3.3),
     glue (>= 1.4),
     MASS,
     purrr (>= 0.3),
     rlang (>= 0.4),
-    scales (>= 0.5),
     stats,
     survival,
     tibble
 Suggests:
     boot,
-    cowplot,
     future.callr,
+    ggplot2 (>= 3.3),
     knitr,
     testthat (>= 3.0.0)
 URL: https://gitlab.com/imb-dev/incubate/
