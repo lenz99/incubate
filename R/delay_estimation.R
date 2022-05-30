@@ -324,7 +324,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
     #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
     ind_t <- which(diff(obs) == 0L)
     if ( length(ind_t) ){
-      stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in preprocess
+      stopifnot( ties == 'density' ) # other tie-strategies have already been dealt with ties in preprocess
       # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
       cumDiffs[1L+ind_t] <- purrr::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
     } #fi
@@ -339,7 +339,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
   # negative maximum spacing estimation objective function.
   # Estimate parameters by minimizing this function.
-  # `pars` a the parameter vector.
+  # `pars` the parameter vector.
   # `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
   negMSE <- function(pars, aggregated = TRUE){
     stopifnot( length(par_names) == length(pars) )
@@ -356,7 +356,6 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
       if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
     }
-
   }
 
   # add preprocessed data as attribute
@@ -672,18 +671,24 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' @param useBoot flag. Do you want to use the boot-package? Default value is `FALSE`.
 #' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing. Default is 0.025
 #' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
-bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE, smd_factor = 0){
+bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE,
+                       smd_factor = 0.025) {
   bs_data <- match.arg(bs_data)
   twoGr <- isTRUE(object$twoGroup)
   useBoot <- isTRUE(useBoot)
   stopifnot( is.numeric(smd_factor), length(smd_factor) == 1L, smd_factor >= 0L )
   smooth_delay <- isTRUE(smd_factor > 0L)
+  ranFun <- getDist(object$distribution, type = "r")
+  dFun <- getDist(object$distribution, type = "d")
+
   if (bs_data != 'parametric' && smooth_delay) {
     smooth_delay <- FALSE
     smd_factor <- 0L
-    #XXX make smooth_delay work also for ordinary?!
-    warning('Smoothing of delay is only implemented for parametric bootstrap!')
+    # how could smooth_delay work also for ordinary bootstrap?!
+    warning('Smoothing of delay is only implemented for parametric bootstrap!',
+            call. = FALSE)
   }
+
   # XXX make smooth_delay work also for Weibull?!
   if (object$distribution == 'weibull' && smooth_delay) stop('Smoothing of delay is only implemented for the delayed exponential model!')
 
@@ -702,7 +707,6 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                                                            method = object$method, bind = object$bind)),
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
-                 ranFun <- getDist(object$distribution, type = "r")
                  if (smooth_delay){
                    # use rectified normal
                    coe[['delay']] <- abs(coe[['delay']] - max(0L, stats::rnorm(1L, mean = 0L,
@@ -716,7 +720,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     # get coefficients from bootstrapped data
     #+(either by ordinary bootstrap of data or by parametric bootstrap)
     coefFun <- switch(bs_data,
-                      ordinary = function(dummy){
+                      ordinary = function(dummy) {
                         # draw bootstrap samples from the data
                         x <- (if (twoGr) object$data$x else object$data)[sample.int(n = nObs[[1L]], replace = TRUE)]
                         y <- if (twoGr) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
@@ -725,15 +729,14 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                       },
                       parametric = {
                         # generate data from the fitted model
-                        # for performance reasons, we 'inline' the simulate code, cf test_diff
-                        ranFun <- getDist(object$distribution, type = "r")
+                        # for performance reasons, we 'inline' the simulate code, cf. test_diff
 
                         # arguments to the random function generation
                         ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
                         ranFunArgsY <- if (twoGr) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
 
 
-                        function(dummy){
+                        function(dummy) {
                           if (smooth_delay){
                             #densFun <- getDist(object$distribution, type = 'd') #more generally, use density at delay+small value?
                             # use rectified Gaussian
@@ -758,9 +761,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     # more clear and shorter but less efficient!
     # future.apply::future_vapply(simulate(object, nsim = R), FUN.VALUE = double(length(cf)),
-    #                             FUN = function(da){
-    #                               coef(delay_model(x=da, distribution = object$distribution, bind = object$bind))
-    #                             })
+    #                             FUN = function(da) coef(delay_model(x=da, distribution = object$distribution, bind = object$bind)))
 
   }
 }
