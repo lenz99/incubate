@@ -669,10 +669,10 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' @param bs_data character. Which type of bootstrap method to generate data?
 #' @param R integer. Number of bootstrapped model coefficient estimates
 #' @param useBoot flag. Do you want to use the boot-package? Default value is `FALSE`.
-#' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing. Default is 0.025
+#' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing.
 #' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
 bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE,
-                       smd_factor = 0.025) {
+                       smd_factor = stop('Provide a smoothing factor for delay!')) {
   bs_data <- match.arg(bs_data)
   twoGr <- isTRUE(object$twoGroup)
   useBoot <- isTRUE(useBoot)
@@ -785,7 +785,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                                  bs_data, bs_infer = c('logquantile', 'quantile', 'quantile0', 'lognormal', 'normal', 'normal0', 't', 't0'),
-                                 useBoot=FALSE, logshift_delay = 3, smd_factor = 0.1,...){
+                                 useBoot=FALSE, logshift_delay = 3, smd_factor = 0.025,...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0)
