@@ -7,7 +7,7 @@
 getPars(par, group = "x", twoGr, oNames, bind)
 }
 \arguments{
-\item{par}{named parameters (as simple vector or as list both work)}
+\item{par}{named parameters (as simple vector or as list)}
 
 \item{group}{character. Which group to extract parameters for?}
 
@@ -23,5 +23,5 @@ parameter vector for the relevant group
 \description{
 For a one-group setting or when \code{group=NULL} it simply returns the given parameter.
 This is an internal helper function
-used in \code{coef.incubate_fit} and in the factory method \code{geomSpaceFactory} below
+used in \code{\link[=coef.incubate_fit]{coef.incubate_fit()}}, \code{\link[=bsDataStep]{bsDataStep()}} and in the factory method \code{\link[=geomSpaceFactory]{geomSpaceFactory()}} below.
 }

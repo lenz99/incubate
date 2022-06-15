@@ -3,8 +3,8 @@
 #'
 #' For a one-group setting or when `group=NULL` it simply returns the given parameter.
 #' This is an internal helper function
-#' used in `coef.incubate_fit` and in the factory method `geomSpaceFactory` below
-#' @param par named parameters (as simple vector or as list both work)
+#' used in [coef.incubate_fit()], [bsDataStep()] and in the factory method [geomSpaceFactory()] below.
+#' @param par named parameters (as simple vector or as list)
 #' @param group character. Which group to extract parameters for?
 #' @param twoGr flag. Is it a two-group setting?
 #' @param oNames character. Original parameter names from distribution.
@@ -660,10 +660,10 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
   }
 }
 
-#' Generate bootstrap distribution of fitted coefficients
+#' Generate bootstrap distribution of model parameters to fitted incubate model.
 #'
 #' Bootstrap data are here estimated coefficients from models fitted to bootstrap samples.
-#' These bootstrap data are used to make bootstrap inference in the second step.
+#' The bootstrap data is used to make bootstrap inference in the second step.
 #' It is an internal function, the main entry point is [confint.incubate_fit()].
 #' @param object an `incubate_fit`-object
 #' @param bs_data character. Which type of bootstrap method to generate data?
@@ -766,11 +766,11 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
   }
 }
 
-#' Confidence intervals for parameters of MPS-model fits.
+#' Confidence intervals for parameters of incubate-model fits.
 #'
 #' Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
 #' Optionally, there are also variants that use a log-transformation first.
-#' At least R=1000 bootstrap replications are recommended. Default are normal-based confidence intervals.
+#' At least R=1000 bootstrap replications are recommended. Default are quantile-based confidence intervals that internally use a log-transformation.
 #' @param object object of class `incubate_fit`
 #' @param parm character. Which parameters to get confidence interval for?
 #' @param level numeric. Which is the requested confidence level for the interval? Default value is 0.95

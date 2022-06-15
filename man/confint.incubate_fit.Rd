@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{confint.incubate_fit}
 \alias{confint.incubate_fit}
-\title{Confidence intervals for parameters of MPS-model fits.}
+\title{Confidence intervals for parameters of incubate-model fits.}
 \usage{
 \method{confint}{incubate_fit}(
   object,
@@ -14,7 +14,7 @@
     "normal0", "t", "t0"),
   useBoot = FALSE,
   logshift_delay = 3,
-  smd_factor = 0.1,
+  smd_factor = 0.025,
   ...
 )
 }
@@ -45,5 +45,5 @@ A matrix (or vector) with columns giving lower and upper confidence limits for e
 \description{
 Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
 Optionally, there are also variants that use a log-transformation first.
-At least R=1000 bootstrap replications are recommended. Default are normal-based confidence intervals.
+At least R=1000 bootstrap replications are recommended. Default are quantile-based confidence intervals that internally use a log-transformation.
 }
