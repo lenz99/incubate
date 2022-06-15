@@ -674,14 +674,17 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE,
                        smd_factor = stop('Provide a smoothing factor for delay!')) {
   bs_data <- match.arg(bs_data)
-  twoGr <- isTRUE(object$twoGroup)
+  stopifnot(is.numeric(R), length(R) == 1L, R > 1)
+  R <- ceiling(R)
   useBoot <- isTRUE(useBoot)
   stopifnot( is.numeric(smd_factor), length(smd_factor) == 1L, smd_factor >= 0L )
   smooth_delay <- isTRUE(smd_factor > 0L)
   ranFun <- getDist(object$distribution, type = "r")
   dFun <- getDist(object$distribution, type = "d")
+  twoGr <- isTRUE(object$twoGroup)
+  nObs <- if (twoGr) lengths(object$data) else length(object$data)
 
-  if (bs_data != 'parametric' && smooth_delay) {
+  if (smooth_delay && bs_data != 'parametric') {
     smooth_delay <- FALSE
     smd_factor <- 0L
     # how could smooth_delay work also for ordinary bootstrap?!
@@ -689,16 +692,52 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
             call. = FALSE)
   }
 
-  # XXX make smooth_delay work also for Weibull?!
-  if (object$distribution == 'weibull' && smooth_delay) stop('Smoothing of delay is only implemented for the delayed exponential model!')
 
-  nObs <- if (twoGr) lengths(object$data) else length(object$data)
+  # smooth delay: sample delay values according to objective function (where delay is varied and other parameters are kept fixed) in the vicinity of the estimated delay
+  # This reflects the certainty we have in the delay estimation. Low variability in data will lead to a quickly deteriorating objective function.
+  # return vector of length R with delay candidate values
+  getSMDCandidates <- function(group = 'x'){
+    del_coef <- coef(object, group = group)[['delay']]
+    obs1 <- if (twoGr) object$data[[group]][1L] else object$data[1L]
 
-  R <- ceiling(R)
+    # avoid smoothing if delay estimated is too close to zer0
+    if (del_coef < sqrt(.Machine$double.eps)) return(rep_len(del_coef, length.out = R))
 
-  # smooth delay parameters
-  SMD_DIV <- 3
-  SMD_MINRATE <- .03
+    coefVect <- coef(object)
+    del_ind <- grep('delay', names(coefVect))[1L + (twoGr && group == 'y')]
+
+    #+areas for delay with high values of objective function are more likely to be sampled
+    #+candidate region: symmetric around coef_del as midpoint, up to smallest observed value
+    #+candidate region becomes finer sampled the broader the interval is
+    #+point estimate for delay is part of sample (if lower bound is not cut to be 0, via max in from= argument)
+    delayParsDF <- tibble(delay = seq.int(from = max(0, 2L * del_coef - obs1),
+                                          to = obs1, #max(obs1*.999, obs1-.001),
+                                          length.out = max(201L, 2L*10L*ceiling(10L*(obs1 - del_coef))+1L)),
+                          # fixing the MSE-parameter estimates other than delay
+                          objVal = purrr::map_dbl(.x = delay,
+                                                  .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
+                                                                       aggregated = FALSE)[1L + (twoGr && group == 'y')])) %>%
+      # drop last entry as it corresponds to delay equal to first observation where objective function explodes
+      dplyr::slice_head(n = -1L) %>%
+      dplyr::mutate(
+        # QQQ check objective value is always !>= 0! >>TTT<< add test!
+        # rel. change to optimal value
+        objValInv = (object$val - objVal) / (object$val+.01), #-objVal, #
+        # shift upwards into non-negative area and standardize
+        objValInv = (objValInv - min(objValInv)) / (sd(objValInv, na.rm = TRUE)+.01),
+        # empirical cumulative numbers for sampling
+        cumSum0 = cumsum(objValInv),
+        # scale cumSum0 to 1.
+        # lag: have it start with 0 and end with a single 1 (the last objValInv is per definitionem 0)
+        cumSum = dplyr::lag(cumSum0 / max(cumSum0), n = 1L, default = 0))
+
+    #delayStep <- delayParsDF$delay[[2L]] - delayParsDF$delay[[1L]]
+    # rightmost.closed = TRUE for the unlikely case that we draw a 1 by runif
+    delayParsDF$delay[findInterval(x = runif(R), vec = delayParsDF$cumSum, rightmost.closed = TRUE)]
+  }
+
+  delayCandX <- if (smooth_delay) getSMDCandidates(group = 'x')
+  delayCandY <- if (smooth_delay && twoGr) getSMDCandidates(group = 'y')
 
   if (useBoot) {
     stopifnot(!twoGr) # for the time being only single group calls are supported!
@@ -708,9 +747,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
                  if (smooth_delay){
-                   # use rectified normal
-                   coe[['delay']] <- abs(coe[['delay']] - max(0L, stats::rnorm(1L, mean = 0L,
-                                                                               sd = min(coe[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + coe[['rate']])))))
+                   coe[['delay']] <- delayCandX[sample.int(n = R, size = 1L)]
                  }
                  rlang::exec(ranFun, !!! as.list(c(n=nObs[[1L]], coe)))
                })
@@ -735,15 +772,14 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                         ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
                         ranFunArgsY <- if (twoGr) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
 
-
-                        function(dummy) {
+                        function(ind) {
                           if (smooth_delay){
-                            #densFun <- getDist(object$distribution, type = 'd') #more generally, use density at delay+small value?
-                            # use rectified Gaussian
-                            ranFunArgsX[['delay']] <- abs(ranFunArgsX[['delay']] - max(0L, stats::rnorm(1L, mean = 0L,
-                                                                                                        sd = min(ranFunArgsX[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsX[['rate']])))))
-                            if (twoGr) ranFunArgsY[['delay']] <- abs(ranFunArgsY[['delay']] - max(0L, stats::rnorm(1L, mean = 0L,
-                                                                                                                   sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsY[['rate']])))))
+                            #I used to subtract from del_coef a rectified normal, with SD approx. inversely proportional to rate_coef (Exponential only)
+                            #+Idea was: high rate = low variability in data => low smoothing required.
+                            #+But a more appropriate and more general way to think is: how sure are we about the delay-estimate?
+                            #+max(0L, stats::rnorm(1L, mean = 0L, sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsY[['rate']]))))
+                            ranFunArgsX[['delay']] <- delayCandX[ind]
+                            if (twoGr) ranFunArgsY[['delay']] <- delayCandY[ind]
                           }
 
                           # cf simulate (but inlined here for performance reasons)
