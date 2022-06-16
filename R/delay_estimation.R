@@ -669,7 +669,7 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' @param bs_data character. Which type of bootstrap method to generate data?
 #' @param R integer. Number of bootstrapped model coefficient estimates
 #' @param useBoot flag. Do you want to use the boot-package? Default value is `FALSE`.
-#' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing.
+#' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing. 0 means no smoothing.
 #' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
 bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE,
                        smd_factor = stop('Provide a smoothing factor for delay!')) {
@@ -710,7 +710,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     #+candidate region: symmetric around coef_del as midpoint, up to smallest observed value
     #+candidate region becomes finer sampled the broader the interval is
     #+point estimate for delay is part of sample (if lower bound is not cut to be 0, via max in from= argument)
-    delayParsDF <- tibble(delay = seq.int(from = max(0, 2L * del_coef - obs1),
+    delayCandDF <- tibble(delay = seq.int(from = max(0, 2L * del_coef - obs1),
                                           to = obs1, #max(obs1*.999, obs1-.001),
                                           length.out = max(201L, 2L*10L*ceiling(10L*(obs1 - del_coef))+1L)),
                           # fixing the MSE-parameter estimates other than delay
@@ -733,7 +733,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     #delayStep <- delayParsDF$delay[[2L]] - delayParsDF$delay[[1L]]
     # rightmost.closed = TRUE for the unlikely case that we draw a 1 by runif
-    delayParsDF$delay[findInterval(x = runif(R), vec = delayParsDF$cumSum, rightmost.closed = TRUE)]
+    delayCandDF$delay[findInterval(x = runif(R), vec = delayCandDF$cumSum, rightmost.closed = TRUE)]
   }
 
   delayCandX <- if (smooth_delay) getSMDCandidates(group = 'x')
@@ -815,7 +815,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
 #' @param logshift_delay numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01
-#' @param smd_factor numeric. How much should the delay parameter be smoothed? Only supported for parametric bootstrap. And only used if no `bs_data`- object is provided.
+#' @param smd_factor numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap. And only used if no `bs_data`- object is provided.
 #' @param ... further arguments, currently not used.
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
