@@ -474,14 +474,15 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
     #XXX pre-processing (NA & neg. values) is done in the geomSpaceFactory() -- this should be shared
     return(structure(
       list(
-        data = if (twoGr) list(x = x, y = y) else x,
+        data = if (twoGr) list(x = sort(x), y = sort(y)) else sort(x), ##XXX sort is only quick fix here!! think of pre-processing: where to put it!
         distribution = distribution,
         method = method,
         twoGroup = twoGr,
         bind = bind,
-        #objFun = objFun, ### neg. log-lik as objective function?!
+        ### neg. log-lik as objective function. XXX !twoGr only
+        objFun = function(pars, aggregated = TRUE) -length(x) * (log(pars[[2L]]) - pars[[2L]] * (mean(x) - pars[[1L]])),
         par = c(delay = min(x), rate = 1/(mean(x) - min(x))),
-        val = - length(x) * ( log(mean(x) - min(x)) + 1L ), ## think here: taken from profiled likelihood. Is it generally correct?
+        val = length(x) * ( log(mean(x) - min(x)) + 1L ),
         optimizer = list(convergence = 0L, message = 'analytic solution for MLE')),
       class = "incubate_fit"))
   } # MLE
@@ -489,7 +490,7 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
   objFun <- geomSpaceFactory(x = x, y = y, distribution = distribution, bind = bind, ties = ties, verbose = verbose)
   # set preprocessed data
   x <- attr(objFun, 'x', exact = TRUE)
-  if (twoGr) { y <- attr(objFun, 'y', exact = TRUE)}
+  if (twoGr) { y <- attr(objFun, 'y', exact = TRUE) }
 
   optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
 
@@ -500,10 +501,9 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
   data_tr <- purrr::exec(getDist(distribution, type = "cdf"),
                          !!! c(list(q=x), getPars(par = optObj$par, group = 'x', twoGr = twoGr, oNames = oNames, bind = bind)))
   if (twoGr){
-    data_tr <-
-      list(x = data_tr,
-           y = purrr::exec(getDist(distribution, type = "cdf"),
-                           !!! c(list(q=y), getPars(par = optObj$par, group = 'y', twoGr = twoGr, oNames = oNames, bind = bind))))
+    data_tr <- list(x = data_tr,
+                    y = purrr::exec(getDist(distribution, type = "cdf"),
+                                    !!! c(list(q=y), getPars(par = optObj$par, group = 'y', twoGr = twoGr, oNames = oNames, bind = bind))))
   }
 
   structure(
@@ -707,11 +707,14 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     coefVect <- coef(object)
     del_ind <- grep('delay', names(coefVect))[1L + (twoGr && group == 'y')]
 
+    stopifnot( is.function(object$objFun) )
     #+areas for delay with high values of objective function are more likely to be sampled
     #+candidate region: symmetric around coef_del as midpoint, up to smallest observed value
     #+candidate region becomes finer sampled the broader the interval is
     #+point estimate for delay is part of sample (if lower bound is not cut to be 0, via max in from= argument)
-    delayCandDF <- tibble(delay = seq.int(from = max(0, 2L * del_coef - obs1),
+    #+min(..) ensures that we are not too close at obs1, otherwise for MLE we have only a single point
+    #+XXX Think here if this approach using min is general/robust enough
+    delayCandDF <- tibble(delay = seq.int(from = max(0L, min(obs1 - .01, obs1 * .99, 2L * del_coef - obs1)),
                                           to = obs1, #max(obs1*.999, obs1-.001),
                                           # uneven number of grid points (hence, MSE-estimate for delay will be one of the grid points)
                                           length.out = max(201L, 2L*10L*ceiling(10L*(obs1 - del_coef))+1L)),
@@ -719,8 +722,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           objVal = purrr::map_dbl(.x = delay,
                                                   .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
                                                                        aggregated = FALSE)[1L + (twoGr && group == 'y')])) %>%
+      # keep last entry as it is the MLE-estimate for delay
       # drop last entry as it corresponds to delay equal to first observation where objective function explodes
-      dplyr::slice_head(n = -1L) %>%
+      #dplyr::slice_head(n = -1L) %>%
       dplyr::mutate(
         # QQQ check objective value is always !>= 0! >>TTT<< add test!
         # rel. change to optimal value
