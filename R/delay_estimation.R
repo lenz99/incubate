@@ -712,8 +712,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     #+point estimate for delay is part of sample (if lower bound is not cut to be 0, via max in from= argument)
     delayCandDF <- tibble(delay = seq.int(from = max(0, 2L * del_coef - obs1),
                                           to = obs1, #max(obs1*.999, obs1-.001),
+                                          # uneven number of grid points (hence, MSE-estimate for delay will be one of the grid points)
                                           length.out = max(201L, 2L*10L*ceiling(10L*(obs1 - del_coef))+1L)),
-                          # fixing the MSE-parameter estimates other than delay
+                          # fixing the parameter estimates other than delay
                           objVal = purrr::map_dbl(.x = delay,
                                                   .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
                                                                        aggregated = FALSE)[1L + (twoGr && group == 'y')])) %>%
@@ -722,9 +723,11 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
       dplyr::mutate(
         # QQQ check objective value is always !>= 0! >>TTT<< add test!
         # rel. change to optimal value
-        objValInv = (object$val - objVal) / (object$val+.01), #-objVal, #
+        objValInv = (object$val - objVal) / (object$val+.01),
         # shift upwards into non-negative area and standardize
-        objValInv = (objValInv - min(objValInv)) / (sd(objValInv, na.rm = TRUE)+.01),
+        objValInv = objValInv - min(objValInv),
+        # scale to be between 0 and 1
+        objValInv = (objValInv / (max(objValInv, na.rm = TRUE) + .01))**(1/(smd_factor+.001)), #(sd(objValInv, na.rm = TRUE)+.01),
         # empirical cumulative numbers for sampling
         cumSum0 = cumsum(objValInv),
         # scale cumSum0 to 1.
