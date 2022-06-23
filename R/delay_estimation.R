@@ -194,7 +194,7 @@ geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull
 
 
   # parameter bounds: lower & upper
-  lowerVec <- upperVec <- purrr::set_names(rep(NA_real_, length(par_names)),
+  lowerVec <- upperVec <- purrr::set_names(rep_len(NA_real_, length(par_names)),
                                            nm = par_names)
 
   PAR_LOW <- 1e-13
@@ -461,12 +461,13 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
 
   twoGr <- ! is.null(y)
   distribution <- match.arg(distribution)
+  method <- toupper(method)
   method <- match.arg(method)
   ties <- match.arg(ties)
 
   if (method == 'MLE') {
     if ( twoGr || distribution != 'exponential') {
-      warning('MLE fitting is currently only supported for single group delayed exponential!')
+      warning('MLE fitting is currently only supported for single group delayed exponential!', call. = FALSE)
       return(invisible(NULL))
     }
 
