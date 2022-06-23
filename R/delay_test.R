@@ -323,7 +323,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     if (verbose > 0L){
       stopifnot( NROW(t0_dist) == 2L )
       fit0_conv <- t0_dist[2L,]
-      cat(glue::glue(
+      cat(glue(
         'Proportion of model failures: {as_percent(length(which(is.na(fit0_conv)))/length(fit0_conv))}',
         'Proportion of conv =  0: {as_percent(length(which(fit0_conv == 0))/ length(fit0_conv))}',
         'Proportion of conv = 52: {as_percent(length(which(fit0_conv == 52))/length(fit0_conv))}\n',
@@ -398,11 +398,11 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
     return(invisible(NULL))
   }
 
-  if (missing(title)) title <- glue::glue('Distribution of test statistic under H0 for parameter {dQuote(x$param)}')
+  if (missing(title)) title <- glue('Distribution of test statistic under H0 for parameter {dQuote(x$param)}')
   if (missing(subtitle) && ! is.null(x$P$bootstrap)){
-    subtitle <- glue::glue('Sampling distribution, based on {length(teststat)} parametric bootstrap draws. ',
-                           'Bootstrap P-value = {format.pval(x$P$bootstrap, eps = 1e-3)}')
-  #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
+    subtitle <- glue('Sampling distribution, based on {length(teststat)} parametric bootstrap draws. ',
+                     'Bootstrap P-value = {format.pval(x$P$bootstrap, eps = 1e-3)}')
+    #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
   }
 
 
@@ -597,8 +597,8 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
 
     # check last iteration
     if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 && pow_cand1[[NBR_CAND1]] < power - tol){
-      warning(glue::glue('Failed to reach requested power with maximally allowed n: {nx_cand1[[NBR_CAND1]]} ',
-              'yields a power of {as_percent(pow_cand1[[NBR_CAND1]])}.'))
+      warning(glue('Failed to reach requested power with maximally allowed n: {nx_cand1[[NBR_CAND1]]} ',
+                   'yields a power of {as_percent(pow_cand1[[NBR_CAND1]])}.'))
       REFINE <- FALSE
     }
 

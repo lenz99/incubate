@@ -118,7 +118,7 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
            } else par_list
 
          },
-         stop(glue::glue("Unknown attribute of distribution {distribution}."))
+         stop(glue("Unknown attribute of distribution {distribution}."))
   )[[1L + (distribution == 'weibull')]]
 }
 
