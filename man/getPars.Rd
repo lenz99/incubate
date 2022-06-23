@@ -23,5 +23,5 @@ parameter vector for the relevant group
 \description{
 For a one-group setting or when \code{group=NULL} it simply returns the given parameter.
 This is an internal helper function
-used in \code{\link[=coef.incubate_fit]{coef.incubate_fit()}}, \code{\link[=bsDataStep]{bsDataStep()}} and in the factory method \code{\link[=geomSpaceFactory]{geomSpaceFactory()}} below.
+used in \code{\link[=coef.incubate_fit]{coef.incubate_fit()}}, \code{\link[=bsDataStep]{bsDataStep()}} and in the factory method \code{\link[=objFunFactory]{objFunFactory()}} below.
 }

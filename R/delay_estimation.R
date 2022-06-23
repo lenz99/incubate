@@ -3,7 +3,7 @@
 #'
 #' For a one-group setting or when `group=NULL` it simply returns the given parameter.
 #' This is an internal helper function
-#' used in [coef.incubate_fit()], [bsDataStep()] and in the factory method [geomSpaceFactory()] below.
+#' used in [coef.incubate_fit()], [bsDataStep()] and in the factory method [objFunFactory()] below.
 #' @param par named parameters (as simple vector or as list)
 #' @param group character. Which group to extract parameters for?
 #' @param twoGr flag. Is it a two-group setting?
@@ -39,8 +39,8 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param ties character. How to handle ties within data of a group.
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
-#' @return An R-function that returns the negative MSE criterion for given choice of model parameters.
-geomSpaceFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL,
+#' @return the objective function (e.g., the negative MSE criterion) for given choice of model parameters
+objFunFactory <- function(x, y=NULL, distribution = c("exponential", "weibull"), bind=NULL,
                              ties=c('equidist', 'density', 'random', 'none'), verbose = 0L) {
 
   # setup ----
@@ -471,7 +471,7 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
       return(invisible(NULL))
     }
 
-    #XXX pre-processing (NA & neg. values) is done in the geomSpaceFactory() -- this should be shared
+    #XXX pre-processing (NA & neg. values) is done in the objFunFactory() -- this should be shared
     return(structure(
       list(
         data = if (twoGr) list(x = sort(x), y = sort(y)) else sort(x), ##XXX sort is only quick fix here!! think of pre-processing: where to put it!
@@ -487,7 +487,7 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
       class = "incubate_fit"))
   } # MLE
 
-  objFun <- geomSpaceFactory(x = x, y = y, distribution = distribution, bind = bind, ties = ties, verbose = verbose)
+  objFun <- objFunFactory(x = x, y = y, distribution = distribution, bind = bind, ties = ties, verbose = verbose)
   # set preprocessed data
   x <- attr(objFun, 'x', exact = TRUE)
   if (twoGr) { y <- attr(objFun, 'y', exact = TRUE) }
@@ -636,8 +636,8 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 }
 
 
+#' S3-method `simulate` for an `incubate`-model (of class `incubate_fit`)
 #' @importFrom stats simulate
-#' @describeIn simulate Simulate from an `incubate`-model of class `incubate_fit`
 #' @export
 simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
   stopifnot( inherits(object, 'incubate_fit'))
