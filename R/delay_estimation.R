@@ -132,7 +132,7 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
         if ( startInd > length(tiesDiffInd) ) break
       } #repeat
 
-      if (verbose > 1L){
+      if (verbose > 1L && length(obs) < 50L ){
         cat(glue("New data: {paste(obs, collapse = ', ')}\n"))
       }
     } #fi tiesdiff
@@ -144,7 +144,7 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
   } #fn preprocess
 
   if (is.null({x <- preprocess(obs = x)})) return(invisible(NULL))
-  if (isTRUE(twoGr) && is.null({y <- preprocess(obs = y)})) return(invisible(NULL))
+  if (twoGr && is.null({y <- preprocess(obs = y)})) return(invisible(NULL))
 
 
   # optimization arguments -----
@@ -200,7 +200,7 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
   lowerVec <- upperVec <- purrr::set_names(rep_len(NA_real_, length(par_names)),
                                            nm = par_names)
 
-  PAR_LOW <- 1e-13
+  PAR_LOW <- sqrt(.Machine$double.eps)
   PAR_BOUNDS <- list(delay = c(lower = 0, upper = NA_real_),
                      rate  = c(lower = PAR_LOW, upper = +Inf),
                      shape = c(lower = PAR_LOW, upper = +Inf),
@@ -341,7 +341,7 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
   }# fn getCumDiffs
 
 
-  # negative maximum spacing estimation objective function.
+  # objective function like negative mean log-spacings for MSE
   # Estimate parameters by minimizing this function.
   # `pars` the parameter vector.
   # `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
@@ -364,10 +364,12 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
              }
            },
            MLE = {
-             - if (! twoGr) { if (distribution == 'exponential')
-               length(x) * (log(pars[['rate']]) - pars[['rate']] * (mean(x) - pars[['delay']])) else
-                 stop('Weibull is not supported for MLE!', call. = FALSE) #XXX fixme
-             } else stop('Two group setting is not supported for MLE!', call. = FALSE)
+             stopifnot( ! twoGr )
+             nObs <- length(x)
+             xc <- x - pars[['delay']]
+             - if (distribution == 'exponential')
+               nObs * (log(pars[['rate']]) - pars[['rate']] * mean(xc)) else
+                 nObs * (log(pars[['shape']]) - pars[['shape']] * log(pars[['scale']]) + (pars[['shape']]-1L) * mean(log(xc)) - mean(xc**pars[['shape']])/pars[['scale']]**pars[['shape']])
            },
            stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
     )
@@ -375,7 +377,7 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
 
   # add preprocessed data as attribute
   attr(objFun, which = 'x') <- x
-  if (twoGr) { attr(objFun, which = 'y') <- y}
+  if (twoGr) { attr(objFun, which = 'y') <- y }
   # add "optim_args" & distribution as attributes to the objective function
   attr(objFun, which = "optim_args") <- c(list(fn = objFun), optim_args) #optim_args
   attr(objFun, which = "distribution") <- distribution
@@ -390,7 +392,9 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
   if ( method == 'MLE' && ! twoGr && distribution == 'exponential' ){
     attr(objFun, which = 'opt') <- list(par = c(delay = x[[1L]], rate = 1L/(mean(x) - x[[1L]])),
                                         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
-                                        optimizer = list(convergence = 0L, message = 'analytic solution for MLE', counts = 1L))
+                                        convergence = 0L,
+                                        message = 'analytic solution for MLE',
+                                        counts = 1L)
   }
 
   objFun
@@ -418,7 +422,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
   # check if there is already a solution provided by the objective function
   optObj <- attr(objFun, which = 'opt', exact = TRUE)
 
-  if ( is.list(optObj) && all( c('par', 'value', 'optimizer') %in% names(optObj)) ){
+  if ( is.list(optObj) && all( c('par', 'value', 'convergence') %in% names(optObj)) ){
     if (verbose > 0L) cat("Using provided (analytical) solution to objective function.\n")
   } else {
     # numeric solution
@@ -498,8 +502,8 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
   method <- match.arg(method)
   ties <- match.arg(ties)
 
-  if (method == 'MLE' && (twoGr || distribution != 'exponential')) {
-      warning('MLE fitting is currently only supported for single group delayed exponential!', call. = FALSE)
+  if (method == 'MLE' && twoGr ) {
+      warning('MLE fitting is currently only supported for single group setting!', call. = FALSE)
       return(invisible(NULL))
   } # MLE
 
