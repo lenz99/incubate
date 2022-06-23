@@ -21,7 +21,7 @@ bsDataStep(
 
 \item{useBoot}{flag. Do you want to use the boot-package? Default value is \code{FALSE}.}
 
-\item{smd_factor}{numeric. smooth-delay factor: influence the amount of smoothing. 0 means no smoothing.}
+\item{smd_factor}{numeric. smooth-delay factor: influence the amount of smoothing. 0 means no smoothing at all.}
 }
 \value{
 bootstrap data, either as matrix or of class \code{boot} (depending on the \code{useBoot}-flag)

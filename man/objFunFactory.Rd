@@ -2,11 +2,12 @@
 % Please edit documentation in R/delay_estimation.R
 \name{objFunFactory}
 \alias{objFunFactory}
-\title{Factory Method for Negative Maximum Spacing Estimation (MSE) Objective Function}
+\title{Factory method for objective function, either for Maximum Spacing Estimation (MSE) or for MLE.}
 \usage{
 objFunFactory(
   x,
   y = NULL,
+  method = c("MSE", "MLE"),
   distribution = c("exponential", "weibull"),
   bind = NULL,
   ties = c("equidist", "density", "random", "none"),
@@ -17,6 +18,8 @@ objFunFactory(
 \item{x}{numeric. observations}
 
 \item{y}{numeric. observations in second group.}
+
+\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MSE}}
 
 \item{distribution}{character(1). delayed distribution family}
 
@@ -31,8 +34,8 @@ the objective function (e.g., the negative MSE criterion) for given choice of mo
 }
 \description{
 Given the observed data this factory method produces an MSE objective function implementation
-which is the negative of the MSE-criterion H.
+which is the negative of the MSE-criterion H or the negative log-likelihood for MLE.
 }
 \details{
-From the observations, negative or infinite values are discarded.
+From the observations, negative or infinite values are discarded. In any case, the objective function is to be minimized.
 }
