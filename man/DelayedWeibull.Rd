@@ -41,7 +41,7 @@ The length of the result is determined by \code{n} for \code{rweib_delayed}, and
 }
 \description{
 Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters
-as in the Weibull functions in \code{stats}:
+as in the Weibull distribution functions in R's stats-package, namely:
 \itemize{
 \item \code{delay}
 \item \code{shape}
@@ -49,7 +49,7 @@ as in the Weibull functions in \code{stats}:
 }
 }
 \details{
-Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the \code{stats}-package.
+Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the stats-package.
 
 The numerical arguments other than \code{n} are recycled to the length of the result. Only the first elements of the logical arguments are used.
 }

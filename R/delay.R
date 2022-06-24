@@ -44,13 +44,13 @@ rexp_delayed <- function(n, delay, rate = 1) delay + stats::rexp(n = n, rate = r
 #'
 #' @description
 #' Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters
-#' as in the Weibull functions in `stats`:
+#' as in the Weibull distribution functions in R's stats-package, namely:
 #' * `delay`
 #' * `shape`
 #' * `scale` (inverse of rate)
 #'
 #' @details
-#' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
+#' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the stats-package.
 #'
 #' The numerical arguments other than `n` are recycled to the length of the result. Only the first elements of the logical arguments are used.
 #'
@@ -118,7 +118,7 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
            } else par_list
 
          },
-         stop(glue("Unknown attribute of distribution {distribution}."))
+         stop(glue("Unknown attribute of distribution {distribution}."), call. = FALSE)
   )[[1L + (distribution == 'weibull')]]
 }
 
