@@ -1,3 +1,5 @@
+# incubate 1.1.9.9000
+* development version
 
 # incubate 1.1.9
 * New implementation of delay smoothing: use objective function along candidate delay values to guide in smoothing
