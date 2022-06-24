@@ -1,8 +1,9 @@
 
-# incubate 1.1.8.9003
-* development version
+# incubate 1.1.9
 * New implementation of delay smoothing: use objective function along candidate delay values to guide in smoothing
-* Better implementation for MLE-fitting: move MLE-objective function into a general objective function factory method
+* Better implementation for MLE-fitting:
+    * Support MLE-fitting also for Weibull (one group setting only)
+    * Move MLE-objective function into a general objective function factory method
 
 # incubate 1.1.8
 * correct URL for bug reports in DESCRIPTION
