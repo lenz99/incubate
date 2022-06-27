@@ -722,22 +722,25 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     obs <- if (twoGr) object$data[[group]] else object$data
     obs1 <- obs[[1L]]
     del_coef <- coef(object, group = group)[['delay']]
-    obs_d <- diff(obs)[seq_len(min(11L, nObs[[1L + (twoGr && group == 'y')]]-1L))]
 
-    # avoid smoothing if delay estimated is too close to zer0
-    if (del_coef < sqrt(.Machine$double.eps)) return(rep_len(del_coef, length.out = R))
+    # avoid smoothing if 1st observation or delay estimated is too close to zer0
+    if ( min(obs1, del_coef) < sqrt(.Machine$double.eps) ) return(rep_len(del_coef, length.out = R))
 
     coefVect <- coef(object) # objective function expects parameters for all involved groups
-    del_ind <- grep('delay', names(coefVect))[[1L + (twoGr && group == 'y')]]
+    del_ind <- grep('delay', names(coefVect))[[groupIdx]]
 
     stopifnot( is.function(object$objFun) )
 
+    groupIdx <- 1L + (twoGr && group == 'y')
+    obs_d <- diff(obs[seq_len(min(23L, nObs[[groupIdx]]))])
+    obs_d <- obs_d[obs_d>0L]
+    obs_d <- if (! length(obs_d)) .0001 else sort(obs_d)
 
     # candidate region for delay parameters
     #+min(..) ensures that we are not too close at obs1, otherwise for MLE we have only a single point
     #+ del_coef - (obs1 - del_coef) = 2 * del_coef - obs1
     del_interv <- c(low = max(0L, min(del_coef - (obs1 - del_coef),
-                                      del_coef - min(obs_d[obs_d>0L]),
+                                      del_coef - obs_d[[1L]],
                                       obs1 - .0001, obs1 * .9999, na.rm = TRUE)),
                     high = obs1)
 
@@ -751,7 +754,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           # fixing the parameter estimates other than delay
                           objVal = purrr::map_dbl(.x = delay,
                                                   .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
-                                                                       aggregated = FALSE)[[1L + (twoGr && group == 'y')]])) %>%
+                                                                       aggregated = FALSE)[[groupIdx]])) %>%
       # keep last entry as it is the MLE-estimate for delay
       # drop last entry as it corresponds to delay equal to first observation where objective function explodes
       #dplyr::slice_head(n = -1L) %>%
@@ -853,7 +856,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
 #' @param logshift_delay numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01
-#' @param smd_factor numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap. And only used if no `bs_data`- object is provided. Default value is 0.5
+#' @param smd_factor numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap and only used if no `bs_data`- object is provided. Default value is 0.5
 #' @param ... further arguments, currently not used.
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export

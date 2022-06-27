@@ -35,7 +35,7 @@
 
 \item{logshift_delay}{numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01}
 
-\item{smd_factor}{numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap. And only used if no \code{bs_data}- object is provided. Default value is 0.5}
+\item{smd_factor}{numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap and only used if no \code{bs_data}- object is provided. Default value is 0.5}
 
 \item{...}{further arguments, currently not used.}
 }
