@@ -750,6 +750,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     #+point estimate for delay is part of sample (if lower bound is not cut to be 0, via max in from= argument)
     delayCandDF <- tibble(delay = seq.int(from = del_interv[['low']], to = del_interv[['high']],
                                           # uneven number of grid points (hence, MSE-estimate for delay will be one of the grid points)
+                                          # grid step width at most 0.005
                                           length.out = max(997L, 200L*ceiling(diff(del_interv))+1L)),
                           # fixing the parameter estimates other than delay
                           objVal = purrr::map_dbl(.x = delay,
@@ -765,7 +766,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
         # shift upwards into non-negative area and standardize
         objValInv = objValInv - min(objValInv),
         # scale to be between 0 and 1
-        objValInv = (objValInv / (max(objValInv, na.rm = TRUE) + .01))**(1/(smd_factor+.001)), #(sd(objValInv, na.rm = TRUE)+.01),
+        objValInv = (objValInv / (max(objValInv, na.rm = TRUE) + .01))**(1/(smd_factor+.01)), #(sd(objValInv, na.rm = TRUE)+.01),
         # empirical cumulative numbers for sampling
         cumSum0 = cumsum(objValInv),
         # scale cumSum0 to 1.
@@ -833,7 +834,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                       stop('Unkown bootstrap data generation type!')
     )
 
-    future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(length(coef(object))),
+    future.apply::future_vapply(X = seq_len(R), FUN.VALUE = double(length(coef(object))),
                                 FUN = coefFun, future.seed = TRUE)
 
     # more clear and shorter but less efficient!
