@@ -129,13 +129,13 @@ test_that('confidence intervals', {
   set.seed(1234)
 
 
-  obs_sim <- rexp_delayed(n = 29, delay = 5, rate = .3)
+  obs_sim <- rexp_delayed(n = 29L, delay = 5, rate = .3)
 
   fm <- delay_model(x = obs_sim, distribution = 'expon')
 
-  bs_data <- incubate:::bsDataStep(fm, R = 1199, useBoot = FALSE)
+  bs_data <- incubate:::bsDataStep(fm, R = 1199, useBoot = FALSE, smd_factor = 0.5)
   # set up identical bs_data from boot-package
-  bs_data_bt <- incubate:::bsDataStep(fm, R = 3, useBoot = TRUE)
+  bs_data_bt <- incubate:::bsDataStep(fm, R = 3, useBoot = TRUE, smd_factor = 0.5)
   bs_data_bt$R <- NCOL(bs_data)
   bs_data_bt$t <- t(bs_data)
 

@@ -726,12 +726,13 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     # avoid smoothing if 1st observation or delay estimated is too close to zer0
     if ( min(obs1, del_coef) < sqrt(.Machine$double.eps) ) return(rep_len(del_coef, length.out = R))
 
-    coefVect <- coef(object) # objective function expects parameters for all involved groups
-    del_ind <- grep('delay', names(coefVect))[[groupIdx]]
-
     stopifnot( is.function(object$objFun) )
 
     groupIdx <- 1L + (twoGr && group == 'y')
+    coefVect <- coef(object) # objective function expects parameters for all involved groups
+    del_ind <- grep('delay', names(coefVect))[[groupIdx]]
+
+
     obs_d <- diff(obs[seq_len(min(23L, nObs[[groupIdx]]))])
     obs_d <- obs_d[obs_d>0L]
     obs_d <- if (! length(obs_d)) .0001 else sort(obs_d)
