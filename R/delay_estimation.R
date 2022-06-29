@@ -765,7 +765,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     delayCandDF <- tibble(delay = seq.int(from = del_interv[['low']], to = del_interv[['high']],
                                           # uneven number of grid points (hence, MSE-estimate for delay will be one of the grid points)
                                           # grid step width at most 0.005
-                                          length.out = max(997L, 200L*ceiling(diff(del_interv))+1L)),
+                                          length.out = max(997L, 2L * min(ceiling(R/2), 100L*ceiling(diff(del_interv)))+1L)),
                           # fixing the parameter estimates other than delay
                           objVal = purrr::map_dbl(.x = delay,
                                                   .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
