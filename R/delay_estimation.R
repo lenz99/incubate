@@ -723,8 +723,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     smooth_delay <- FALSE
     smd_factor <- 0L
     # how could smooth_delay work also for ordinary bootstrap?!
-    warning('Smoothing of delay is only implemented for parametric bootstrap!',
-            call. = FALSE)
+    warning('Smoothing of delay is only implemented for parametric bootstrap!', call. = FALSE)
   }
 
 
@@ -743,7 +742,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     groupIdx <- 1L + (twoGr && group == 'y')
     coefVect <- coef(object) # objective function expects parameters for all involved groups
-    del_ind <- grep('delay', names(coefVect))[[groupIdx]]
+    del_ind <- grep('delay', names(coefVect)) # indices of coefficients that involve delay, e.g. 'delay' or 'delay.x' or 'delay.y'
+    # in case of a delay per group ('delay.x' and 'delay.y') use the right one
+    if (length(del_ind) > 1L) del_ind <- del_ind[[groupIdx]]
 
 
     obs_d <- diff(obs[seq_len(min(23L, nObs[[groupIdx]]))])
