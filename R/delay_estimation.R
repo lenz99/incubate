@@ -496,7 +496,10 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
     x <- x[[1L]]
   }
 
-  twoGr <- ! is.null(y)
+  # enforce that the first argument x= is instantiated
+  stopifnot( !is.null(x) && is.numeric(x) && length(x) )
+  twoGr <- !is.null(y) && is.numeric(y) && length(y)
+
   distribution <- match.arg(distribution)
   method <- toupper(method)
   method <- match.arg(method)
@@ -507,18 +510,28 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
       return(invisible(NULL))
   } # MLE
 
+  if (!twoGr && !is.null(bind)) warning('bind= has a given non-null argument but it is ignored as we have only a single group!', call. = FALSE)
+
   objFun <- objFunFactory(x = x, y = y, method = method, distribution = distribution,
                           bind = bind, ties = ties, verbose = verbose)
   # set preprocessed data
   x <- attr(objFun, 'x', exact = TRUE)
   if (twoGr) { y <- attr(objFun, 'y', exact = TRUE) }
 
+  # parameter names for chosen distribution
+  oNames <- getDist(distribution, type = 'param')
+  # check that there is enough data (here we also look at bind= if twoGr)
+  if (!twoGr && length(x) < length(oNames) || twoGr && length(x) + length(y) < 2L * length(oNames) - length(bind) && min(length(x), length(y)) < length(oNames) - length(bind)) {
+    warning('Too few valid observations provided!', call. = FALSE)
+    return(invisible(NULL))
+  }
+
+  # optimise objective function
   optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
 
   if (is.null(optObj)) return(invisible(NULL))
 
   # get CDF-transformed data
-  oNames <- getDist(distribution, type = 'param')
   data_tr <- purrr::exec(getDist(distribution, type = "cdf"),
                          !!! c(list(q=x), getPars(par = optObj$par, group = 'x', twoGr = twoGr, oNames = oNames, bind = bind)))
   if (twoGr){
