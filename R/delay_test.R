@@ -186,8 +186,8 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
                       ties = c('equidist', 'density', 'random'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr', 'lr_pp'),
                       verbose = 0) {
-  STRICT <- TRUE #keep only conv=0 model fits?
-  TOL_CRIT <- 1e-6
+  STRICT <- TRUE #accept models only if they converged flawlessly, i.e., convergence=0
+  TOL_CRIT <- 1e-7
   distribution <- match.arg(distribution)
   ties <- match.arg(ties)
   type <- match.arg(type)
@@ -227,7 +227,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     #+we are in trouble, possibly due to non-convergence, e.g. convergence code 52
     #+we refit the general fit1 again using parameter-values from fit0
     if ( fit0[['val']] + TOL_CRIT < fit1[['val']] ){
-      warning('Restricted model with better fit than unrestricted model.', call. = FALSE)
+      if (verbose>0) warning('Restricted model with better fit than unrestricted model.', call. = FALSE)
       # re-run fit1 with start values based on fitted parameters of reduced model fit0
       fit1oa <- attr(fit1[['objFun']], 'optim_args', exact = TRUE)
       stopifnot( is.list(fit1oa), 'par' %in% names(fit1oa) )
@@ -245,7 +245,10 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
-      if (is.null(fit1) || fit0[['val']] + TOL_CRIT < fit1[['val']]) return(invisible(NULL))
+      if (is.null(fit1) || fit0[['val']] + TOL_CRIT < fit1[['val']]) {
+        warning('Restricted model with better fit than unrestricted model even after attempt to refit the unrestricted model!', call. = FALSE)
+        return(invisible(NULL))
+      }
     }# fi bad fit1
 
     # convergence of re-fits?
@@ -256,13 +259,13 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
     #   2. fit1 has low value (=good fit)
-    list(val = -2L * (fit1[["val"]] - fit0[["val"]]),
+    list(val = 2L * max(0L, fit0[["val"]] - fit1[["val"]]),
          fit0 = fit0, fit1 = fit1)
   }
 
   # observed test statistic
   ts_obs <- testStat(x, y)
-  if (is.null(ts_obs)){
+  if ( is.null(ts_obs) || ts_obs < -TOL_CRIT ){
     stop("Delay model failed for restricted null-model or free full model", call. = FALSE)
   }
   fit0 <- ts_obs[["fit0"]]
