@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
-# evaluate test for differences in delayed exponential or Weibull setting
+# Evaluate test for differences in delayed exponential or Weibull setting
 #
-# test delay parameter
+# Test delay parameter
 
 
 TODAY <- Sys.Date()
@@ -11,28 +11,33 @@ suppressPackageStartupMessages(library('R.utils'))
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
-                                defaults = list(dist='exponential', scenario='delayEQ', slice=0, seed=as.integer(TODAY),
-                                                chnkSize=0, workers=6, R=150, nrep=100))
+                                defaults = list(resultsDir = getwd(), dist='exponential', scenario='delayEQ', slice=0, seed=as.integer(TODAY),
+                                                chnkSize=0, workers=5, R=150, mcnrep=100))
 
 
 if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('Run Monte-Carlo simulations with delayed Exponential or Weibull data in a two group setting.\n')
   cat('A test for difference in delay (and sometimes delay+rate) is performed.\n')
-  cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values that are specified within the script.\n')
-  cat('Parameter options are:\n')
+  cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values (see code in this script).\n')
+  cat('Flexible command line parameter options are:\n')
   cat('  --help\t print this help\n')
+  cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --dist=\t specify distribution that governs the data generation\n')
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t DELAYEQ = no difference in delay, DELAYGT = 2nd group y with bigger delay. ALL = both, plus some edge cases.\n')
   cat('  --slice=\t if given, pick only this number of scenarios for the simulation\n')
-  cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. In the past, we used a fixed seed of 12. \n')
+  cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. \n')
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios. Default is no chunking (=0).\n')
-  cat('  --workers=\t number of parallel computations using future.callr and future.apply\n')
+  cat('  --workers=\t number of parallel computations using `future.callr` and `future.apply`. The first level of parallelization is across the MC-replications for each simulation setting.\n')
   cat('  --R=\t\t number of samples within parametric bootstrap test: it determines the resolution for our P-value, e.g.,\n\t\t R=100 will allow for P-values at per-cent resolution\n')
-  cat('  --nrep=\t size of Monte-Carlo study: it is the number of replicated bootstrap data sets on which statistical tests are done.\n')
+  cat('  --mcnrep=\t size of Monte-Carlo study: it is the number of replicated bootstrap data sets on which statistical tests are done.\n')
   cat('  --print\t show scenarios to simulate and exit.\n')
   quit(save = 'no')
 }
 
+myResultsDir <- cmdArgs[["resultsDir"]]
+stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
+           # check read & write permission (first octal information)
+           (file.mode(myResultsDir) %>% as.character() %>% substr(1,1) %>% as.octmode() & 6) == '6')
 
 myDist <- cmdArgs[["dist"]]
 stopifnot( is.character(myDist), length(myDist) == 1L )
@@ -49,8 +54,8 @@ stopifnot( is.numeric(myChnkSize), length(myChnkSize) == 1L )
 myR <- cmdArgs[["R"]]
 stopifnot( is.numeric(myR), length(myR) == 1L, myR >= 1L )
 
-myNrep <- cmdArgs[["nrep"]]
-stopifnot( is.numeric(myNrep), length(myNrep) == 1L, myNrep >= 1L )
+myMCNrep <- cmdArgs[["mcnrep"]]
+stopifnot( is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L )
 
 mySlice <- cmdArgs[["slice"]]
 stopifnot( ! is.null(mySlice), is.numeric(mySlice), length(mySlice) == 1L )
@@ -67,11 +72,12 @@ myPrint <- isTRUE(any(c('print', 'p') %in% names(cmdArgs)))
 
 
 # init -----
-library(incubate)
+library('incubate')
 # minimal version check:
 #+ 0.7.6 for GOF-Pvalues for restricted & unrestricted model: e.g. gof_mo0 (was gof_mo) and gof_mo1 (new)
 #+ 0.9.8 for names for P-values have changed: boot => bootstrap, gof_mo0 => moran, etc
-stopifnot( package_version(packageVersion('incubate')) >= '0.9.8' )
+stopifnot( packageVersion('incubate') >= '0.9.8' )
+cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
 
 library('dplyr')
 library('purrr')
@@ -91,7 +97,7 @@ if (mySeed > 0L){
 
 simSetting <- tidyr::expand_grid(n_x = 8L, #c(8, 10, 12),
                                  delay_x = 5,
-                                 delay_y = c(5, 10), #, 15), #, 20, 100, 1000),
+                                 delay_y = c(5, 10, 15), #, 20, 100, 1000),
                                  scale_x = c(5, 10), #c(1, 2, 5),
                                  scale_ratio = c(2, 1, .5),
                                  # effectively filter for distribution
@@ -100,7 +106,7 @@ simSetting <- tidyr::expand_grid(n_x = 8L, #c(8, 10, 12),
 # avoid duplicates:
 # by convention, group y is not less delayed than group x
 simSetting <- simSetting %>%
-  dplyr::filter(delay_y >= delay_x - 1e-9) %>%
+  dplyr::filter(delay_y >= delay_x - 1e-11) %>%
   # use equally sized groups
   dplyr::mutate(n_y = n_x, .after = n_x)
 
@@ -133,7 +139,7 @@ switch (myScenario,
                 tibble::tibble(scale_x = 10, scale_ratio = 1)
 
           simSetting <- simSetting %>%
-            dplyr::filter(delay_y > delay_x + 1e-9) %>%
+            dplyr::filter(delay_y > delay_x + 1e-11) %>%
             dplyr::inner_join(simFilter, by = names(simFilter))
         },
 
@@ -151,15 +157,16 @@ if (mySlice > 0L) {
 if (myPrint) {
   print(knitr::kable(simSetting, format = 'pipe', digits = 2))
   cat('\nIn total,', NROW(simSetting), 'simulation scenarios.\n')
-  cat('Each scenario is covered by ', myNrep, 'data replications.\n')
+  cat('Each scenario is covered by ', myMCNrep, 'data replications.\n')
   cat('A bootstrap test has R=', myR, 'parametric bootstrap samples.\n')
   cat('Seed set initially is: ', if (mySeed>0) mySeed else '-not set-', '\n')
+  cat('Results directory is set to ,' myResultsDir, '\n')
   quit(save = 'no')
 }
 
 # set up parallel computing ----
-library(future.callr)
-library(future.apply)
+library('future.callr')
+library('future.apply')
 
 future::plan(strategy = future.callr::callr, workers = myWorkers)
 # two level future
@@ -174,7 +181,7 @@ future::plan(strategy = future.callr::callr, workers = myWorkers)
 
 #' Monte-Carlo simulation for a single simulation setting.
 #' Uses parallel computation (future_replicate) to go through the (=nrep) MC-simulations.
-#' Each bootstrap test is also future-aware.
+#' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
 #' @param xx numeric. parameters that specify the simulation model for both groups
 #' @return dataframe. P-values in the different Monte-Carlo runs.
 doMCSim <- function(xx){
@@ -190,7 +197,7 @@ doMCSim <- function(xx){
   #XXX add boot+ test (in certain scenarios)
   #XXX add gof_tests for unrestricted model
 
-  testList <- future.apply::future_replicate(n = myNrep, expr = {
+  testList <- future.apply::future_replicate(n = myMCNrep, expr = {
     x <- y <- 1 #dummy init
     # generate data
     if (isExpon) {
@@ -206,8 +213,8 @@ doMCSim <- function(xx){
     te_diff <- NULL
     # test_diff also uses parallel computations depending on future-settings
     try(expr = {
-      te_diff <- test_diff(x = x, y = y, distribution = "expon", param = "delay", R = myR)
-      # get bootstrap P-value for combined test: delay+rate
+      te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay', R = myR)
+      # get bootstrap P-value for combined test: delay+rate (if the scale (=1/rate for exponential) is indeed different)
       if (scale_ratio != 1){
         te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay', 'rate'), R = myR, type = 'bootstrap')
         # store P-value of delay+rate in original test_diff-object
@@ -253,20 +260,22 @@ applyMCSims <- function(simSetDF){
 
 # run & save ----
 addMetaData <- function(da) {
-  comment(da) <- list(seed = mySeed, R = myR, nrep = myNrep, workers = myWorkers, chnkSize = myChnkSize,
+  # add comment as text
+  comment(da) <- list(seed = mySeed, R = myR, mcnrep = myMCNrep, workers = myWorkers, chnkSize = myChnkSize,
                       host = Sys.info()[["nodename"]],
                       rversion = R.version.string,
                       incubate = as.character(packageVersion('incubate')),
                       date = TODAY,
                       time = format(Sys.time(), format = "%Y-%m-%d_%Hh%M")) %>%
     #or: deparse!
-    paste(names(.), ., sep = '=', collapse = ',')
+    #paste(names(.), ., sep = '=', collapse = ',')
+    deparse
   da
 }
 
 DATE_TAG <- format(Sys.time(), format = "%Y%m%d_%H%M")
 rdsBaseName <- paste0("simRes_test_", DATE_TAG)
-rdsName <- file.path("results", paste0(rdsBaseName, ".rds"))
+rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 
 if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
   # no chunking
@@ -281,14 +290,14 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
   rowIdxLst <- split(rowIdx, f = rep_len(x=seq_len(chnkNbr), length.out = length(rowIdx)))
   stopifnot( length(rowIdxLst) == chnkNbr )
   for (i in seq_along(rowIdxLst)){
-    simSetting_chnk <- slice(simSetting, rowIdxLst[[i]])
+    simSetting_chnk <- dplyr::slice(simSetting, rowIdxLst[[i]])
     simSetting_chnk <- applyMCSims(simSetDF = simSetting_chnk)
     cat("Write out chunk ", i, "\n")
-    saveRDS(simSetting_chnk, file = file.path("results", paste0(rdsBaseName, "_", sprintf("%06d", i), ".rds")))
+    saveRDS(simSetting_chnk, file = file.path(myResultsDir, paste0(rdsBaseName, "_", sprintf("%06d", i), ".rds")))
   }#rof
 
   # merge chunked output!
-  chnkFileNames <- list.files(path = "results", pattern = paste0('^', rdsBaseName, '_[[:digit:]]+[.]rds$'),
+  chnkFileNames <- list.files(path = myResultsDir, pattern = paste0('^', rdsBaseName, '_[[:digit:]]+[.]rds$'),
              full.names = TRUE)
   if ( length(chnkFileNames) ){
     chnkFiles <- purrr::map(.x = chnkFileNames, .f = readRDS)
@@ -328,6 +337,8 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
 # output the latest warnings:
 cat("\n+++\nThese are warnings from the script:\n+++\n")
 warnings()
-cat('\n\n~fine~\n')
 
 future::plan(strategy = future::sequential)
+
+cat('\n\n~fine~\n')
+
