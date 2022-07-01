@@ -6,7 +6,7 @@
 \alias{pexp_delayed}
 \alias{qexp_delayed}
 \alias{rexp_delayed}
-\title{The Delayed Exponential Distribution}
+\title{Delayed Exponential Distribution}
 \usage{
 dexp_delayed(x, delay, rate = 1, ...)
 
@@ -38,7 +38,7 @@ and \code{rexp_delayed} generates a pseudo-random sample from the delayed expone
 The length of the result is determined by \code{n} for \code{rexp_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions.
 }
 \description{
-Density, distribution function, quantile function and random generation for the delayed exponential distribution with rate \code{rate}.
+Density, distribution function, quantile function and random generation for the delayed exponential distribution with \code{rate}-parameter.
 }
 \details{
 Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the \code{stats}-package.

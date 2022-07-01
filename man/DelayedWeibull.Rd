@@ -6,7 +6,7 @@
 \alias{pweib_delayed}
 \alias{qweib_delayed}
 \alias{rweib_delayed}
-\title{The Delayed Weibull Distribution}
+\title{Delayed Weibull Distribution}
 \usage{
 dweib_delayed(x, delay, shape, scale = 1, ...)
 

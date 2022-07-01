@@ -2,10 +2,10 @@
 # delay distribution functions
 
 
-#' The Delayed Exponential Distribution
+#' Delayed Exponential Distribution
 #'
 #' @description
-#' Density, distribution function, quantile function and random generation for the delayed exponential distribution with rate `rate`.
+#' Density, distribution function, quantile function and random generation for the delayed exponential distribution with `rate`-parameter.
 #'
 #' @details
 #' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
@@ -40,7 +40,7 @@ qexp_delayed <- function(p, delay, rate = 1, ...) delay + stats::qexp(p = p, rat
 rexp_delayed <- function(n, delay, rate = 1) delay + stats::rexp(n = n, rate = rate)
 
 
-#' The Delayed Weibull Distribution
+#' Delayed Weibull Distribution
 #'
 #' @description
 #' Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters
