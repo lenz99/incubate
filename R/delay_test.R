@@ -3,7 +3,7 @@
 #'
 #' The GOF-test is performed for a fitted delay-model.
 #' There are different GOF-tests implemented:
-#' * __Moran GOF__ is based on spacings, like the MSE-criterion itself.
+#' * __Moran GOF__ is based on spacings, like the MPSE-criterion itself.
 #' * __Pearson GOF__ uses categories and compares observed to expected frequencies.
 #' * __Anderson-Darling GOF__ makes inference based on the cumulative distribution function.
 #'
@@ -16,8 +16,8 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
   stopifnot( inherits(delayFit, what = 'incubate_fit') )
   method <- match.arg(method)
 
-  if (delayFit$method != 'MSE'){
-    stop('Goodness-of-fit test only supported for models that are fit with maximum spacing estimation (MSE)!')
+  if (delayFit$method != 'MPSE'){
+    stop('Goodness-of-fit test only supported for models that are fit with maximum product of spacings estimation (MPSE)!')
   }
 
   twoGr <- isTRUE(delayFit$twoGroup)
@@ -157,7 +157,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 }
 
 
-#' Test the difference for delay model parameter(s) between two uncorrelated groups, based on maximum spacing estimation (MSE).
+#' Test the difference for delay model parameter(s) between two uncorrelated groups, based on maximum product of spacings estimation (MPSE).
 #'
 #' It is in fact a model comparison between a null model where the parameters are enforced to be equal and an unconstrained full model.
 #' As test statistic we use twice the difference in best (=lowest) objective function value, i.e. 2 * (`val_0` - `val_1`).
@@ -218,8 +218,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   # High values of the test statistic speak in favour of H1:
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y) {
-    fit0 <- delay_model(x = x, y = y, distribution = distribution, method = 'MSE', ties = ties, bind = param)
-    fit1 <- delay_model(x = x, y = y, distribution = distribution, method = 'MSE', ties = ties)
+    fit0 <- delay_model(x = x, y = y, distribution = distribution, method = 'MPSE', ties = ties, bind = param)
+    fit1 <- delay_model(x = x, y = y, distribution = distribution, method = 'MPSE', ties = ties)
 
     if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
 

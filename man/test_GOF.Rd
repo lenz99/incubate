@@ -18,7 +18,7 @@ An \code{htest}-object containing the GOF-test result
 The GOF-test is performed for a fitted delay-model.
 There are different GOF-tests implemented:
 \itemize{
-\item \strong{Moran GOF} is based on spacings, like the MSE-criterion itself.
+\item \strong{Moran GOF} is based on spacings, like the MPSE-criterion itself.
 \item \strong{Pearson GOF} uses categories and compares observed to expected frequencies.
 \item \strong{Anderson-Darling GOF} makes inference based on the cumulative distribution function.
 }

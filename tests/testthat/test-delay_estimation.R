@@ -24,6 +24,15 @@ test_that("Fit delayed Exponentials", {
   expect_equal(coef_exp[[1L]], expected = 9, tolerance = .04)
   expect_equal(coef_exp[[2L]], expected = 0.5, tolerance = .4)
 
+  fd_exp_MLE <- delay_model(xx, distribution = 'expon', method = 'MLE')
+  expect_identical(length(fd_exp_MLE$data), expected = 16L)
+  expect_identical(length(coef(fd_exp_MLE)), expected = 2L)
+  expect_identical(coef(fd_exp_MLE)[['delay']], expected = xx[[1L]])
+  # MLE's later delay is compensated with higher estimated rate
+  expect_gt(coef(fd_exp_MLE)[['rate']], expected = coef_exp[['rate']])
+
+  expect_identical(purrr::chuck(fd_exp_MLE, 'optimizer', 'convergence'), expected = 0L)
+
   set.seed(20220429)
   yy <- rexp_delayed(27L, delay = 10.2, rate = .9)
 
@@ -57,8 +66,12 @@ test_that("Fit delayed Exponentials", {
   expect_equal(coef_exp2c[2L], coef_exp3[2L], tolerance = .05)
 })
 
+test_that('Fit delayed Exponential with MLE', {
 
-test_that("Fit delayed Weibull", {
+})
+
+
+test_that("Fit delayed Weibull with MPSE", {
 
   # from Dumonceaux and Antle (1973)
   # as cited by Cheng (1982)
@@ -124,7 +137,7 @@ test_that("Fit delayed Weibull", {
 })
 
 
-test_that('confidence intervals', {
+test_that('Confidence intervals', {
   testthat::skip_on_cran()
   set.seed(1234)
 

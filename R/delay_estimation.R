@@ -25,23 +25,24 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
   c(par.gr, par[bind])[oNames]
 }
 
-#' Factory method for objective function, either for Maximum Spacing Estimation (MSE) or for MLE.
+#' Factory method for objective function, either according to maximum product of spacings estimation (MPSE)
+#' or according to maximum likelihood estimation (MLE).
 #'
-#' Given the observed data this factory method produces an MSE objective function implementation
-#' which is the negative of the MSE-criterion H or the negative log-likelihood for MLE.
+#' Given the observed data this factory method produces an MPSE objective function implementation
+#' which is the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
 #'
 #' @details
 #' From the observations, negative or infinite values are discarded. In any case, the objective function is to be minimized.
 #'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
-#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MSE`
+#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`
 #' @param distribution character(1). delayed distribution family
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param ties character. How to handle ties within data of a group.
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
-#' @return the objective function (e.g., the negative MSE criterion) for given choice of model parameters
-objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c("exponential", "weibull"), bind=NULL,
+#' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters
+objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE'), distribution = c("exponential", "weibull"), bind=NULL,
                              ties=c('equidist', 'density', 'random', 'none'), verbose = 0L) {
 
   # setup ----
@@ -341,7 +342,7 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
   }# fn getCumDiffs
 
 
-  # objective function like negative mean log-spacings for MSE
+  # objective function like negative mean log-spacings for MPSE
   # Estimate parameters by minimizing this function.
   # `pars` the parameter vector.
   # `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
@@ -350,7 +351,7 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
     pars <- purrr::set_names(pars, par_names)
 
     switch(method,
-           MSE = {
+           MPSE = {
              - if (! twoGr) {
                mean(getCumDiffs(pars, group = "x"))
              } else {
@@ -401,10 +402,11 @@ objFunFactory <- function(x, y=NULL, method = c('MSE', 'MLE'), distribution = c(
 }
 
 
-#' Fit optimal parameters according to the objective function (either MSE or MLE) using numerical optimization or a provided analytical solution.
+#' Fit optimal parameters according to the objective function (either MPSE or MLE).
 #'
 #' The objective function carries the given data in its environment and it is to be minimized.
 #' R's standard routine `stats::optim` does the numerical optimization, using numerical derivatives.
+#' or the analytical solution is returned directly if available.
 #' @param objFun objective function to be minimized
 #' @param optim_args list of own arguments for optimization. If `NULL` it uses the default optim arguments associated to the objective function.
 #' @param verbose integer that indicates the level of verboseness. Default 0 is quiet.
@@ -479,14 +481,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
-#' @param method character. Which method to fit the model? MSE = maximum spacing estimation or MLE = maximum likelihood estimation
+#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLE' = maximum likelihood estimation
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param ties character. How to handle ties.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
-#' @return `incubate_fit` object that contains the information of the delayed model fit. Or `NULL` if optimization failed (e.g. too few observations).
+#' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, distribution = c("exponential", "weibull"), method = c('MSE', 'MLE'), bind=NULL,
+delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, distribution = c("exponential", "weibull"), method = c('MPSE', 'MLE'), bind=NULL,
                         ties=c('equidist', 'density', 'random'), optim_args=NULL, verbose = 0) {
 
   # unpack x if it is a list of two vectors
@@ -559,7 +561,7 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
 print.incubate_fit <- function(x, ...){
   coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
-                      "Fit a delayed {distribution} through {c('Maximum Spacing Estimation (MSE)', 'Maximum Likelihood Estimation (MLE)')[[1L+(method=='MLE')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
+                      "Fit a delayed {distribution} through {c('Maximum Product of Spacings Estimation (MPSE)', 'Maximum Likelihood Estimation (MLE)')[[1L+(method=='MLE')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
@@ -764,7 +766,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     #+candidate region becomes finer sampled the broader the interval is
     #+point estimate for delay is part of sample (if lower bound is not cut to be 0, via max in from= argument)
     delayCandDF <- tibble(delay = seq.int(from = del_interv[['low']], to = del_interv[['high']],
-                                          # uneven number of grid points (hence, MSE-estimate for delay will be one of the grid points)
+                                          # uneven number of grid points (hence, MPSE-estimate for delay will be one of the grid points)
                                           # grid step width at most 0.005
                                           length.out = max(997L, 2L * min(ceiling(R/2), 100L*ceiling(diff(del_interv)))+1L)),
                           # fixing the parameter estimates other than delay

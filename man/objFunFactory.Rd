@@ -2,12 +2,13 @@
 % Please edit documentation in R/delay_estimation.R
 \name{objFunFactory}
 \alias{objFunFactory}
-\title{Factory method for objective function, either for Maximum Spacing Estimation (MSE) or for MLE.}
+\title{Factory method for objective function, either according to maximum product of spacings estimation (MPSE)
+or according to maximum likelihood estimation (MLE).}
 \usage{
 objFunFactory(
   x,
   y = NULL,
-  method = c("MSE", "MLE"),
+  method = c("MPSE", "MLE"),
   distribution = c("exponential", "weibull"),
   bind = NULL,
   ties = c("equidist", "density", "random", "none"),
@@ -19,7 +20,7 @@ objFunFactory(
 
 \item{y}{numeric. observations in second group.}
 
-\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MSE}}
+\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}}
 
 \item{distribution}{character(1). delayed distribution family}
 
@@ -30,11 +31,11 @@ objFunFactory(
 \item{verbose}{integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.}
 }
 \value{
-the objective function (e.g., the negative MSE criterion) for given choice of model parameters
+the objective function (e.g., the negative MPSE criterion) for given choice of model parameters
 }
 \description{
-Given the observed data this factory method produces an MSE objective function implementation
-which is the negative of the MSE-criterion H or the negative log-likelihood for MLE.
+Given the observed data this factory method produces an MPSE objective function implementation
+which is the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
 }
 \details{
 From the observations, negative or infinite values are discarded. In any case, the objective function is to be minimized.

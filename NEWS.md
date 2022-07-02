@@ -1,8 +1,16 @@
 # incubate 1.1.9.9000
 * development version
+* check for minimal size of data to fail gracefully
+* test_diff: test-statistic gets lower bound of 0 enforced (a restricted model can not have better fit than unrestricted model)
+* include simulation R-scripts in package (under inst/scripts/ folder)
+* rename 'MSE' to 'MPSE' (as the term MSE has already other meanings)
+
 
 # incubate 1.1.9
 * New implementation of delay smoothing: use objective function along candidate delay values to guide in smoothing
+    * define an interval for delay candidate values
+    * sample from this interval according to the objective function (varying only delay and keeping the other parameters at their estimate)
+    * use `smd_factor` to either concentrate or flatten around the best delay estimate
 * Better implementation for MLE-fitting:
     * Support MLE-fitting also for Weibull (one group setting only)
     * Move MLE-objective function into a general objective function factory method

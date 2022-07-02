@@ -8,7 +8,7 @@ delay_model(
   x = stop("Specify observations in sample!"),
   y = NULL,
   distribution = c("exponential", "weibull"),
-  method = c("MSE", "MLE"),
+  method = c("MPSE", "MLE"),
   bind = NULL,
   ties = c("equidist", "density", "random"),
   optim_args = NULL,
@@ -22,7 +22,7 @@ delay_model(
 
 \item{distribution}{character. Which delayed distribution is assumed? Exponential or Weibull.}
 
-\item{method}{character. Which method to fit the model? MSE = maximum spacing estimation or MLE = maximum likelihood estimation}
+\item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLE' = maximum likelihood estimation}
 
 \item{bind}{character. parameter names that are bind together in 2-group situation.}
 
@@ -33,7 +33,7 @@ delay_model(
 \item{verbose}{integer. level of verboseness. Default 0 is quiet.}
 }
 \value{
-\code{incubate_fit} object that contains the information of the delayed model fit. Or \code{NULL} if optimization failed (e.g. too few observations).
+\code{incubate_fit} the delay-model fit object. Or \code{NULL} if optimization failed (e.g. too few observations).
 }
 \description{
 Maximum product spacing is used to fit the parameters.

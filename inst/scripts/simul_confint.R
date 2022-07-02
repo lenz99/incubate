@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # evaluate bootstrap confidence intervals for one-group situation
-# either MSE or MLE based fits
+# either MPSE or MLE based fits
 
 TODAY <- Sys.Date()
 
@@ -93,7 +93,8 @@ cat('incubate version ', incubate_ver, '\n')
 # mkuhn, 2022-03-24: v0.9.5 logshift internally redefined (should not have impact here, though)
 # mkuhn, 2022-03-31: v0.9.6 is needed for smoothing for delay
 # mkuhn, 2022-06-??: v1.1.9 new meaning for SMD_factor
-stopifnot( utils::compareVersion(incubate_ver, '1.1.9') >= 0L )
+# mkuhn, 2022-07-02: v1.1.9.9001 is first to have name-change MPSE
+stopifnot( utils::compareVersion(incubate_ver, '1.1.9.9001') >= 0L )
 
 
 library('dplyr')
@@ -118,7 +119,7 @@ simSetting <- tidyr::expand_grid(n = c(5, 8, 10, 12, 20), #, 50, 100), # low n m
                                  shape = unique(case_when(
                                    myDist == 'exponential' ~ 1,
                                    myDist == 'weibull' ~ c(.5, 2))),
-                                 method = c('MSE', 'MLE'),
+                                 method = c('MPSE', 'MLE'),
                                  bs_data = c('parametric', 'ordinary'),
                                  smd_factor = c(0, .1, 0.25, 0.5, 0.75, 1, 2),
                                  implement = c('own', 'boot'),
@@ -129,7 +130,7 @@ simSetting <- tidyr::expand_grid(n = c(5, 8, 10, 12, 20), #, 50, 100), # low n m
   # boot package offers no CIs based on t-quantiles
   dplyr::filter(! (bs_infer %in% c('t', 't0', 'normal0') & implement == 'boot'))
 # mkuhn, quick filter
-# dplyr::filter(method == 'MSE', ! bs_infer %in% c('quantile0', 'normal0', 't0'))
+# dplyr::filter(method == 'MPSE', ! bs_infer %in% c('quantile0', 'normal0', 't0'))
 
 # first select the inference methods
 if (myBS_infer != 'all') {
@@ -170,7 +171,7 @@ if (mySingle) {
                   dplyr::near(shape, case_when(myDist == 'exponential' ~ 1,
                                                myDist == 'weibull' ~ .5,
                                                TRUE ~ 99)),
-                  dplyr::near(scale, 5L), method == 'MSE')
+                  dplyr::near(scale, 5L), method == 'MPSE')
 }
 
 if (! dplyr::near(mySlice, 0L)) {
