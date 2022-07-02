@@ -265,7 +265,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
   # observed test statistic
   ts_obs <- testStat(x, y)
-  if ( is.null(ts_obs) || ts_obs < -TOL_CRIT ){
+  if ( is.null(ts_obs) || ! is.list(ts_obs) || ! is.numeric(ts_obs[['val']]) || ts_obs[['val']] < -TOL_CRIT ){
     stop("Delay model failed for restricted null-model or free full model", call. = FALSE)
   }
   fit0 <- ts_obs[["fit0"]]
