@@ -92,7 +92,8 @@ cat('incubate version ', incubate_ver, '\n')
 # mkuhn, 2022-03-22: v0.9.4 is needed for bs_infer=lognormal & logquantile with log-shift parameter
 # mkuhn, 2022-03-24: v0.9.5 logshift internally redefined (should not have impact here, though)
 # mkuhn, 2022-03-31: v0.9.6 is needed for smoothing for delay
-stopifnot( utils::compareVersion(incubate_ver, '0.9.6') >= 0L )
+# mkuhn, 2022-06-??: v1.1.9 new meaning for SMD_factor
+stopifnot( utils::compareVersion(incubate_ver, '1.1.9') >= 0L )
 
 
 library('dplyr')
@@ -119,7 +120,7 @@ simSetting <- tidyr::expand_grid(n = c(5, 8, 10, 12, 20), #, 50, 100), # low n m
                                    myDist == 'weibull' ~ c(.5, 2))),
                                  method = c('MSE', 'MLE'),
                                  bs_data = c('parametric', 'ordinary'),
-                                 smd_factor = c(0, 0.025, 0.05, 0.075, 0.1, 0.15),
+                                 smd_factor = c(0, .1, 0.25, 0.5, 0.75, 1, 2),
                                  implement = c('own', 'boot'),
                                  # bootstrap inference propoerties come last
                                  bs_infer = c('quantile0', 'quantile', 'logquantile_.00001', 'logquantile_.001', 'logquantile_.1', 'logquantile_.25', 'logquantile_.5', 'logquantile_1', 'logquantile_2', 'logquantile_3', 'logquantile_5', 'logquantile_10', 'logquantile_15', 'logquantile_20', 'logquantile_25',
