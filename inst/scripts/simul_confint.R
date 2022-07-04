@@ -9,8 +9,9 @@ suppressPackageStartupMessages(library(R.utils))
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
-                                defaults = list(dist='exponential', seed=as.integer(TODAY), bs_data='parametric', smd_factor='all', bs_infer='all',
-                                                implement='own', slice=0, chnkSize=0, workers=6, R=150, nrep=100))
+                                defaults = list(resultsDir=getwd(),
+                                                dist='exponential', seed=as.integer(TODAY), bs_data='parametric', smd_factor='all', bs_infer='all',
+                                                implement='own', slice=0, chnkSize=0, workers=6, R=150, mcnrep=100))
 
 
 if (any(c('help', 'h') %in% names(cmdArgs))){
@@ -19,6 +20,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values that are specified within the script.\n')
   cat('Parameter options are:\n')
   cat('  --help\t print this help\n')
+  cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --single/--1\t flag to use only single scenario: n=10, delay=5, shape=.5 for Weibull, scale=5, level=.95\n')
   cat('  --dist=\t specify underlying distribution. It can be either exponential (default) or Weibull (but not both at the same time).\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. In the past, we used a fixed seed of 12. \n')
@@ -30,11 +32,15 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios\n')
   cat('  --workers=\t number of parallel computations using future.callr and future.apply\n')
   cat('  --R=\t\t number of bootstrap samples for the confidence interval: it determines the reliabiltiy of the CI, e.g., R=1000 will start to be stable\n')
-  cat('  --nrep=\t number of replicated bootstrap data sets to build confidence intervals for: it determines the precision of coverage/width mean value.\n')
+  cat('  --mcnrep=\t number of replicated bootstrap data sets to build confidence intervals for: it determines the precision of coverage/width mean value.\n')
   cat('  --print\t show scenarios to simulate and exit.\n')
   quit(save = 'no')
 }
 
+myResultsDir <- cmdArgs[["resultsDir"]]
+stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
+           # check read & write permission (first octal information)
+           (file.mode(myResultsDir) %>% as.character() %>% substr(1,1) %>% as.octmode() & 6) == '6')
 
 myDist <- cmdArgs[["dist"]]
 stopifnot( is.character(myDist), length(myDist) == 1L )
@@ -49,8 +55,8 @@ stopifnot( is.numeric(myChnkSize), length(myChnkSize) == 1L )
 myR <- cmdArgs[["R"]]
 stopifnot( is.numeric(myR), length(myR) == 1L, myR >= 1L )
 
-myNrep <- cmdArgs[["nrep"]]
-stopifnot( is.numeric(myNrep), length(myNrep) == 1L, myNrep >= 1L )
+myMCNrep <- cmdArgs[["mcnrep"]]
+stopifnot( is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L )
 
 mySlice <- cmdArgs[["slice"]]
 stopifnot( ! is.null(mySlice), is.numeric(mySlice), is.finite(mySlice), length(mySlice) == 1L )
@@ -187,16 +193,17 @@ if (NROW(simSetting) == 0L){
 
 if (myPrint) {
   print(knitr::kable(dplyr::select(simSetting, !bs_infer), format = 'pipe', digits = 2))
-  cat('\nIn total,', NROW(simSetting), 'simulation scenarios.\nEach scenario is covered by ', myNrep, 'data replications.\n')
+  cat('\nIn total,', NROW(simSetting), 'simulation scenarios.\nEach scenario is covered by ', myMCNrep, 'data replications.\n')
   cat('A confidence interval has R=', myR, 'parametric bootstrap samples.\n')
+  cat('Results directory is set to ', myResultsDir, '\n')
   quit(save = 'no')
 }
 
 
 
 # set up parallel computing ----
-library(future.callr)
-library(future.apply)
+library('future.callr')
+library('future.apply')
 
 future::plan(strategy = future.callr::callr, workers = myWorkers)
 
@@ -224,7 +231,7 @@ simfun <- function(dist, n, delay, scale, shape, method, bs_data, smd_factor, im
       c(delay = delay, scale = scale, shape = shape),
     name = 'param', value = 'truth')
 
-  ciList <- future.apply::future_replicate(n = myNrep, expr = {
+  ciList <- future.apply::future_replicate(n = myMCNrep, expr = {
     # generate data
     x <- if (myDist == 'exponential') {
       stopifnot( dplyr::near(shape, 1L) )
@@ -317,21 +324,21 @@ applySimFun <- function(simSetDF, agg=TRUE){
 # run & save ----
 
 addMetaData <- function(da) {
-  comment(da) <- list(seed = mySeed, R = myR, nrep = myNrep, workers = myWorkers, chnkSize = myChnkSize,
+  comment(da) <- list(seed = mySeed, R = myR, mcnrep = myMCNrep, workers = myWorkers, chnkSize = myChnkSize,
                       host = Sys.info()[["nodename"]],
                       rversion = R.version.string,
                       incubate = as.character(packageVersion('incubate')),
                       date = TODAY,
                       time = format(Sys.time(), format = "%Y-%m-%d_%Hh%M")) %>%
-    #or: deparse!
-    paste(names(.), ., sep = '=', collapse = ',')
+    #paste(names(.), ., sep = '=', collapse = ',')
+    deparse
   da
 }
 
 AGG <- TRUE
 DATE_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%M")
 rdsBaseName <- paste0("simRes_confint_", DATE_TAG, "_agg"[AGG])
-rdsName <- file.path("results", paste0(rdsBaseName, ".rds"))
+rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 
 if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
   # no chunking
@@ -349,13 +356,13 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
   for (i in seq_along(rowIdxLst)){
     #slice does not work on rowwise tibbles (as it works *per group*)
     simSetting_chk <- applySimFun(simSetDF = simSetting[rowIdxLst[[i]],], agg = AGG)
-    rdsChkName <- file.path("results", paste0(rdsBaseName, "_", sprintf("%06d", i), ".rds"))
+    rdsChkName <- file.path(myResultsDir, paste0(rdsBaseName, "_", sprintf("%06d", i), ".rds"))
     cat("Write out chunk ", i, "\n")
     saveRDS(simSetting_chk, file = rdsChkName)
   }#rof
 
   # merge chunked output!
-  chkFileNames <- list.files(path = "results", pattern = paste0('^', rdsBaseName, '_[[:digit:]]+[.]rds$'),
+  chkFileNames <- list.files(path = myResultsDir, pattern = paste0('^', rdsBaseName, '_[[:digit:]]+[.]rds$'),
                              full.names = TRUE)
   if ( length(chkFileNames) ){
     chkFiles <- purrr::map(.x = chkFileNames, .f = readRDS)
@@ -385,3 +392,4 @@ warnings()
 
 future::plan(strategy = future::sequential)
 
+cat('\n\n~fine~\n')

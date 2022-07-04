@@ -76,7 +76,8 @@ library('incubate')
 # minimal version check:
 #+ 0.7.6 for GOF-Pvalues for restricted & unrestricted model: e.g. gof_mo0 (was gof_mo) and gof_mo1 (new)
 #+ 0.9.8 for names for P-values have changed: boot => bootstrap, gof_mo0 => moran, etc
-stopifnot( packageVersion('incubate') >= '0.9.8' )
+#+ 1.1.9.9000 script is developed as part of the incubate package (not separate as part of the MS)
+stopifnot( packageVersion('incubate') >= '1.1.9.9000' )
 cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
 
 library('dplyr')
@@ -97,7 +98,7 @@ if (mySeed > 0L){
 
 simSetting <- tidyr::expand_grid(n_x = 8L, #c(8, 10, 12),
                                  delay_x = 5,
-                                 delay_y = c(5, 10, 15), #, 20, 100, 1000),
+                                 delay_y = c(3, 5, 8, 10, 15), #, 20, 100, 1000),
                                  scale_x = c(5, 10), #c(1, 2, 5),
                                  scale_ratio = c(2, 1, .5),
                                  # effectively filter for distribution
@@ -160,7 +161,7 @@ if (myPrint) {
   cat('Each scenario is covered by ', myMCNrep, 'data replications.\n')
   cat('A bootstrap test has R=', myR, 'parametric bootstrap samples.\n')
   cat('Seed set initially is: ', if (mySeed>0) mySeed else '-not set-', '\n')
-  cat('Results directory is set to ,' myResultsDir, '\n')
+  cat('Results directory is set to ', myResultsDir, '\n')
   quit(save = 'no')
 }
 
@@ -267,7 +268,6 @@ addMetaData <- function(da) {
                       incubate = as.character(packageVersion('incubate')),
                       date = TODAY,
                       time = format(Sys.time(), format = "%Y-%m-%d_%Hh%M")) %>%
-    #or: deparse!
     #paste(names(.), ., sep = '=', collapse = ',')
     deparse
   da

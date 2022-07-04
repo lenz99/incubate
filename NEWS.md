@@ -1,4 +1,4 @@
-# incubate 1.1.9.9000
+# incubate 1.1.9.9001
 * development version
 * check for minimal size of data to fail gracefully
 * test_diff: test-statistic gets lower bound of 0 enforced (a restricted model can not have better fit than unrestricted model)
@@ -9,7 +9,7 @@
 # incubate 1.1.9
 * New implementation of delay smoothing: use objective function along candidate delay values to guide in smoothing
     * define an interval for delay candidate values
-    * sample from this interval according to the objective function (varying only delay and keeping the other parameters at their estimate)
+    * sample from this interval according to the objective function: the better the value of the objective function the more likely it is to sample a value. For speed of computation, we vary only delay and keep the other parameters at their estimate.
     * use `smd_factor` to either concentrate or flatten around the best delay estimate
 * Better implementation for MLE-fitting:
     * Support MLE-fitting also for Weibull (one group setting only)
