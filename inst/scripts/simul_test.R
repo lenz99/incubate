@@ -4,10 +4,26 @@
 # Test delay parameter
 
 
+# init -----
+library('incubate')
+# minimal version check:
+#+ 0.7.6 for GOF-Pvalues for restricted & unrestricted model: e.g. gof_mo0 (was gof_mo) and gof_mo1 (new)
+#+ 0.9.8 for names for P-values have changed: boot => bootstrap, gof_mo0 => moran, etc
+#+ 1.1.9.9000 script is developed as part of the incubate package (not separate as part of the MS)
+stopifnot( packageVersion('incubate') >= '1.1.9.9000' )
+cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
+
+library('dplyr')
+library('purrr')
+library('tidyr', warn.conflicts = FALSE)
+library('tibble')
+
+suppressPackageStartupMessages(library('R.utils'))
+
 TODAY <- Sys.Date()
 
+
 # command line arguments -----
-suppressPackageStartupMessages(library('R.utils'))
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
@@ -71,34 +87,17 @@ myPrint <- isTRUE(any(c('print', 'p') %in% names(cmdArgs)))
 
 
 
-# init -----
-library('incubate')
-# minimal version check:
-#+ 0.7.6 for GOF-Pvalues for restricted & unrestricted model: e.g. gof_mo0 (was gof_mo) and gof_mo1 (new)
-#+ 0.9.8 for names for P-values have changed: boot => bootstrap, gof_mo0 => moran, etc
-#+ 1.1.9.9000 script is developed as part of the incubate package (not separate as part of the MS)
-stopifnot( packageVersion('incubate') >= '1.1.9.9000' )
-cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
-
-library('dplyr')
-library('purrr')
-library('tidyr', warn.conflicts = FALSE)
-library('tibble')
-
-
 
 
 # set up simulation setting -----
 
-if (mySeed > 0L){
-  set.seed(mySeed) ##used to be: 12
-}
+if (mySeed > 0L) set.seed(mySeed)
 
 # shape values according to distribution
 
 simSetting <- tidyr::expand_grid(n_x = 8L, #c(8, 10, 12),
                                  delay_x = 5,
-                                 delay_y = c(3, 5, 8, 10, 15), #, 20, 100, 1000),
+                                 delay_y = c(5, 8, 10, 15), #, 20, 100, 1000),
                                  scale_x = c(5, 10), #c(1, 2, 5),
                                  scale_ratio = c(2, 1, .5),
                                  # effectively filter for distribution
@@ -136,7 +135,7 @@ switch (myScenario,
         DELAYGT = {
           simFilter <- if (isExpon) {
             simSetting %>%
-              filter(scale_ratio == 1 | scale_ratio == 2 & scale_x == 5 | scale_ratio == .5 & scale_x == 10) } else
+              dplyr::filter(scale_ratio == 1 | scale_ratio == 2 & scale_x == 5 | scale_ratio == .5 & scale_x == 10) } else
                 tibble::tibble(scale_x = 10, scale_ratio = 1)
 
           simSetting <- simSetting %>%
@@ -166,16 +165,17 @@ if (myPrint) {
 }
 
 # set up parallel computing ----
-library('future.callr')
-library('future.apply')
+if (myWorkers > 1L){
+  library('future.callr')
+  library('future.apply')
 
-future::plan(strategy = future.callr::callr, workers = myWorkers)
-# two level future
-# future::plan(list(
-#   tweak(future.callr::callr, workers = 2L),
-#   tweak(multicore, workers = 4L)
-# ))
-
+  future::plan(strategy = future.callr::callr, workers = myWorkers)
+  # two level future
+  # future::plan(list(
+  #   tweak(future.callr::callr, workers = 2L),
+  #   tweak(multicore, workers = 4L)
+  # ))
+}
 
 
 # functions -----
@@ -195,8 +195,6 @@ doMCSim <- function(xx){
   scale_ratio <- xx[[6]]
   shape <- xx[[7]]
 
-  #XXX add boot+ test (in certain scenarios)
-  #XXX add gof_tests for unrestricted model
 
   testList <- future.apply::future_replicate(n = myMCNrep, expr = {
     x <- y <- 1 #dummy init
@@ -338,7 +336,7 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
 cat("\n+++\nThese are warnings from the script:\n+++\n")
 warnings()
 
-future::plan(strategy = future::sequential)
+if (myWorkers > 1L && isNamespaceLoaded('future')) future::plan(strategy = future::sequential)
 
 cat('\n\n~fine~\n')
 
