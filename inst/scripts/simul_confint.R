@@ -41,7 +41,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
 
 if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('Run Monte-Carlo simulations with delayed Exponential or Weibull data for a single group setting.\n')
-  cat('A confidence interval is constructed for all involved parameters and its properties "width" and "coverage" are calculted.\n')
+  cat('A confidence interval is constructed for all involved parameters and its properties "width" and "coverage" are calculated.\n')
   cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values that are specified within the script.\n')
   cat('Parameter options are:\n')
   cat('  --help\t print this help\n')
