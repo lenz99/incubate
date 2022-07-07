@@ -203,17 +203,18 @@ if (myPrint) {
 
 
 # set up parallel computing ----
-library('future.callr')
-library('future.apply')
+if (myWorkers > 1L){
+  library('future.callr')
+  library('future.apply')
 
-future::plan(strategy = future.callr::callr, workers = myWorkers)
-
+  future::plan(strategy = future.callr::callr, workers = myWorkers)
+}
 
 # functions -----
 
 #' Monte-Carlo simulation for a single simulation setting.
-#' Uses parallel computation (using `future_replicate`) to go through the MC-simulations. This is the first parallelization.
-#' Each bootstrap test is also future-aware.
+#' Uses parallel computation (using `future_replicate`) to go through the MC-simulations. This is the first level of parallelisation.
+#' Each bootstrap test is also future-aware (which listens on the 2nd layer of future topology).
 #' @param dist character. delay-distribution to simulate data from
 #' @param bs_data character. data generation in bootstrap
 #' @param implement character. flag to choose between implementation via boot-package or own future-aware code
@@ -391,6 +392,6 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
 cat("\n+++\nThese are warnings from the script:\n+++\n")
 warnings()
 
-future::plan(strategy = future::sequential)
+if (myWorkers > 1L) future::plan(strategy = future::sequential)
 
 cat('\n\n~fine~\n')
