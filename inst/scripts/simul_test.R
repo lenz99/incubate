@@ -258,26 +258,27 @@ applyMCSims <- function(simSetDF){
 
 
 # run & save ----
-addMetaData <- function(da) {
+addMetaData <- function(da, timeTag) {
   # add comment as text
   comment(da) <- list(seed = mySeed, R = myR, mcnrep = myMCNrep, workers = myWorkers, chnkSize = myChnkSize,
                       host = Sys.info()[["nodename"]],
                       rversion = R.version.string,
                       incubate = as.character(packageVersion('incubate')),
                       date = TODAY,
-                      time = format(Sys.time(), format = "%Y-%m-%d_%Hh%M")) %>%
+                      time = timeTag) %>%
     #paste(names(.), ., sep = '=', collapse = ',')
     deparse
   da
 }
 
-DATE_TAG <- format(Sys.time(), format = "%Y%m%d_%H%M")
-rdsBaseName <- paste0("simRes_test_", DATE_TAG)
+DATETIME_TAG <- format(Sys.time(), format = "%Y%m%d_%Hh%Mm%Ss")
+rdsBaseName <- paste0("simRes_test_", DATETIME_TAG)
 rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 
 if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
   # no chunking
-  simSetting <- applyMCSims(simSetDF = simSetting) %>% addMetaData()
+  simSetting <- applyMCSims(simSetDF = simSetting) %>%
+    addMetaData(timeTag = DATETIME_TAG)
   saveRDS(simSetting, file = rdsName)
 } else {
   # work in chunks
@@ -291,7 +292,8 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
     simSetting_chnk <- dplyr::slice(simSetting, rowIdxLst[[i]])
     simSetting_chnk <- applyMCSims(simSetDF = simSetting_chnk)
     cat("Write out chunk ", i, "\n")
-    saveRDS(simSetting_chnk, file = file.path(myResultsDir, paste0(rdsBaseName, "_", sprintf("%06d", i), ".rds")))
+    saveRDS(simSetting_chnk %>% addMetaData(timeTag = DATETIME_TAG),
+            file = file.path(myResultsDir, paste0(rdsBaseName, "_", sprintf("%06d", i), ".rds")))
   }#rof
 
   # merge chunked output!
@@ -302,7 +304,7 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
 
     saveRDS(chnkFiles %>%
               dplyr::bind_rows() %>%
-              addMetaData(),
+              addMetaData(timeTag = DATETIME_TAG),
             file = rdsName)
 
     if (! inherits( try(infoRDS(rdsName), silent = TRUE), "try-error")){

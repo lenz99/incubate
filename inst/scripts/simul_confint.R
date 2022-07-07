@@ -325,27 +325,27 @@ applySimFun <- function(simSetDF, agg=TRUE){
 
 # run & save ----
 
-addMetaData <- function(da) {
+addMetaData <- function(da, timeTag) {
   comment(da) <- list(seed = mySeed, R = myR, mcnrep = myMCNrep, workers = myWorkers, chnkSize = myChnkSize,
                       host = Sys.info()[["nodename"]],
                       rversion = R.version.string,
                       incubate = as.character(packageVersion('incubate')),
                       date = TODAY,
-                      time = format(Sys.time(), format = "%Y-%m-%d_%Hh%Mm%Ss")) %>%
+                      time = timeTag) %>%
     #paste(names(.), ., sep = '=', collapse = ',')
     deparse
   da
 }
 
 AGG <- TRUE
-DATE_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%Mm%Ss")
-rdsBaseName <- paste0("simRes_confint_", DATE_TAG, "_agg"[AGG])
+DATETIME_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%Mm%Ss")
+rdsBaseName <- paste0("simRes_confint_", DATETIME_TAG, "_agg"[AGG])
 rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 
 if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
   # no chunking
   simSetting <- applySimFun(simSetDF = simSetting, agg = AGG) %>%
-    addMetaData()
+    addMetaData(timeTag = DATETIME_TAG)
   saveRDS(simSetting, file = rdsName)
 } else {
   # work in chunks
@@ -360,7 +360,8 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
     simSetting_chk <- applySimFun(simSetDF = simSetting[rowIdxLst[[i]],], agg = AGG)
     rdsChkName <- file.path(myResultsDir, paste0(rdsBaseName, "_", sprintf("%06d", i), ".rds"))
     cat("Write out chunk ", i, "\n")
-    saveRDS(simSetting_chk, file = rdsChkName)
+    saveRDS(simSetting_chk %>% addMetaData(timeTag = DATETIME_TAG),
+            file = rdsChkName)
   }#rof
 
   # merge chunked output!
@@ -371,7 +372,7 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
 
     saveRDS(chkFiles %>%
               dplyr::bind_rows() %>%
-              addMetaData(),
+              addMetaData(timeTag = DATETIME_TAG),
             file = rdsName)
 
     if (! inherits( try(infoRDS(rdsName), silent = TRUE), "try-error")){
