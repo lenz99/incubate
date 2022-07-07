@@ -82,8 +82,10 @@ readResultFile <- function(rdsFN, ind) {
 
 	resName <- paste(mdList[['host']], mdList[['time']], sep='||')
 	stopifnot( indOffset + ind <= length(RUN_NS) )
+
+	unnestVar <- c('P', 'ci_res')[[1L+(myType == 'confint')]]
 	resData <- rdsF %>%
-		tidyr::unnest(P) %>%
+		tidyr::unnest(cols = all_of(unnestVar)) %>%
 		dplyr::mutate(run = paste0(RUN_NS[[indOffset + ind]], run))
 
 	# pass on comment to unnested dataframe
