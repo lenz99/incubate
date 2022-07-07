@@ -886,7 +886,9 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   stopifnot(is.numeric(R), length(R) == 1L, R > 0)
   if (missing(bs_data)) bs_data <- 'parametric'
   if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data, choices = c('parametric', 'ordinary'))
-  stopifnot(logshift_delay > 0, smd_factor >= 0)
+  logTransform <- isTRUE(startsWith(bs_infer, 'log'))
+  if (logTransform) stopifnot(logshift_delay > 0)
+  stopifnot(smd_factor >= 0)
 
   twoGr <- isTRUE(object$twoGroup)
   nObs <- if (twoGr) lengths(object$data) else length(object$data)
@@ -935,7 +937,6 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   R <- if (useBoot) bs_data[['R']] else NCOL(bs_data)
 
 
-  logTransform <- isTRUE(startsWith(bs_infer, 'log'))
   # standard value for all parameters
   logshift <- purrr::set_names(rep_len(.0001, length.out=length(cf)), nm = names(cf))
   # for delay, the transformation needs to be independent of the scale of delay.

@@ -331,14 +331,14 @@ addMetaData <- function(da) {
                       rversion = R.version.string,
                       incubate = as.character(packageVersion('incubate')),
                       date = TODAY,
-                      time = format(Sys.time(), format = "%Y-%m-%d_%Hh%M")) %>%
+                      time = format(Sys.time(), format = "%Y-%m-%d_%Hh%Mm%Ss")) %>%
     #paste(names(.), ., sep = '=', collapse = ',')
     deparse
   da
 }
 
 AGG <- TRUE
-DATE_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%M")
+DATE_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%Mm%Ss")
 rdsBaseName <- paste0("simRes_confint_", DATE_TAG, "_agg"[AGG])
 rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 
