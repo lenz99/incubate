@@ -2,10 +2,35 @@
 # evaluate bootstrap confidence intervals for one-group situation
 # either MPSE or MLE based fits
 
+
+
+# init -----
+library('incubate')
+incubate_ver <- toString(packageVersion('incubate'))
+cat('incubate version ', incubate_ver, '\n')
+# mkuhn, 2021-12-09: v0.7.2 is needed for new name of bs_data: 'ordinary' instead of 'simple' and boot-package implementation
+# mkuhn, 2021-12-15: v0.7.3 is needed for bs_infer = 't'
+# mkuhn, 2022-03-17: v0.9 is needed for 2-step confint
+# mkuhn, 2022-03-18: v0.9.1 is needed for bs_infer=lognormal & logquantile
+# mkuhn, 2022-03-22: v0.9.4 is needed for bs_infer=lognormal & logquantile with log-shift parameter
+# mkuhn, 2022-03-24: v0.9.5 logshift internally redefined (should not have impact here, though)
+# mkuhn, 2022-03-31: v0.9.6 is needed for smoothing for delay
+# mkuhn, 2022-06-??: v1.1.9 new meaning for SMD_factor
+# mkuhn, 2022-07-02: v1.1.9.9001 is first to have name-change MPSE
+stopifnot( utils::compareVersion(incubate_ver, '1.1.9.9001') >= 0L )
+
+
+library('dplyr')
+library('purrr')
+library('stringr')
+library('tidyr')
+library('tibble')
+suppressPackageStartupMessages(library('R.utils'))
+
+
 TODAY <- Sys.Date()
 
 # command line arguments -----
-suppressPackageStartupMessages(library(R.utils))
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
@@ -85,30 +110,6 @@ stopifnot( is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L )
 myPrint <- isTRUE(any(c('print', 'p') %in% tolower(names(cmdArgs))))
 
 mySingle <- isTRUE(any(c('single', '1') %in% tolower(names(cmdArgs))))
-
-
-# init -----
-library('incubate')
-incubate_ver <- toString(packageVersion('incubate'))
-cat('incubate version ', incubate_ver, '\n')
-# mkuhn, 2021-12-09: v0.7.2 is needed for new name of bs_data: 'ordinary' instead of 'simple' and boot-package implementation
-# mkuhn, 2021-12-15: v0.7.3 is needed for bs_infer = 't'
-# mkuhn, 2022-03-17: v0.9 is needed for 2-step confint
-# mkuhn, 2022-03-18: v0.9.1 is needed for bs_infer=lognormal & logquantile
-# mkuhn, 2022-03-22: v0.9.4 is needed for bs_infer=lognormal & logquantile with log-shift parameter
-# mkuhn, 2022-03-24: v0.9.5 logshift internally redefined (should not have impact here, though)
-# mkuhn, 2022-03-31: v0.9.6 is needed for smoothing for delay
-# mkuhn, 2022-06-??: v1.1.9 new meaning for SMD_factor
-# mkuhn, 2022-07-02: v1.1.9.9001 is first to have name-change MPSE
-stopifnot( utils::compareVersion(incubate_ver, '1.1.9.9001') >= 0L )
-
-
-library('dplyr')
-library('purrr')
-library('stringr')
-library('tidyr')
-library('tibble')
-
 
 
 
