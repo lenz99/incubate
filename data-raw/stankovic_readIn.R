@@ -2,14 +2,16 @@
 # read in data from Stankovic 2018 publication,
 # taken from Figure 6J and Figure 6K
 
-library(readr)
-library(dplyr)
+library("readr")
+library("dplyr")
+library("survival")
 
 try(setwd('data-raw/'), silent = FALSE)
 
+
 #' Prepare survival data for analysis with MSE-method.
 #' The data was digitized from the survival plots in the publication of Stankovic et al (2018)
-#' @param fileName file name of CSV-file within folder 'stankovic_2018'
+#' @param fileName file name of CSV-file within current 'data-raw'-folder
 prepSurvData <- function(fileName) {
   fnPath <- file.path(fileName)
   stopifnot( file.exists(fnPath) )
@@ -31,7 +33,6 @@ prepSurvData <- function(fileName) {
 fig6J <- prepSurvData("stankovic_fig6J_U87.csv")
 fig6K <- prepSurvData('stankovic_fig6K_U87.csv')
 
-library(survival)
 # visual test
 plot(survfit(Surv(Time, Status) ~ Group, data = fig6J), col = 1:4, main = 'Figure 6J')
 plot(survfit(Surv(Time, Status) ~ Group, data = fig6K), col = 1:3, main = 'Figure 6K')
@@ -51,8 +52,8 @@ pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6K, subset = Group != 'Ant
 pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6K, subset = Group != 'TMD')$chisq, df = 1, lower.tail = F)
 
 
-stankovic <- dplyr::bind_rows(fig6J=fig6J, fig6K=fig6K, .id = 'figure')
+stankovic <- dplyr::bind_rows(Fig6J=fig6J, Fig6K=fig6K, .id = 'Figure')
 # save as one dataframe, including column 'figure' to describe source
 #saveRDS(stankovic, file = 'stankovic_fig6JK_U87.rds')
 
-#usethis::use_data(stankovic, overwrite = FALSE)
+#usethis::use_data(stankovic, overwrite = TRUE)

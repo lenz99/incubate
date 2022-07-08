@@ -7,7 +7,7 @@
 #'
 #' @format
 #' \describe{
-#'   \item{figure}{Specifies where the data is shown in the publication}
+#'   \item{Figure}{The figure in the publication where the data is shown}
 #'   \item{Time}{Survival in days}
 #'   \item{Status}{Right-censor status: 1 means observed event}
 #'   \item{Group}{Experimental group identifier}
