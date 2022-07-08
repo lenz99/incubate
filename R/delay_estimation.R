@@ -491,7 +491,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @export
 delay_model <- function(x = stop('Specify observations in sample!'), y = NULL,
                         distribution = c("exponential", "weibull"), method = c('MPSE', 'MLE0'),
-                        bind=NULL, ties=c('equidist', 'density', 'random'),
+                        bind=NULL, ties=c('density', 'equidist', 'random'),
                         optim_args=NULL, verbose = 0) {
 
   # unpack x if it is a list of two vectors
