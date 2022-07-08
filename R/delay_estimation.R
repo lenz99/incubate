@@ -737,7 +737,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     obs1 <- obs[[1L]]
     del_coef <- coef(object, group = group)[['delay']]
 
-    # avoid smoothing if 1st observation or delay estimated is too close to zer0
+    # avoid smoothing if 1st observation or estimted delay is too close to zer0
     if ( min(obs1, del_coef) < sqrt(.Machine$double.eps) ) return(rep_len(del_coef, length.out = R))
 
     stopifnot( is.function(object$objFun) )
@@ -749,15 +749,15 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     if (length(del_ind) > 1L) del_ind <- del_ind[[groupIdx]]
 
 
+    # look at differences of first observations
     obs_d <- diff(obs[seq_len(min(23L, nObs[[groupIdx]]))])
-    obs_d <- obs_d[obs_d>0L]
-    obs_d <- if (! length(obs_d)) .0001 else sort(obs_d)
+    obs_d <- obs_d[is.finite(obs_d) & obs_d>0L] #get rid of ties
+    obs_d <- if (! length(obs_d)) .0001 else min(obs_d)
 
     # candidate region for delay parameters
     #+min(..) ensures that we are not too close at obs1, otherwise for MLE we have only a single point
     #+ del_coef - (obs1 - del_coef) = 2 * del_coef - obs1
-    del_interv <- c(low = max(0L, min(del_coef - (obs1 - del_coef),
-                                      del_coef - obs_d[[1L]],
+    del_interv <- c(low = max(0L, min(del_coef - (obs1 - del_coef), del_coef - obs_d,
                                       obs1 - .0001, obs1 * .9999, na.rm = TRUE)),
                     high = obs1)
 
@@ -772,27 +772,25 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           # fixing the parameter estimates other than delay
                           objVal = purrr::map_dbl(.x = delay,
                                                   .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
-                                                                       aggregated = FALSE)[[groupIdx]])) %>%
-      # keep last entry as it is the MLE-estimate for delay
-      # drop last entry as it corresponds to delay equal to first observation where objective function explodes
-      #dplyr::slice_head(n = -1L) %>%
-      dplyr::mutate(
-        # QQQ check objective value is always !>= 0! >>TTT<< add test!
-        # rel. change to optimal value
-        objValInv = (object$val - objVal) / (object$val+.01),
-        # shift upwards into non-negative area and standardize
-        objValInv = objValInv - min(objValInv),
-        # scale to be between 0 and 1
-        objValInv = (objValInv / (max(objValInv, na.rm = TRUE) + .01))**(1/(smd_factor+.01)), #(sd(objValInv, na.rm = TRUE)+.01),
-        # empirical cumulative numbers for sampling
-        cumSum0 = cumsum(objValInv),
-        # scale cumSum0 to 1.
-        # lag: have it start with 0 and end with a single 1 (the last objValInv is per definitionem 0)
-        cumSum = dplyr::lag(cumSum0 / max(cumSum0), n = 1L, default = 0))
+                                                                       aggregated = FALSE)[[groupIdx]]))
 
-    #delayStep <- delayParsDF$delay[[2L]] - delayParsDF$delay[[1L]]
-    # rightmost.closed = TRUE for the unlikely case that we draw a 1 by runif
-    delayCandDF$delay[findInterval(x = runif(R), vec = delayCandDF$cumSum, rightmost.closed = TRUE)]
+      # we like to drop last entry (delay = 1st observation) as objective function tends to explode
+      # but we have to keep last entry if it corresponds to the delay estimate (e.g., as is the case for MLE0-fitting)
+    if (delayCandDF$delay[NROW(delayCandDF)] > del_coef) delayCandDF <- delayCandDF[-NROW(delayCandDF),, drop = FALSE]
+    # relative change to optimal value, will be negative as objective function is minimized
+    delayCandDF$objValInv <- (object$val - delayCandDF$objVal) / (object$val+.01)
+    # shift upwards into non-negative area
+    delayCandDF$objValInv <- delayCandDF$objValInv - min(delayCandDF$objValInv, na.rm = TRUE)
+    # scale to be between 0 and 1
+    delayCandDF$objValInv <- (delayCandDF$objValInv / (max(delayCandDF$objValInv, na.rm = TRUE) + .01))**(1L/(smd_factor+.01))
+    delayCandDF$cumSum0 <- cumsum(delayCandDF$objValInv)
+    # scale cumSum0 to 1.
+    delayCandDF$cumSum <- delayCandDF$cumSum0 / max(delayCandDF$cumSum0)
+    # lag-1: have it start with 0 and end with a single 1 (the last objValInv is most often 0 as)
+    delayCandDF$cumSum <- c(0L, delayCandDF$cumSum[-NROW(delayCandDF)])
+
+    # rightmost.closed = TRUE for the unlikely/impossible?! case that we draw a 1 by runif
+    delayCandDF$delay[findInterval(x = stats::runif(R), vec = delayCandDF$cumSum, rightmost.closed = TRUE)]
   }
 
   delayCandX <- if (smooth_delay) getSMDCandidates(group = 'x')
