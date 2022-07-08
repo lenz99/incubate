@@ -13,7 +13,7 @@ library('incubate')
 stopifnot( packageVersion('incubate') >= '1.1.9.9000' )
 cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
 
-library('dplyr')
+library('dplyr', warn.conflicts = FALSE)
 library('purrr')
 library('tidyr', warn.conflicts = FALSE)
 library('tibble')
@@ -97,7 +97,7 @@ if (mySeed > 0L) set.seed(mySeed)
 
 simSetting <- tidyr::expand_grid(n_x = 8L, #c(8, 10, 12),
                                  delay_x = 5,
-                                 delay_y = c(5, 8, 10, 15), #, 20, 100, 1000),
+                                 delay_y = c(5, 7, 9, 11, 13, 15), #, 20, 100, 1000),
                                  scale_x = c(5, 10), #c(1, 2, 5),
                                  scale_ratio = c(2, 1, .5),
                                  # effectively filter for distribution
