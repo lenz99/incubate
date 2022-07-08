@@ -800,6 +800,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     stopifnot(!twoGr) # for the time being only single group calls are supported!
     boot::boot(data = object$data,
                statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distribution,
+                                                           ties = attr(object$objFun, 'ties', exact = TRUE),
                                                            method = object$method, bind = object$bind)),
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
@@ -819,7 +820,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                         x <- (if (twoGr) object$data$x else object$data)[sample.int(n = nObs[[1L]], replace = TRUE)]
                         y <- if (twoGr) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
 
-                        coef(delay_model(x=x, y=y, distribution = object$distribution, method = object$method, bind = object$bind))
+                        coef(delay_model(x=x, y=y, distribution = object$distribution,
+                                         ties = attr(object$objFun, 'ties', exact = TRUE),
+                                         method = object$method, bind = object$bind))
                       },
                       parametric = {
                         # generate data from the fitted model
@@ -843,7 +846,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           x <- rlang::exec(ranFun, !!! ranFunArgsX)
                           y <- if (twoGr) rlang::exec(ranFun, !!! ranFunArgsY)
 
-                          coef(delay_model(x=x, y=y, distribution = object$distribution, method = object$method, bind = object$bind))
+                          coef(delay_model(x=x, y=y, distribution = object$distribution,
+                                           ties = attr(object$objFun, 'ties', exact = TRUE),
+                                           method = object$method, bind = object$bind))
                         }
                       },
                       stop('Unkown bootstrap data generation type!')
@@ -854,7 +859,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     # more clear and shorter but less efficient!
     # future.apply::future_vapply(simulate(object, nsim = R), FUN.VALUE = double(length(cf)),
-    #                             FUN = function(da) coef(delay_model(x=da, distribution = object$distribution, bind = object$bind)))
+    #  FUN = \(d) coef(delay_model(x=d, distribution = object$distribution, ties = attr(object$objFun, 'ties', exact = TRUE), method = object$method, bind = object$bind)))
 
   }
 }
