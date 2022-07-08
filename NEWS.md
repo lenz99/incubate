@@ -1,9 +1,11 @@
-# incubate 1.1.9.9001
+# incubate 1.1.9.9007
 * development version
 * check for minimal size of data and fail early if not enough observations
 * test_diff: test-statistic gets lower bound of 0 enforced (a restricted model can not have better fit than unrestricted model)
 * include simulation R-scripts in package (under inst/scripts/ folder)
-* rename 'MSE' to 'MPSE' (as the term MSE has already other meanings)
+* rename methods:
+    * 'MSE' => 'MPSE' (as the term MSE has already other meanings)
+    * 'MLE' => 'MLE0' (to indicate that this is the standard MLE that is not appropriate for delay models)
 
 
 # incubate 1.1.9

@@ -126,7 +126,7 @@ simSetting <- tidyr::expand_grid(n = c(5, 8, 10, 12, 20), #, 50, 100), # low n m
                                  shape = unique(case_when(
                                    myDist == 'exponential' ~ 1,
                                    myDist == 'weibull' ~ c(.5, 2))),
-                                 method = c('MPSE', 'MLE'),
+                                 method = c('MPSE', 'MLE0'),
                                  bs_data = c('parametric', 'ordinary'),
                                  smd_factor = c(0, .1, 0.25, 0.5, 0.75, 1, 2),
                                  implement = c('own', 'boot'),

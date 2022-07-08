@@ -24,14 +24,14 @@ test_that("Fit delayed Exponentials", {
   expect_equal(coef_exp[[1L]], expected = 9, tolerance = .04)
   expect_equal(coef_exp[[2L]], expected = 0.5, tolerance = .4)
 
-  fd_exp_MLE <- delay_model(xx, distribution = 'expon', method = 'MLE')
-  expect_identical(length(fd_exp_MLE$data), expected = 16L)
-  expect_identical(length(coef(fd_exp_MLE)), expected = 2L)
-  expect_identical(coef(fd_exp_MLE)[['delay']], expected = xx[[1L]])
+  fd_exp_MLE0 <- delay_model(xx, distribution = 'expon', method = 'MLE0')
+  expect_identical(length(fd_exp_MLE0$data), expected = 16L)
+  expect_identical(length(coef(fd_exp_MLE0)), expected = 2L)
+  expect_identical(coef(fd_exp_MLE0)[['delay']], expected = xx[[1L]])
   # MLE's later delay is compensated with higher estimated rate
-  expect_gt(coef(fd_exp_MLE)[['rate']], expected = coef_exp[['rate']])
+  expect_gt(coef(fd_exp_MLE0)[['rate']], expected = coef_exp[['rate']])
 
-  expect_identical(purrr::chuck(fd_exp_MLE, 'optimizer', 'convergence'), expected = 0L)
+  expect_identical(purrr::chuck(fd_exp_MLE0, 'optimizer', 'convergence'), expected = 0L)
 
   set.seed(20220429)
   yy <- rexp_delayed(27L, delay = 10.2, rate = .9)

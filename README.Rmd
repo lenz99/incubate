@@ -24,10 +24,10 @@ set.seed(123L)
 
 In survival analysis, one sometimes encounters situations where events only start to occur after a certain delay since entry time and this delay varies for different treatments or groups.
 While parametric delay models, like the three-parameter Weibull distribution, might adequately describe this process the estimation of delay via standard maximum likelihood is severely biased in small samples.
-The R-package `incubate` employs an alternative estimation method called *maximum spacing estimation (MSE)* to estimate delay and other parameters in a one or two group setting.
-Building on MSE, `incubate` can
+The R-package `incubate` employs an alternative estimation method called *maximum product of spacings estimation (MPSE)* to estimate delay and other parameters in a one or two group setting.
+Building on MPSE, `incubate` can
 
-1. calculate confidence intervals for these model parameters _and_
+1. calculate bootstrap confidence intervals for these model parameters _and_
 2. compare the survival experience of two groups within this statistical model with respect to model parameters.
 
 
@@ -37,7 +37,7 @@ The `incubate`-package provides the delayed exponential distribution as special 
 We draw random samples corresponding to two groups with different model parameters.
 
 ```{r example_gen}
-library(incubate)
+library("incubate")
 
 # simulate data from exponential distribution with delay
 x <- rexp_delayed(n = 13, delay = 1.0, rate = 0.8)

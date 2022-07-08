@@ -36,18 +36,19 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
 #'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
-#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`
+#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLE0` is the standard MLE-method, calculating the likelihood function as the product of density values
 #' @param distribution character(1). delayed distribution family
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param ties character. How to handle ties within data of a group.
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters
-objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE'), distribution = c("exponential", "weibull"), bind=NULL,
+objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = c("exponential", "weibull"), bind=NULL,
                              ties=c('equidist', 'density', 'random', 'none'), verbose = 0L) {
 
   # setup ----
   twoGr <- ! is.null(y)
   stopifnot( is.numeric(x), length(x) > 0L, ! twoGr || is.numeric(y) && length(y) > 0L )
+  method <- toupper(method)
   method <- match.arg(method)
   distribution <- match.arg(distribution)
   stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1L )
@@ -86,7 +87,7 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE'), distribution = c
 
     # tie break
     # || ties == 'groupedML') # groupedML not implemented yet
-    if (method == 'MLE' || ties %in% c('none', 'density') ) return(obs)
+    if (startsWith(method, 'MLE') || ties %in% c('none', 'density') ) return(obs)
 
     diffobs <- diff(obs)
     stopifnot( all(diffobs >= 0L) ) # i.e. sorted obs
@@ -364,7 +365,7 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE'), distribution = c
                if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
              }
            },
-           MLE = {
+           MLE0 = {
              stopifnot( ! twoGr )
              nObs <- length(x)
              xc <- x - pars[['delay']]
@@ -390,11 +391,11 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE'), distribution = c
   attr(objFun, which = "ties") <- ties
 
   # attach analytical solution for MLE
-  if ( method == 'MLE' && ! twoGr && distribution == 'exponential' ){
+  if ( method == 'MLE0' && ! twoGr && distribution == 'exponential' ){
     attr(objFun, which = 'opt') <- list(par = c(delay = x[[1L]], rate = 1L/(mean(x) - x[[1L]])),
                                         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
                                         convergence = 0L,
-                                        message = 'analytic solution for MLE',
+                                        message = "analytic solution for standard MLE ('MLE0')",
                                         counts = 1L)
   }
 
@@ -402,7 +403,7 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE'), distribution = c
 }
 
 
-#' Fit optimal parameters according to the objective function (either MPSE or MLE).
+#' Fit optimal parameters according to the objective function (either MPSE or MLE0).
 #'
 #' The objective function carries the given data in its environment and it is to be minimized.
 #' R's standard routine `stats::optim` does the numerical optimization, using numerical derivatives.
@@ -481,15 +482,17 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
-#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLE' = maximum likelihood estimation
+#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLE0' = standard maximum likelihood estimation
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param ties character. How to handle ties.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, distribution = c("exponential", "weibull"), method = c('MPSE', 'MLE'), bind=NULL,
-                        ties=c('equidist', 'density', 'random'), optim_args=NULL, verbose = 0) {
+delay_model <- function(x = stop('Specify observations in sample!'), y = NULL,
+                        distribution = c("exponential", "weibull"), method = c('MPSE', 'MLE0'),
+                        bind=NULL, ties=c('equidist', 'density', 'random'),
+                        optim_args=NULL, verbose = 0) {
 
   # unpack x if it is a list of two vectors
   if (is.list(x)){
@@ -504,10 +507,11 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
 
   distribution <- match.arg(distribution)
   method <- toupper(method)
+  if (length(method) == 1L && method == 'MSE') method <- 'MPSE'
   method <- match.arg(method)
   ties <- match.arg(ties)
 
-  if (method == 'MLE' && twoGr ) {
+  if (startsWith(method, 'MLE') && twoGr ) {
       warning('MLE fitting is currently only supported for single group setting!', call. = FALSE)
       return(invisible(NULL))
   } # MLE
@@ -561,7 +565,7 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL, d
 print.incubate_fit <- function(x, ...){
   coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
-                      "Fit a delayed {distribution} through {c('Maximum Product of Spacings Estimation (MPSE)', 'Maximum Likelihood Estimation (MLE)')[[1L+(method=='MLE')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
+                      "Fit a delayed {distribution} through {c('Maximum Product of Spacings Estimation (MPSE)', 'standard Maximum Likelihood Estimation (MLE0)')[[1L+(method=='MLE0')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
@@ -572,7 +576,6 @@ print.incubate_fit <- function(x, ...){
 #' @param group character string to request the canonical parameter for one group
 #' @param ... further arguments, currently not used.
 #' @return named coefficient vector
-#' @importFrom stats coef
 #' @export
 coef.incubate_fit <- function(object, group = NULL, ...){
   #stopifnot( inherits(object, "incubate_fit") )
@@ -596,7 +599,6 @@ summary.incubate_fit <- function(object, ...){
 #' @param verbose integer flag. Requested verbosity during `delay_fit`
 #' @param ... further arguments, currently not used.
 #' @return The updated fitted object of class `incubate_fit`
-#' @importFrom stats update
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
@@ -672,8 +674,6 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 }
 
 
-#' S3-method `simulate` for an `incubate`-model (of class `incubate_fit`)
-#' @importFrom stats simulate
 #' @export
 simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
   stopifnot( inherits(object, 'incubate_fit'))

@@ -457,7 +457,6 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which might be enough for power analysis.
 #' @param nRange integer. Admissible range for sample size when power is pre-specified and sample size is requested.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
-#' @importFrom rlang .data
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
                        test = c('bootstrap', 'pearson', 'moran', 'ad', 'lr', 'lr_pp'),

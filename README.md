@@ -12,11 +12,12 @@ delay varies for different treatments or groups. While parametric delay
 models, like the three-parameter Weibull distribution, might adequately
 describe this process the estimation of delay via standard maximum
 likelihood is severely biased in small samples. The R-package `incubate`
-employs an alternative estimation method called *maximum spacing
-estimation (MSE)* to estimate delay and other parameters in a one or two
-group setting. Building on MSE, `incubate` can
+employs an alternative estimation method called *maximum product of
+spacings estimation (MPSE)* to estimate delay and other parameters in a
+one or two group setting. Building on MPSE, `incubate` can
 
-1.  calculate confidence intervals for these model parameters *and*
+1.  calculate bootstrap confidence intervals for these model parameters
+    *and*
 2.  compare the survival experience of two groups within this
     statistical model with respect to model parameters.
 
@@ -27,7 +28,7 @@ special case of the delayed Weibull distribution. We draw random samples
 corresponding to two groups with different model parameters.
 
 ``` r
-library(incubate)
+library("incubate")
 
 # simulate data from exponential distribution with delay
 x <- rexp_delayed(n = 13, delay = 1.0, rate = 0.8)
@@ -52,9 +53,9 @@ comparisons in a two group setting.
 ``` r
 # confidence interval for delay-parameters
 confint(fm, parm = c('delay.x', 'delay.y'))
-#>            2.5%  97.5%
-#> delay.x 0.85443 1.2627
-#> delay.y 1.37808 1.9318
+#>           2.5%  97.5%
+#> delay.x 0.8224 1.1097
+#> delay.y 1.3684 1.7700
 
 # test on difference in delay
 # for real applications use R>=1000 bootrap draws

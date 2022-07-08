@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{delay_fit}
 \alias{delay_fit}
-\title{Fit optimal parameters according to the objective function (either MPSE or MLE).}
+\title{Fit optimal parameters according to the objective function (either MPSE or MLE0).}
 \usage{
 delay_fit(objFun, optim_args = NULL, verbose = 0)
 }

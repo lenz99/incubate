@@ -8,7 +8,7 @@ or according to maximum likelihood estimation (MLE).}
 objFunFactory(
   x,
   y = NULL,
-  method = c("MPSE", "MLE"),
+  method = c("MPSE", "MLE0"),
   distribution = c("exponential", "weibull"),
   bind = NULL,
   ties = c("equidist", "density", "random", "none"),
@@ -20,7 +20,7 @@ objFunFactory(
 
 \item{y}{numeric. observations in second group.}
 
-\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}}
+\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLE0} is the standard MLE-method, calculating the likelihood function as the product of density values}
 
 \item{distribution}{character(1). delayed distribution family}
 
