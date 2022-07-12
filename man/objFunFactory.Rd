@@ -2,8 +2,8 @@
 % Please edit documentation in R/delay_estimation.R
 \name{objFunFactory}
 \alias{objFunFactory}
-\title{Factory method for objective function, either according to maximum product of spacings estimation (MPSE)
-or according to maximum likelihood estimation (MLE).}
+\title{Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
+or according to standard maximum likelihood estimation ('MLE0').}
 \usage{
 objFunFactory(
   x,
@@ -11,7 +11,7 @@ objFunFactory(
   method = c("MPSE", "MLE0"),
   distribution = c("exponential", "weibull"),
   bind = NULL,
-  ties = c("equidist", "density", "random", "none"),
+  ties = c("density", "equidist", "random", "error"),
   verbose = 0L
 )
 }

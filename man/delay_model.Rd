@@ -5,12 +5,12 @@
 \title{Fit a delayed Exponential or Weibull model to one or two given sample(s).}
 \usage{
 delay_model(
-  x = stop("Specify observations in sample!"),
+  x = stop("Specify observations!", call. = FALSE),
   y = NULL,
   distribution = c("exponential", "weibull"),
   method = c("MPSE", "MLE0"),
   bind = NULL,
-  ties = c("density", "equidist", "random"),
+  ties = c("density", "equidist", "random", "error"),
   optim_args = NULL,
   verbose = 0
 )

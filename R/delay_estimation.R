@@ -25,8 +25,8 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
   c(par.gr, par[bind])[oNames]
 }
 
-#' Factory method for objective function, either according to maximum product of spacings estimation (MPSE)
-#' or according to maximum likelihood estimation (MLE).
+#' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
+#' or according to standard maximum likelihood estimation ('MLE0').
 #'
 #' Given the observed data this factory method produces an MPSE objective function implementation
 #' which is the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
@@ -43,7 +43,7 @@ getPars <- function(par, group = "x", twoGr, oNames, bind) {
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters
 objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = c("exponential", "weibull"), bind=NULL,
-                             ties=c('equidist', 'density', 'random', 'none'), verbose = 0L) {
+                             ties=c('density', 'equidist', 'random', 'error'), verbose = 0L) {
 
   # setup ----
   twoGr <- ! is.null(y)
@@ -85,7 +85,7 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
 
     # tie break
     # || ties == 'groupedML') # groupedML not implemented yet
-    if (startsWith(method, 'MLE') || ties %in% c('none', 'density') ) return(obs)
+    if (startsWith(method, 'MLE') || ties == 'density' ) return(obs)
 
     diffobs <- diff(obs)
     stopifnot( all(diffobs >= 0L) ) # i.e. sorted obs
@@ -100,10 +100,13 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
                  'in {sum(diff(tiesDiffInd)>1L) + 1L} group(s) within data vector.\n'))
       }
 
+      if ( ties == 'error' ) stop('Ties within data are not allowed!', call. = FALSE)
+
       roundOffPrecision <- estimRoundingError(obs, maxObs = 1000L)
       if (verbose > 0L){
         cat(glue("Round-off error has magnitude {roundOffPrecision}\n"))
       }
+
 
       # rounding radius can't be wider than smallest observed diff.
       # plogis to mitigate the effect of sample size: the larger the sample the more we can 'trust' the observed minimal diff
@@ -123,7 +126,7 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
         obs[obsInd] <- obs[obsInd] + if (ties == 'random') {
           # sort ensures that data after tie-break is still sorted from small to large
           sort(stats::runif(n = length(obsInd), min = -rr, max = +rr)) } else {
-            # ties == 'equidist'
+            stopifnot( ties == 'equidist' )
             # use evenly spaced observations to break tie as proposed by Cheng (1989) on Moran test statistic
             #+They first use the ties = 'density' approach for initial estimation of parameters for Moran's statistic
             seq.int(from = -rr, to = +rr, length.out = length(obsInd))
@@ -477,6 +480,32 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
   optObj
 }
 
+
+#' Transform observed data according to parameters of distribution.
+#' @param x data vector of 1st group
+#' @param y data vector of 2nd group
+#' @param distribution name of distribution
+#' @param par parameter vector
+#' @param bind names of parameter that are bound together in a two-group scenario
+#' @return transformed data, either as atomic vector for one-group scenario or as a list
+transformData <- function(x = stop('Specify observations!', call. = FALSE), y = NULL, distribution, par, bind) {
+  cdfFun <- getDist(distribution, type = "cdf")
+  oNames <- getDist(distribution, type = "param")
+
+  twoGr <- !is.null(y) && is.numeric(y) && length(y)
+
+  tr <- purrr::exec(cdfFun,
+                    !!! c(list(q=x), getPars(par = par, group = 'x', twoGr = twoGr, oNames = oNames, bind = bind)))
+  if (twoGr){
+    tr <- list(x = tr,
+               y = purrr::exec(cdfFun,
+                               !!! c(list(q=y), getPars(par = par, group = 'y', twoGr = twoGr, oNames = oNames, bind = bind))))
+  }
+
+  tr
+}
+
+
 #' Fit a delayed Exponential or Weibull model to one or two given sample(s).
 #'
 #' Maximum product spacing is used to fit the parameters.
@@ -491,9 +520,9 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x = stop('Specify observations in sample!'), y = NULL,
+delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), method = c('MPSE', 'MLE0'),
-                        bind=NULL, ties=c('density', 'equidist', 'random'),
+                        bind=NULL, ties=c('density', 'equidist', 'random', 'error'),
                         optim_args=NULL, verbose = 0) {
 
   # unpack x if it is a list of two vectors
@@ -527,7 +556,7 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL,
   if (twoGr) { y <- attr(objFun, 'y', exact = TRUE) }
 
   # parameter names for chosen distribution
-  oNames <- getDist(distribution, type = 'param')
+  oNames <- getDist(distribution, type = "param")
   # check that there is enough data (here we also look at bind= if twoGr)
   if (!twoGr && length(x) < length(oNames) || twoGr && length(x) + length(y) < 2L * length(oNames) - length(bind) && min(length(x), length(y)) < length(oNames) - length(bind)) {
     warning('Too few valid observations provided!', call. = FALSE)
@@ -539,23 +568,16 @@ delay_model <- function(x = stop('Specify observations in sample!'), y = NULL,
 
   if (is.null(optObj)) return(invisible(NULL))
 
-  # get CDF-transformed data
-  data_tr <- purrr::exec(getDist(distribution, type = "cdf"),
-                         !!! c(list(q=x), getPars(par = optObj$par, group = 'x', twoGr = twoGr, oNames = oNames, bind = bind)))
-  if (twoGr){
-    data_tr <- list(x = data_tr,
-                    y = purrr::exec(getDist(distribution, type = "cdf"),
-                                    !!! c(list(q=y), getPars(par = optObj$par, group = 'y', twoGr = twoGr, oNames = oNames, bind = bind))))
-  }
 
   structure(
     list(
       data = if (twoGr) list(x = x, y = y) else x,
-      data_transf = data_tr, # store CDF-transformed data
+      data_transf = transformData(x = x, y = y, distribution = distribution, par = optObj$par, bind = bind), # store CDF-transformed data
       distribution = distribution,
       method = method,
       twoGroup = twoGr,
       bind = bind,
+      ties = ties,
       objFun = objFun,
       par = optObj$par,
       val = optObj$value, ##objFun(optObj$par),
@@ -604,24 +626,23 @@ summary.incubate_fit <- function(object, ...){
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
-  objFun <- object[['objFun']]
+  stopifnot( all(c("objFun", "twoGroup", "data", "data_transf", "par", "val", "optimizer") %in% names(object)) )
 
   ## fit model with given optim_args
-  optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
+  optObj <- delay_fit(object[["objFun"]], optim_args = optim_args, verbose = verbose)
 
   if (is.null(optObj)) return(invisible(NULL))
 
-  structure(
-    list(
-      data = object[['data']],
-      distribution = object[['distribution']],
-      twoGroup = object[['twoGroup']],
-      bind = object[['bind']],
-      objFun = objFun,
-      par = optObj$par,
-      val = optObj$value, ##objFun(optObj$par),
-      optimizer = optObj[c('convergence', 'message', 'counts')]
-    ), class = "incubate_fit")
+  twoGr <- object[["twoGroup"]]
+  # update all relevant fields in the list
+  object[c("data_transf", "par", "val", "optimizer")] <- list(data_transf = transformData(x = if (twoGr) object[["data"]][["x"]] else object[["data"]],
+                                                                             y = if (twoGr) object[["data"]][["y"]] else NULL,
+                                                                             distribution = object[["distribution"]],
+                                                                             par = optObj$par, bind = object[["bind"]]),
+                                                 par = optObj$par, val = optObj$value,
+                                                 optimizer = optObj[c("convergence", "message", "counts")])
+
+  object
 }
 
 #' @export
@@ -753,7 +774,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     # look at differences of first observations
     obs_d <- diff(obs[seq_len(min(23L, nObs[[groupIdx]]))])
-    obs_d <- obs_d[is.finite(obs_d) & obs_d>0L] #get rid of ties
+    obs_d <- obs_d[is.finite(obs_d) & obs_d > 0L] #get rid of ties
     obs_d <- if (! length(obs_d)) .0001 else min(obs_d)
 
     # candidate region for delay parameters
@@ -802,7 +823,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     stopifnot(!twoGr) # for the time being only single group calls are supported!
     boot::boot(data = object$data,
                statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distribution,
-                                                           ties = attr(object$objFun, 'ties', exact = TRUE),
+                                                           ties = object$ties,
                                                            method = object$method, bind = object$bind)),
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
@@ -823,7 +844,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                         y <- if (twoGr) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
 
                         coef(delay_model(x=x, y=y, distribution = object$distribution,
-                                         ties = attr(object$objFun, 'ties', exact = TRUE),
+                                         ties = object$ties,
                                          method = object$method, bind = object$bind))
                       },
                       parametric = {
@@ -849,7 +870,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           y <- if (twoGr) rlang::exec(ranFun, !!! ranFunArgsY)
 
                           coef(delay_model(x=x, y=y, distribution = object$distribution,
-                                           ties = attr(object$objFun, 'ties', exact = TRUE),
+                                           ties = object$ties,
                                            method = object$method, bind = object$bind))
                         }
                       },
@@ -861,7 +882,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     # more clear and shorter but less efficient!
     # future.apply::future_vapply(simulate(object, nsim = R), FUN.VALUE = double(length(cf)),
-    #  FUN = \(d) coef(delay_model(x=d, distribution = object$distribution, ties = attr(object$objFun, 'ties', exact = TRUE), method = object$method, bind = object$bind)))
+    #  FUN = \(d) coef(delay_model(x=d, distribution = object$distribution, ties = object$ties, method = object$method, bind = object$bind)))
 
   }
 }

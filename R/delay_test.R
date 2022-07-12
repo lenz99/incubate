@@ -184,7 +184,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
-                      ties = c('equidist', 'density', 'random'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr', 'lr_pp'),
+                      ties = c('density', 'equidist', 'random', 'error'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr', 'lr_pp'),
                       verbose = 0) {
   STRICT <- TRUE #accept models only if they converged flawlessly, i.e., convergence=0
   TOL_CRIT <- 1e-7
