@@ -53,8 +53,6 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
   distribution <- match.arg(distribution)
   stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1L )
   ties <- match.arg(ties)
-  # tie-breaking via density is difficult for two-group situation
-  stopifnot( ties != 'density' || !twoGr )
 
   #standard ('original') names of distribution
   oNames <- getDist(distribution, type = "param", twoGroup = FALSE, bind = NULL)
@@ -315,7 +313,10 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
   # @return n+1 cumulative diffs on log-scale
   getCumDiffs <- function(pars, group){
-    obs <- get(group, mode = 'numeric') ###XXX specify environment?! enclosing environment of this function. use dynGet?
+    # get() would (by default) start looking in the execution environment of getCumDiffs and would find the object in its parent
+    # or: env = rlang::env_parent() # parent of caller env is (normally!?) the function-env
+    # or: env = rlang::fn_env(getCumDiffs) # referring directly to the function environment
+    obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
     pars.gr <- getPars(pars, group = group, twoGr = twoGr, oNames = oNames, bind = bind)
 
     # calculate spacings
@@ -330,7 +331,7 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
     #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
     ind_t <- which(diff(obs) == 0L)
     if ( length(ind_t) ){
-      stopifnot( ties == 'density' ) # other tie-strategies have already been dealt with ties in preprocess
+      stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess*
       # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
       cumDiffs[1L+ind_t] <- purrr::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
     } #fi
@@ -366,6 +367,7 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
              }
            },
            MLE0 = {
+             # MLE0 is currently only implemented for single group situation
              stopifnot( ! twoGr )
              nObs <- length(x)
              xc <- x - pars[['delay']]
