@@ -27,31 +27,6 @@ getPars <- function(par, group = "x", twoGroup, oNames, bind) {
   c(par.gr, par[bind])[oNames]
 }
 
-#' Transform observed data according to parameters of distribution.
-#' @param x data vector of 1st group
-#' @param y data vector of 2nd group
-#' @param distribution name of distribution
-#' @param par parameter vector
-#' @param bind names of parameter that are bound together in a two-group scenario
-#' @return transformed data, either as atomic vector for one-group scenario or as a list
-transformData <- function(x = stop('Specify observations!', call. = FALSE), y = NULL, distribution, par, bind) {
-  cdfFun <- getDist(distribution, type = "cdf")
-  oNames <- getDist(distribution, type = "param")
-
-  twoGroup <- !is.null(y) && is.numeric(y) && length(y)
-
-  tr <- purrr::exec(cdfFun,
-                    !!! c(list(q=x), getPars(par = par, group = 'x', twoGroup = twoGroup, oNames = oNames, bind = bind)))
-  if (twoGroup) {
-    tr <- list(x = tr,
-               y = purrr::exec(cdfFun,
-                               !!! c(list(q=y), getPars(par = par, group = 'y', twoGroup = twoGroup, oNames = oNames, bind = bind))))
-  }
-
-  tr
-}
-
-
 
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
 #' or according to standard maximum likelihood estimation ('MLE0').
@@ -588,8 +563,6 @@ delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NU
   structure(
     list(
       data = if (twoGroup) list(x = x, y = y) else x,
-      # store CDF-transformed data
-      data_transf = transformData(x = x, y = y, distribution = distribution, par = optObj$par, bind = bind),
       distribution = distribution,
       method = method,
       twoGroup = twoGroup,
@@ -598,7 +571,7 @@ delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NU
       objFun = objFun,
       par = optObj$par,
       val = optObj$value, ##objFun(optObj$par),
-      optimizer = optObj[c('convergence', 'message', 'counts', 'optim_args')]),
+      optimizer = purrr::compact(optObj[c('convergence', 'message', 'counts', 'optim_args')])),
     class = "incubate_fit")
 }
 
@@ -643,21 +616,17 @@ summary.incubate_fit <- function(object, ...){
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
-  stopifnot( all(c("objFun", "twoGroup", "data", "data_transf", "par", "val", "optimizer") %in% names(object)) )
+  stopifnot( all(c("objFun", "twoGroup", "data", "par", "val", "optimizer") %in% names(object)) )
 
   ## fit model with given optim_args
   optObj <- delay_fit(object[["objFun"]], optim_args = optim_args, verbose = verbose)
 
   if (is.null(optObj)) return(invisible(NULL))
 
-  twoGroup <- object[["twoGroup"]]
   # update all relevant fields in the list
-  object[c("data_transf", "par", "val", "optimizer")] <- list(data_transf = transformData(x = if (twoGroup) object[["data"]][["x"]] else object[["data"]],
-                                                                             y = if (twoGroup) object[["data"]][["y"]] else NULL,
-                                                                             distribution = object[["distribution"]],
-                                                                             par = optObj$par, bind = object[["bind"]]),
-                                                 par = optObj$par, val = optObj$value,
-                                                 optimizer = optObj[c("convergence", "message", "counts", "optim_args")])
+  object[c("par", "val", "optimizer")] <- list(par = optObj$par, val = optObj$value,
+                                               # drop NULLs from list (e.g. if optim_args is not present)
+                                               optimizer = purrr::compact(optObj[c("convergence", "message", "counts", "optim_args")]))
 
   object
 }
@@ -716,7 +685,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 
 #' @export
 simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
-  stopifnot( inherits(object, 'incubate_fit'))
+  stopifnot(inherits(object, 'incubate_fit'))
 
   ranFun <- getDist(object$distribution, type = "r")
   nObs <- if (isTRUE(object$twoGroup)) lengths(object$data) else length(object$data)
@@ -1087,4 +1056,31 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
 
   ci[parm, , drop = FALSE]
+}
+
+#' Transform observed data to unit interval
+#'
+#' The transformation is the probability integral transform. It uses the cumulative distribution function with the estimated parameters of the model fit.
+#' All available data in the model fit is transformed.
+#'
+#' @note
+#' This S3-method implementation is quite different from its default method that allows for non-standard evaluation on data frames, primarily for interactive use.
+#' But the name `transform` just fits so nicely to the intended purpose that it is re-used for the probability integral transform.
+#'
+#' @param `_data` a fitted model object of class `incubate_fit`
+#' @param ... currently ignored
+#' @return The transformed data, either a vector (for single group) or a list with entries x and y (in two group scenario)
+#' @export
+transform.incubate_fit <- function(`_data`, ...){
+  stopifnot(inherits(`_data`, "incubate_fit"))
+
+  cdfFun <- getDist(`_data`$distribution, type = "cdf")
+
+  twoGroup <- `_data`$twoGroup
+  x <- if (twoGroup) `_data`$data$x else `_data`$data
+
+  tr <- purrr::exec(cdfFun, !!! c(list(q=x), coef(`_data`, group = 'x')))
+  if (twoGroup) tr <- list(x = tr, y = purrr::exec(cdfFun, !!! c(list(q=`_data`$data$y), coef(`_data`, group = 'y'))))
+
+  tr
 }

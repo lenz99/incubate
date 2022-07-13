@@ -84,11 +84,11 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
            if (twoGroup) {
              nCl <- pmax.int(k/2 + 2L, ceiling(2L * nObs**.4))
              # sum of two chi-square test statistics
-             statist <- c(`X^2` = sum(purrr::map2_dbl(.x = delayFit$data_transf, .y = nCl, .f = testStat_pe)))
+             statist <- c(`X^2` = sum(purrr::map2_dbl(.x = transform(delayFit), .y = nCl, .f = testStat_pe)))
              p_val <- stats::pchisq(q = statist, df = sum(nCl) - k - 2L, lower.tail = FALSE)
            } else {
              nCl <- max(k + 2L, ceiling(2L * nObs**.4))
-             statist <- testStat_pe(datr = delayFit$data_transf, nCl = nCl)
+             statist <- testStat_pe(datr = transform(delayFit), nCl = nCl)
              # inference based on Chi-square distribution.
              # use adjusted degrees of freedom (loose one df for each parameter estimated)
              p_val <- stats::pchisq(q = statist, df = nCl - k - 1L, lower.tail = FALSE)
@@ -110,9 +110,9 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
            }
 
            A2 <- if (twoGroup) {
-             purrr::map2_dbl(.x = delayFit$data_transf, .y = nObs, .f = testStat_ad)
+             purrr::map2_dbl(.x = transform(delayFit), .y = nObs, .f = testStat_ad)
            } else {
-             testStat_ad(datr = delayFit$data_transf, n = nObs)
+             testStat_ad(datr = transform(delayFit), n = nObs)
            }
 
            p_val <- if ( delayFit$distribution == 'exponential' ){
