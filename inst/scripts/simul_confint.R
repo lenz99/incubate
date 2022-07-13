@@ -288,12 +288,14 @@ simfun <- function(dist, n, delay, scale, shape, method, bs_data, smd_factor, im
     # drop NULLs
     purrr::compact() %>%
     # bind results together
-    dplyr::bind_rows(.id = 'run')
+    dplyr::bind_rows(.id = 'run') %>%
+    # mkuhn, 2022-07-13: check for finite value
+    dplyr::filter(is.finite(value))
 
   if (agg){
     ciList <- ciList %>%
       group_by(param, quality, bs_infer, level) %>%
-      summarize(meanv = mean(value, na.rm = TRUE), medianv = median(value, na.rm = TRUE), .groups = 'drop') %>%
+      summarize(nagg = n(), meanv = mean(value, na.rm = TRUE), medianv = median(value, na.rm = TRUE), .groups = 'drop') %>%
       # mean of coverage, median of width
       mutate(mv = if_else(quality == 'covered', true = meanv, false = medianv)) %>%
       dplyr::select(!c(meanv, medianv))
