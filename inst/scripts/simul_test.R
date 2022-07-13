@@ -10,7 +10,9 @@ library('incubate')
 #+ 0.7.6 for GOF-Pvalues for restricted & unrestricted model: e.g. gof_mo0 (was gof_mo) and gof_mo1 (new)
 #+ 0.9.8 for names for P-values have changed: boot => bootstrap, gof_mo0 => moran, etc
 #+ 1.1.9.9000 script is developed as part of the incubate package (not separate as part of the MS)
-stopifnot( packageVersion('incubate') >= '1.1.9.9000' )
+#+ 1.1.9.9014 ties='density' as default now also for tests
+#+ 1.1.9.9016 avoid attributes, use transform() for Pearson/AD GOF tests
+stopifnot( packageVersion('incubate') >= '1.1.9.9016' )
 cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
 
 library('dplyr', warn.conflicts = FALSE)
@@ -27,7 +29,7 @@ TODAY <- Sys.Date()
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
-                                defaults = list(resultsDir = getwd(), dist='exponential', scenario='delayEQ', slice=0, seed=as.integer(TODAY),
+                                defaults = list(resultsDir = getwd(), dist='exponential', scenario='ALL', slice=0, seed=as.integer(TODAY),
                                                 chnkSize=0, workers=5, R=150, mcnrep=100))
 
 
@@ -39,7 +41,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('  --help\t print this help\n')
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --dist=\t specify distribution that governs the data generation\n')
-  cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t DELAYEQ = no difference in delay, DELAYGT = 2nd group y with bigger delay. ALL = both, plus some edge cases.\n')
+  cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\tDELAYEQ = no difference in delay,\n\t\tDELAYGT = 2nd group y with bigger delay.\n\t\tALL = both, plus some edge cases (default)\n')
   cat('  --slice=\t if given, pick only this number of scenarios for the simulation\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. \n')
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios. Default is no chunking (=0).\n')
@@ -271,7 +273,7 @@ addMetaData <- function(da, timeTag) {
   da
 }
 
-DATETIME_TAG <- format(Sys.time(), format = "%Y%m%d_%Hh%Mm%Ss")
+DATETIME_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%Mm%Ss")
 rdsBaseName <- paste0("simRes_test_", DATETIME_TAG)
 rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 

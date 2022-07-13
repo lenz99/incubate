@@ -18,7 +18,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
                                 defaults = list(resultsDir=file.path(getwd(), 'results'),
-                                                resultsName='MS',
+                                                resultsTag='MS',
                                                 type = 'test'))
 
 if (any(c('help', 'h') %in% names(cmdArgs))){
@@ -26,7 +26,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('Parameter options are:\n')
   cat('  --help\t print this help\n')
   cat('  --resultsDir=\t specify the directory where to find and to put the result files. Defaults to directory "results".\n')
-  cat('  --resultsName=\tspecify a name suffix for results file. Default is "MS".\n')
+  cat('  --resultsTag=\tspecify a name suffix for results file. Default is "MS".\n')
   cat('  --type=\t what type of results to gather? "test" (default) or "confint"\n')
   cat('  --removeTemp\t flag to clean temporary results file after they have been saved.\n')
   quit(save = 'no')
@@ -37,8 +37,8 @@ myRemoveTemp <- isTRUE(any(c('r', 'removeTemp') %in% names(cmdArgs)))
 myResultsDir <- cmdArgs[["resultsDir"]]
 stopifnot( is.character(myResultsDir), dir.exists(myResultsDir) )
 
-myResultsName <- cmdArgs[["resultsName"]]
-stopifnot( is.character(myResultsName), length(myResultsName) == 1L, nzchar(myResultsName) )
+myResultsTag <- cmdArgs[["resultsTag"]]
+stopifnot( is.character(myResultsTag), length(myResultsTag) == 1L, nzchar(myResultsTag) )
 
 myType <- cmdArgs[["type"]]
 stopifnot( is.character(myType), length(myType) == 1L, nzchar(myType) )
@@ -65,7 +65,7 @@ RUN_NS <- tidyr::crossing(L1=LETTERS, L2=LETTERS) %>%
 # look at previous results (already saved)
 resData <- NULL
 indOffset <- 0L
-RES_FILEN <- file.path(myResultsDir, paste0('simRes_', myType, '_', myResultsName,'.rds'))
+RES_FILEN <- file.path(myResultsDir, paste0('simRes_', myType, '_', myResultsTag,'.rds'))
 
 if (file.exists(RES_FILEN)){
 	resData <- readRDS(RES_FILEN)
@@ -130,7 +130,7 @@ if (is.null(resData)){
 } else {
 	resDuplicates <- intersect(names(resData), names(resCandidates))
 	if ( length(resDuplicates) ){
-		cat(glue("These temporary result dataframes are already stored in the {myResultsName}-results file:\n  * ",
+		cat(glue("These temporary result dataframes are already stored in the {myResultsTag}-results file:\n  * ",
 		         "{paste(resDuplicates, collapse = '\n  * ')}", .trim = FALSE), "\n\n")
 		cat('Please clean up temporary results files that are already saved in result list, first!\n')
 		q(save='no')
