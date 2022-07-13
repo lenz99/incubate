@@ -4,23 +4,26 @@
 \alias{getPars}
 \title{Extract the parameters for the specified group.}
 \usage{
-getPars(par, group = "x", twoGr, oNames, bind)
+getPars(par, group = "x", twoGroup, oNames, bind)
 }
 \arguments{
 \item{par}{named parameters (as simple vector or as list)}
 
 \item{group}{character. Which group to extract parameters for?}
 
-\item{twoGr}{flag. Is it a two-group setting?}
+\item{twoGroup}{flag. Is it a two-group setting?}
 
 \item{oNames}{character. Original parameter names from distribution.}
 
 \item{bind}{character. Which parameters are bind together in a two-group setting?}
 }
 \value{
-parameter vector for the relevant group
+named vector of parameters from the relevant group
 }
 \description{
+The parameters of the requested group are named using the canonical parameter names of the distribution.
+}
+\details{
 For a one-group setting or when \code{group=NULL} it simply returns the given parameter.
 This is an internal helper function
 used in \code{\link[=coef.incubate_fit]{coef.incubate_fit()}}, \code{\link[=bsDataStep]{bsDataStep()}} and in the factory method \code{\link[=objFunFactory]{objFunFactory()}} below.

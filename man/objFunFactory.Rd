@@ -31,7 +31,7 @@ objFunFactory(
 \item{verbose}{integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.}
 }
 \value{
-the objective function (e.g., the negative MPSE criterion) for given choice of model parameters
+the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or \code{NULL} upon errors
 }
 \description{
 Given the observed data this factory method produces an MPSE objective function implementation
