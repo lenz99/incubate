@@ -36,7 +36,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
                                 defaults = list(resultsDir=getwd(),
-                                                dist='exponential', seed=as.integer(TODAY), bs_data='parametric', smd_factor='all', bs_infer='all',
+                                                dist='exponential', method='MPSE', seed=as.integer(TODAY), bs_data='parametric', smd_factor='all', bs_infer='all',
                                                 implement='own', slice=0, chnkSize=0, workers=6, R=150, mcnrep=100))
 
 
@@ -49,6 +49,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --single/--1\t flag to use only single scenario: n=10, delay=5, shape=.5 for Weibull, scale=5, level=.95\n')
   cat('  --dist=\t specify underlying distribution. It can be either exponential (default) or Weibull (but not both at the same time).\n')
+  cat('  --method=\t specify the estimation method that underlies the confidence interval. MPSE (default) or MLE0 or all.\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. In the past, we used a fixed seed of 12. \n')
   cat('  --bs_data=\t with respect to bootstrap data options, choose a scenario\n')
   cat('  --smd_factor=\t factor for smoothing of delay\n')
@@ -71,6 +72,10 @@ stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
 myDist <- cmdArgs[["dist"]]
 stopifnot( is.character(myDist), length(myDist) == 1L )
 myDist <- match.arg(arg = tolower(myDist), choices = c("exponential", "weibull"))
+
+myMethod <- cmdArgs[["method"]]
+stopifnot( is.character(myMethod), length(myMethod) == 1L )
+myMethod <- match.arg(arg = toupper(myMethod), choices = c('MPSE', 'MLE0', 'ALL'))
 
 myWorkers <- cmdArgs[["workers"]]
 stopifnot( is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L )
@@ -139,6 +144,11 @@ simSetting <- tidyr::expand_grid(n = c(5, 8, 10, 12, 20), #, 50, 100), # low n m
   dplyr::filter(! (bs_infer %in% c('t', 't0', 'normal0') & implement == 'boot'))
 # mkuhn, quick filter
 # dplyr::filter(method == 'MPSE', ! bs_infer %in% c('quantile0', 'normal0', 't0'))
+
+if (myMethod != 'ALL') {
+  simSetting <- simSetting %>%
+    dplyr::filter(method == myMethod)
+}
 
 # first select the inference methods
 if (myBS_infer != 'all') {

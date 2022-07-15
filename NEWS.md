@@ -1,12 +1,12 @@
 # incubate 1.1.9.9007
 * development version
 * check for minimal size of data and fail early if not enough observations
-* test_diff: test-statistic gets lower bound of 0 enforced (a restricted model can not have better fit than unrestricted model)
-* include simulation R-scripts in package (under inst/scripts/ folder)
+* `test_diff`: test-statistic gets lower bound of 0 enforced (a restricted model can not have better fit than unrestricted model)
+* include simulation R-scripts in package under `inst/scripts/` folder. When the package is installed the scripts are found at `scripts/`-directory within the package.
 * rename methods:
     * 'MSE' => 'MPSE' (as the term MSE has already other meanings)
     * 'MLE' => 'MLE0' (to indicate that this is the standard MLE that is not appropriate for delay models)
-
+* rework implementation of objective-function: do not rely on attributes but use the environment of the objective function instead. This means fewer copies of information are made.
 
 # incubate 1.1.9
 * New implementation of delay smoothing: use objective function along candidate delay values to guide in smoothing
