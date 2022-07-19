@@ -29,7 +29,7 @@ TODAY <- Sys.Date()
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
-                                defaults = list(resultsDir = getwd(), dist='exponential', scenario='ALL', slice=0, seed=as.integer(TODAY),
+                                defaults = list(resultsDir = getwd(), dist='exponential', scenario='MS', slice=0, seed=as.integer(TODAY),
                                                 chnkSize=0, workers=5, R=150, mcnrep=100))
 
 
@@ -41,7 +41,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('  --help\t print this help\n')
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --dist=\t specify distribution that governs the data generation\n')
-  cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\tDELAYEQ = no difference in delay,\n\t\tDELAYGT = 2nd group y with bigger delay.\n\t\tALL = both, plus some edge cases (default)\n')
+  cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
   cat('  --slice=\t if given, pick only this number of scenarios for the simulation\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. \n')
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios. Default is no chunking (=0).\n')
@@ -83,7 +83,7 @@ stopifnot( is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L )
 
 myScenario <- cmdArgs[["scenario"]]
 stopifnot( ! is.null(myScenario), is.character(myScenario), length(myScenario) == 1L )
-myScenario <- match.arg(arg = toupper(myScenario), choices = c('DELAYEQ', 'DELAYGT', 'ALL'))
+myScenario <- match.arg(arg = toupper(myScenario), choices = c('DELAYEQ', 'DELAYGT', 'MS', 'ALL'))
 
 myPrint <- isTRUE(any(c('print', 'p') %in% names(cmdArgs)))
 
@@ -114,35 +114,42 @@ simSetting <- simSetting %>%
 
 
 #filter only relevant scale_ratio combinations
+# for exponential:
+# [G1] scale_x = 10 & scale_ratio = 1  (rate_x = .1, rate_ratio = 1)
+# [G2] scale_x =  5 & scale_ratio = 1  (rate_x = .2, rate_ratio = 1)
+# [G3] scale_x =  5 & scale_ratio =  2 [i.e., scale_y = 10]  (rate_x = .2, rate_ratio = .5 [i.e., rate_y = .1])
+# [G4] scale_x = 10 & scale_ratio = .5 [i.e., scale_y =  5]  (rate_x = .1, rate_ratio = 2  [i.e., rate_y = .2])
 # for weibull:
 # dd=0, k=.5|2, scale_x = 10 & scale_ratio = 1
 # dd=5, k=.5|2, scale_x = 10 & scale_ratio = 1
-# for exponential:
-# dd=0, scale_x = 10 & scale_ratio = 1  (rate_x = .1, rate_ratio = 1)
-# dd=5, scale_x = 10 & scale_ratio = 1  (rate_x = .1, rate_ratio = 1)
-# dd=5, scale_x =  5 & scale_ratio = 1  (rate_x = .2, rate_ratio = 1)
-# dd=5, scale_x =  5 & scale_ratio =  2 [i.e., scale_y = 10]  (rate_x = .2, rate_ratio = .5 [i.e., rate_y = .1])
-# dd=5, scale_x = 10 & scale_ratio = .5 [i.e., scale_y =  5]  (rate_x = .1, rate_ratio = 2  [i.e., rate_y = .2])
 
+
+# this contains the cases which are needed in the manuscript
+simFilterMS <- if (isExpon) {
+  simSetting %>%
+    dplyr::filter(dplyr::near(scale_ratio, 1) | dplyr::near(scale_x, 5) & dplyr::near(scale_ratio, 2) |
+                    dplyr::near(scale_x, 10) & dplyr::near(scale_ratio, .5)) } else
+      tibble::tibble(scale_x = 10, scale_ratio = 1)
 
 # filter for target scenario!
 # use all capital letters (see definition of myScenario)
 switch (myScenario,
-        DELAYEQ = { simSetting <- simSetting %>%
-          dplyr::filter(dplyr::near(delay_x, delay_y),
-                        # for both distributions:
-                        dplyr::near(scale_x, 10), dplyr::near(scale_ratio, 1))
+        DELAYEQ = {
+          simSetting <- simSetting %>%
+            dplyr::filter(dplyr::near(delay_x, delay_y))
+                          # # for both distributions:
+                          # dplyr::near(scale_x, 10), dplyr::near(scale_ratio, 1))
         },
 
         DELAYGT = {
-          simFilter <- if (isExpon) {
-            simSetting %>%
-              dplyr::filter(scale_ratio == 1 | scale_ratio == 2 & scale_x == 5 | scale_ratio == .5 & scale_x == 10) } else
-                tibble::tibble(scale_x = 10, scale_ratio = 1)
-
           simSetting <- simSetting %>%
-            dplyr::filter(delay_y > delay_x + 1e-11) %>%
-            dplyr::inner_join(simFilter, by = names(simFilter))
+            dplyr::filter(delay_y > delay_x + 1e-11)
+            #dplyr::inner_join(simFilter, by = names(simFilter))
+        },
+
+        MS = {
+          simSetting <- simSetting %>%
+            dplyr::inner_join(simFilterMS, by = names(simFilterMS))
         },
 
         ALL = { invisible(NULL) }, # keep everything! (also unused border cases)
