@@ -316,7 +316,7 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
               addMetaData(timeTag = DATETIME_TAG),
             file = rdsName)
 
-    if (! inherits( try(infoRDS(rdsName), silent = TRUE), "try-error")){
+    if ( file.exists(rdsName) && (! exists('infoRDS') || ! inherits( try(infoRDS(rdsName), silent = TRUE), "try-error")) ){
       message("Removing ", length(chnkFileNames), " intermediate chunked RDS-files!")
       try(file.remove(chnkFileNames))
     } #fi remove RDS-chunk-files
