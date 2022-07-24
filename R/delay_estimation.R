@@ -886,7 +886,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
-                                 bs_data, bs_infer = c('logquantile', 'lognormal', 'quantile', 'quantile0', 'normal', 'normal0', 't', 't0'),
+                                 bs_data, bs_infer = c('logquantile', 'lognormal', 'quantile', 'quantile0', 'normal', 'normal0'),
                                  useBoot=FALSE, ..){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
@@ -1033,14 +1033,6 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
              -logshift + exp(
                t(c(1L, 1L) %o% (2L * log(cf + logshift) - .rowMeans(bs_data_h, m = length(cf), n = R)) + stats::qnorm(a) %o% apply(bs_data_h, 1L, stats::sd)))
            }),
-           t0 = {
-             t(c(1L, 1L) %o% .rowMeans(bs_data, m = length(cf), n = R) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, stats::sd))
-           },
-           t = {
-             # we actually estimate the variance quite accurately through the high number of bootstrap samples,
-             #+ still we use a t-quantile to compensate the too low coverage when using qnorm, for the df we add 3L to be less conservative
-             t(c(1L, 1L) %o% (2L * cf - .rowMeans(bs_data, m = length(cf), n = R)) + stats::qt(a, df = sum(nObs)-length(cf)+3L) %o% apply(bs_data, 1L, stats::sd))
-           },
            stop('This type of bootstrap confidence interval is not supported!')
     )
   } #esle useBoot

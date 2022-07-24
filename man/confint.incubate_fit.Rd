@@ -11,7 +11,7 @@
   R = 199L,
   bs_data,
   bs_infer = c("logquantile", "lognormal", "quantile", "quantile0", "normal",
-    "normal0", "t", "t0"),
+    "normal0"),
   useBoot = FALSE,
   ..
 )
