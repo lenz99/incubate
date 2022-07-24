@@ -5,13 +5,12 @@
 #' There are different GOF-tests implemented:
 #' * __Moran GOF__ is based on spacings, like the MPSE-criterion itself.
 #' * __Pearson GOF__ uses categories and compares observed to expected frequencies.
-#' * __Anderson-Darling GOF__ makes inference based on the cumulative distribution function.
 #'
 #' @param delayFit delay_model fit
 #' @param method character(1). which method to use for GOF. Default is 'moran'.
 #' @return An `htest`-object containing the GOF-test result
 #' @export
-test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'anderson')){
+test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
   stopifnot( inherits(delayFit, what = 'incubate_fit') )
   method <- match.arg(method)
@@ -141,7 +140,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 
          },
          # catch all
-         stop('This method is not supported!')
+         stop('This GOF-test method is not supported!')
   )
 
 
@@ -184,13 +183,13 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson', 'AD', 'ad', 'ander
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
-                      ties = c('density', 'equidist', 'random', 'error'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'ad', 'lr', 'lr_pp'),
+                      ties = c('density', 'equidist', 'random', 'error'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'lr', 'lr_pp'),
                       verbose = 0) {
   STRICT <- TRUE #accept models only if they converged flawlessly, i.e., convergence=0
   TOL_CRIT <- 1e-7
-  distribution <- match.arg(distribution)
-  ties <- match.arg(ties)
-  type <- match.arg(type)
+  distribution <- match.arg(arg = distribution)
+  ties <- match.arg(arg = ties)
+  type <- match.arg(arg = tolower(type))
   par_names <- getDist(distribution = distribution, type = "param")
   stopifnot( is.numeric(x), length(x) > length(par_names), is.numeric(y), length(y) > length(par_names) )
   stopifnot( is.numeric(R), length(R) == 1L, R >= 1L )
@@ -200,16 +199,15 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   verbose <- verbose[[1L]]
 
   # bitmask for test types
-  testMask <- purrr::set_names(logical(6L), nm = c('bootstrap', 'pearson', 'moran', 'ad', 'lr', 'lr_pp'))
+  testMask <- purrr::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'lr', 'lr_pp'))
 
   switch(EXPR = type,
          all = { testMask <- testMask | TRUE },
          # bootstrap + LR-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLR=?!
          bootstrap = {testMask[c('bootstrap', 'lr', 'lr_pp')] <- TRUE},
-         gof = {testMask[c('pearson', 'moran', 'ad')] <- TRUE},
+         gof = {testMask[c('pearson', 'moran')] <- TRUE},
          moran = {testMask['moran'] <- TRUE},
          pearson = {testMask['pearson'] <- TRUE},
-         ad = {testMask['ad'] <- TRUE},
          lr = {testMask['lr'] <- TRUE},
          lr_pp = {testMask['lr_pp'] <- TRUE},
          stop('This type of tests is not supported!')
@@ -291,11 +289,6 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   GOF_pears0 <- if (testMask[['pearson']]) test_GOF(delayFit = fit0, method = 'pearson')
   GOF_pears1 <- if (testMask[['pearson']]) test_GOF(delayFit = fit1, method = 'pearson')
 
-  # EDF-based GOF-test
-  # Anderson-Darling (AD) test statistic, cf Stephens, Tests based on EDF Statistics p.101, (4.2)
-  GOF_ad0 <- if (testMask[['ad']]) test_GOF(delayFit = fit0, method = 'AD')
-  GOF_ad1 <- if (testMask[['ad']]) test_GOF(delayFit = fit1, method = 'AD')
-
 
 
   t0_dist <- P_boot <- chisq_df_hat <- NULL
@@ -364,15 +357,13 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       R = if (testMask[['bootstrap']]) length(t0_dist),
       chisq_df_hat = chisq_df_hat,
       param = param,
-      P = purrr::compact(
+      P = purrr::compact( # compact = cleanse NULL entries
         list(
           bootstrap = P_boot,
           moran = as.vector(GOF_mo0$p.value),
           moran1 = as.vector(GOF_mo1$p.value),
           pearson = as.vector(GOF_pears0$p.value),
           pearson1 = as.vector(GOF_pears1$p.value),
-          ad = as.vector(GOF_ad0$p.value),
-          ad1 = as.vector(GOF_ad1$p.value),
           lr = P_lr,
           lr_pp = P_lr_pp
         )
@@ -463,14 +454,14 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
-                       test = c('bootstrap', 'pearson', 'moran', 'ad', 'lr', 'lr_pp'),
+                       test = c('bootstrap', 'pearson', 'moran', 'lr', 'lr_pp'),
                        eff = stop("Provide parameters for both group that reflect the effect!"),
                        n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
                        nRange = c(5, 50)){
 
   tol <- .001
   distribution <- match.arg(distribution)
-  test <- match.arg(test)
+  test <- match.arg(arg = tolower(test))
   ranFun <- getDist(distribution, type = "r")
   par_names <- getDist(distribution, type = "param")
   param <- match.arg(param, choices = par_names)
@@ -566,7 +557,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
     NBR_CAND1 <- length(nx_cand1)
     pow_cand1 <- rep_len(-1, length.out = NBR_CAND1)
 
-    # if single n remain, return the power for it (no search for n necessary)
+    # if single n remains, return the power for it (no search for n necessary)
     if (NBR_CAND1 == 1L) return(power_diff(distribution, param, test, eff,
                                            n = nx_cand1[[1L]], power = NULL,
                                            r = r, sig.level = sig.level,nPowerSim = nPowerSim, R = R))

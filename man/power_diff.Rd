@@ -7,7 +7,7 @@
 power_diff(
   distribution = c("exponential", "weibull"),
   param = "delay",
-  test = c("bootstrap", "pearson", "moran", "ad", "lr", "lr_pp"),
+  test = c("bootstrap", "pearson", "moran", "lr", "lr_pp"),
   eff = stop("Provide parameters for both group that reflect the effect!"),
   n = NULL,
   r = 1,

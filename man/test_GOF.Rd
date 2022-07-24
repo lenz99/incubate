@@ -4,7 +4,7 @@
 \alias{test_GOF}
 \title{Goodness-of-fit (GOF) test statistic.}
 \usage{
-test_GOF(delayFit, method = c("moran", "pearson", "AD", "ad", "anderson"))
+test_GOF(delayFit, method = c("moran", "pearson"))
 }
 \arguments{
 \item{delayFit}{delay_model fit}
@@ -20,6 +20,5 @@ There are different GOF-tests implemented:
 \itemize{
 \item \strong{Moran GOF} is based on spacings, like the MPSE-criterion itself.
 \item \strong{Pearson GOF} uses categories and compares observed to expected frequencies.
-\item \strong{Anderson-Darling GOF} makes inference based on the cumulative distribution function.
 }
 }
