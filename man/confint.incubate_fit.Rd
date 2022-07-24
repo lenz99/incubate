@@ -13,8 +13,7 @@
   bs_infer = c("logquantile", "lognormal", "quantile", "quantile0", "normal",
     "normal0", "t", "t0"),
   useBoot = FALSE,
-  smd_factor = 0.5,
-  ...
+  ..
 )
 }
 \arguments{
@@ -31,8 +30,6 @@
 \item{bs_infer}{character. Which type of bootstrap inference is requested to generate the confidence interval?}
 
 \item{useBoot}{logical. Delegate bootstrap confint calculation to the \code{boot}-package?}
-
-\item{smd_factor}{numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap and only used if no \code{bs_data}- object is provided. Default value is 0.5}
 
 \item{...}{further arguments, currently not used.}
 }

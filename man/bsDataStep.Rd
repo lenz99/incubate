@@ -9,7 +9,7 @@ bsDataStep(
   bs_data = c("parametric", "ordinary"),
   R,
   useBoot = FALSE,
-  smd_factor = stop("Provide a smoothing factor for delay!")
+  smd_factor = 0.25
 )
 }
 \arguments{
@@ -21,7 +21,7 @@ bsDataStep(
 
 \item{useBoot}{flag. Do you want to use the boot-package? Default value is \code{FALSE}.}
 
-\item{smd_factor}{numeric. smooth-delay factor: influence the amount of smoothing. 0 means no smoothing at all.}
+\item{smd_factor}{numeric. smooth-delay factor: influence the amount of smoothing. 0 means no smoothing at all. Default is 0.25 (as was optimal in simulation for log-quantile together with log-delay-shift = 5)}
 }
 \value{
 bootstrap data, either as matrix or of class \code{boot} (depending on the \code{useBoot}-flag)

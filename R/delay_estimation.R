@@ -715,10 +715,9 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
 #' @param bs_data character. Which type of bootstrap method to generate data?
 #' @param R integer. Number of bootstrapped model coefficient estimates
 #' @param useBoot flag. Do you want to use the boot-package? Default value is `FALSE`.
-#' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing. 0 means no smoothing at all.
+#' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing. 0 means no smoothing at all. Default is 0.25 (as was optimal in simulation for log-quantile together with log-delay-shift = 5)
 #' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
-bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE,
-                       smd_factor = stop('Provide a smoothing factor for delay!')) {
+bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot = FALSE, smd_factor = 0.25) {
   bs_data <- match.arg(bs_data)
   stopifnot(is.numeric(R), length(R) == 1L, R > 1)
   R <- ceiling(R)
@@ -843,10 +842,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
                         function(ind) {
                           if (smooth_delay){
-                            #I used to subtract from del_coef a rectified normal, with SD approx. inversely proportional to rate_coef (Exponential only)
-                            #+Idea was: high rate = low variability in data => low smoothing required.
-                            #+But a more appropriate and more general way to think is: how sure are we about the delay-estimate?
-                            #+max(0L, stats::rnorm(1L, mean = 0L, sd = min(ranFunArgsY[['delay']]/SMD_DIV, smd_factor/(SMD_MINRATE + ranFunArgsY[['rate']]))))
+                            #+smooth delay according to how sure are we about the delay-estimate:
+                            #+the more sure the smaller is the smoothing
                             ranFunArgsX[['delay']] <- delayCandX[ind]
                             if (twoGroup) ranFunArgsY[['delay']] <- delayCandY[ind]
                           }
@@ -885,13 +882,12 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @param bs_data character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
-#' @param smd_factor numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap and only used if no `bs_data`- object is provided. Default value is 0.5
 #' @param ... further arguments, currently not used.
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                                  bs_data, bs_infer = c('logquantile', 'lognormal', 'quantile', 'quantile0', 'normal', 'normal0', 't', 't0'),
-                                 useBoot=FALSE, smd_factor = 0.5,...){
+                                 useBoot=FALSE, ..){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0)
@@ -899,7 +895,6 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data[[1L]], choices = c('parametric', 'ordinary'))
   bs_infer <- match.arg(bs_infer)
   logTransform <- isTRUE(startsWith(bs_infer, 'log'))
-  stopifnot(smd_factor >= 0)
 
   twoGroup <- isTRUE(object$twoGroup)
   nObs <- if (twoGroup) lengths(object$data) else length(object$data)
@@ -938,7 +933,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
   # if not already provided get bootstrap data (i.e. coefficients) from fitted model to bootstrapped observations
   if (genBootstrapData) {
-    bs_data <- bsDataStep(object = object, bs_data = bs_data, R = R, useBoot = useBoot, smd_factor = smd_factor)
+    bs_data <- bsDataStep(object = object, bs_data = bs_data, R = R, useBoot = useBoot)
     if (R < 999) warning('Be cautious with the confidence interval(s) because the number of bootstrap samples R is rather low (R<999).',
                        call. = FALSE)
   }
