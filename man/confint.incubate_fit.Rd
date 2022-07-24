@@ -10,10 +10,9 @@
   level = 0.95,
   R = 199L,
   bs_data,
-  bs_infer = c("logquantile", "quantile", "quantile0", "lognormal", "normal",
+  bs_infer = c("logquantile", "lognormal", "quantile", "quantile0", "normal",
     "normal0", "t", "t0"),
   useBoot = FALSE,
-  logshift_delay = 3,
   smd_factor = 0.5,
   ...
 )
@@ -32,8 +31,6 @@
 \item{bs_infer}{character. Which type of bootstrap inference is requested to generate the confidence interval?}
 
 \item{useBoot}{logical. Delegate bootstrap confint calculation to the \code{boot}-package?}
-
-\item{logshift_delay}{numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01}
 
 \item{smd_factor}{numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap and only used if no \code{bs_data}- object is provided. Default value is 0.5}
 

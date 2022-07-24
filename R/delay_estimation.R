@@ -885,21 +885,20 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @param bs_data character or bootstrap data object. If character, it specifies which type of bootstrap is requested and the bootstrap data will be generated. Data can also be provided here directly. If missing it uses parametric bootstrap.
 #' @param bs_infer character. Which type of bootstrap inference is requested to generate the confidence interval?
 #' @param useBoot logical. Delegate bootstrap confint calculation to the `boot`-package?
-#' @param logshift_delay numeric. Used for log-transforms only. Positive number what to add to delay fit distribution once the minimum has been subtracted. Then log is applied. Default is .01
 #' @param smd_factor numeric. Smooth the delay parameter when providing a positive value. Only supported for parametric bootstrap and only used if no `bs_data`- object is provided. Default value is 0.5
 #' @param ... further arguments, currently not used.
 #' @return A matrix (or vector) with columns giving lower and upper confidence limits for each parameter.
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
-                                 bs_data, bs_infer = c('logquantile', 'quantile', 'quantile0', 'lognormal', 'normal', 'normal0', 't', 't0'),
-                                 useBoot=FALSE, logshift_delay = 3, smd_factor = 0.5,...){
+                                 bs_data, bs_infer = c('logquantile', 'lognormal', 'quantile', 'quantile0', 'normal', 'normal0', 't', 't0'),
+                                 useBoot=FALSE, smd_factor = 0.5,...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0)
   if (missing(bs_data)) bs_data <- 'parametric'
-  if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data, choices = c('parametric', 'ordinary'))
+  if (is.vector(bs_data) && is.character(bs_data)) bs_data <- match.arg(bs_data[[1L]], choices = c('parametric', 'ordinary'))
+  bs_infer <- match.arg(bs_infer)
   logTransform <- isTRUE(startsWith(bs_infer, 'log'))
-  if (logTransform) stopifnot(logshift_delay > 0)
   stopifnot(smd_factor >= 0)
 
   twoGroup <- isTRUE(object$twoGroup)
@@ -910,7 +909,6 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   genBootstrapData <- is.character(bs_data) && length(bs_data == 1L) && ! is.na(bs_data) && nzchar(bs_data)
   stopifnot( genBootstrapData || useBoot && inherits(bs_data, 'boot') || is.matrix(bs_data) )
 
-  bs_infer <- match.arg(bs_infer)
 
   # check if we can really use boot
   if ( useBoot &&
@@ -922,7 +920,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
   cf <- coef(object)
   pnames <- names(cf)
-  stopifnot( is.numeric(cf), is.character(pnames) )
+  stopifnot( is.numeric(cf), is.character(pnames), nzchar(pnames), length(cf) == length(pnames) )
 
   if (missing(parm)) parm <- pnames else
     if (is.numeric(parm)) parm <- pnames[parm]
@@ -945,16 +943,22 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                        call. = FALSE)
   }
   stopifnot( ! is.vector(bs_data) && ! is.character(bs_data) )
-  # set R according to the provided bs_data (in particular important when R & bs_data object is given)
+  # set R according to the provided bs_data (in particular important when both R & bs_data object are given)
   R <- if (useBoot) bs_data[['R']] else NCOL(bs_data)
 
 
-  # standard value for all parameters
-  logshift <- purrr::set_names(rep_len(.0001, length.out=length(cf)), nm = names(cf))
-  # for delay, the transformation needs to be independent of the scale of delay.
-  if (logTransform && ('delay' %in% pnames))
-    logshift['delay'] <- -min(if (useBoot) bs_data$t[,which('delay' == names(cf))] else bs_data['delay',], na.rm = TRUE) + logshift_delay
-
+  # logShift: needed only when log-transformation is requested. Start with standard value for all parameters
+  logshift <- purrr::set_names(rep_len(.0001, length.out=length(pnames)), nm = pnames)
+  # for delay, the transformation needs to be independent of the scale of delay, so we subtract the minimum and add a shift
+  #+use fixed logshift_delay = 5 (which performed well in simulation at single group, exponential distribution, together with smd=0.25)
+  if (logTransform){
+    LOGSHIFT_DELAY <- 5
+    for (i in which(startsWith(pnames, 'delay'))){
+      logshift[i] <- -min(if (useBoot) bs_data$t[,i] else bs_data[i,], na.rm = TRUE) + LOGSHIFT_DELAY
+      # using low quantiles would make it less dependent on R but then we needed to check that x-logshift remains positive (for log)
+      #stats::quantile(..i.., probs = c(0, 0.001), na.rm = TRUE, names = FALSE) # catch when diff() > LOGSHIFT_DELAY
+    }#rof
+  }#fi
 
   # do bootstrap inference on bootstrap data
   ci <- if (useBoot) {
