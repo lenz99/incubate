@@ -6,19 +6,21 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-In survival analysis, one sometimes encounters situations where events
-only start to occur after a certain delay since entry time and this
-delay varies for different treatments or groups. While parametric delay
-models, like the three-parameter Weibull distribution, might adequately
-describe this process the estimation of delay via standard maximum
-likelihood is severely biased in small samples. The R-package `incubate`
-employs an alternative estimation method called *maximum product of
-spacings estimation (MPSE)* to estimate delay and other parameters in a
-one or two group setting. Building on MPSE, `incubate` can
+In survival analysis, events sometimes only start to occur after a
+certain delay since entry time and this delay period might vary for
+different treatments or groups. While parametric delay models, like the
+three-parameter Weibull distribution, might adequately describe this
+process the estimation of delay via standard maximum likelihood is
+severely biased in small samples. The R-package `incubate` employs an
+alternative estimation method called *maximum product of spacings
+estimation (MPSE)* to estimate and test delay and other parameters in a
+one or two group setting. Concretely, building on MPSE, `incubate` can
 
-1.  calculate bootstrap confidence intervals for these model parameters
+1.  fit parameter estimates where certain parameters can be constrained
+    to be shared between both groups
+2.  calculate bootstrap confidence intervals for these model parameters
     *and*
-2.  compare the survival experience of two groups within this
+3.  compare the survival experience of two groups within this
     statistical model with respect to model parameters.
 
 ## Example
@@ -53,9 +55,9 @@ comparisons in a two group setting.
 ``` r
 # confidence interval for delay-parameters
 confint(fm, parm = c('delay.x', 'delay.y'))
-#>           2.5%  97.5%
-#> delay.x 0.8224 1.1097
-#> delay.y 1.3684 1.7700
+#>            2.5%  97.5%
+#> delay.x 0.80601 1.0943
+#> delay.y 1.35051 1.7531
 
 # test on difference in delay
 # for real applications use R>=1000 bootrap draws
@@ -103,11 +105,11 @@ remotes::install_gitlab("imb-dev/incubate")
 ```
 
 To install a specific version, add the version tag after the name,
-separated by a `@`, e.g. to install `incubate` in version `v1.0` use
+separated by a `@`, e.g. to install `incubate` in version `v1.1.9` use
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate@v1.0")
+remotes::install_gitlab("imb-dev/incubate@v1.1.9")
 ```
 
-The suffix `@develop` points to the latest **development version** from
+The suffix `@develop` points to the latest **development version** on
 Gitlab.

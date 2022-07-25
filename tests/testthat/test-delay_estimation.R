@@ -37,7 +37,8 @@ test_that("Fit delayed Exponentials", {
   # effect of worse start values
   fd_exp_upd <- update(fd_exp, optim_args = purrr::assign_in(fd_exp_oa, 'par', c(1, .1)))
   expect_gt(min(fd_exp_upd$optimizer$counts), expected = min(fd_exp$optimizer$counts))
-  expect_gte(fd_exp_upd$val, fd_exp$val)
+  # add a little safty margin as buffer
+  expect_gte(fd_exp_upd$val + 1e-05, expected = fd_exp$val)
 
   # MLE0 fit ----------------------------------------------------------------
   fd_exp_MLE0 <- delay_model(xx, distribution = 'expon', method = 'MLE0')

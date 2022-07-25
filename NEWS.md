@@ -1,7 +1,9 @@
-# incubate 1.1.9.9018
-* development version
-* check for minimal size of data and fail early if not enough observations
-* `test_diff`: test-statistic gets lower bound of 0 enforced (a restricted model can not have better fit than unrestricted model)
+
+# incubate 1.2.0
+* check for minimal number of observations and fail early if not enough observations
+* `test_diff`:
+    * test-statistic gets lower bound of 0 enforced (a restricted model can not have better fit than unrestricted model)
+    * deactivate Anderson-Darling (AD) GOF-test as its performance in simulations under two-group setting was unsatisfactory
 * include simulation R-scripts in package under `inst/scripts/` folder. When the package is installed the scripts are found at in the -directory `scripts/` within the package.
 * rename methods:
     * 'MSE' => 'MPSE' (as the term MSE has already other meanings)

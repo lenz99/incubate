@@ -22,13 +22,14 @@ set.seed(123L)
 <!-- badges: start -->
 <!-- badges: end -->
 
-In survival analysis, one sometimes encounters situations where events only start to occur after a certain delay since entry time and this delay varies for different treatments or groups.
+In survival analysis, events sometimes only start to occur after a certain delay since entry time and this delay period might vary for different treatments or groups.
 While parametric delay models, like the three-parameter Weibull distribution, might adequately describe this process the estimation of delay via standard maximum likelihood is severely biased in small samples.
-The R-package `incubate` employs an alternative estimation method called *maximum product of spacings estimation (MPSE)* to estimate delay and other parameters in a one or two group setting.
-Building on MPSE, `incubate` can
+The R-package `incubate` employs an alternative estimation method called *maximum product of spacings estimation (MPSE)* to estimate and test delay and other parameters in a one or two group setting.
+Concretely, building on MPSE, `incubate` can
 
-1. calculate bootstrap confidence intervals for these model parameters _and_
-2. compare the survival experience of two groups within this statistical model with respect to model parameters.
+1. fit parameter estimates where certain parameters can be constrained to be shared between both groups
+2. calculate bootstrap confidence intervals for these model parameters _and_
+3. compare the survival experience of two groups within this statistical model with respect to model parameters.
 
 
 ## Example
@@ -95,10 +96,10 @@ To install its **latest version** from the main branch on Gitlab use the followi
 remotes::install_gitlab("imb-dev/incubate")
 ```
 
-To install a specific version, add the version tag after the name, separated by a `@`, e.g. to install `incubate` in version `v1.0` use
+To install a specific version, add the version tag after the name, separated by a `@`, e.g. to install `incubate` in version `v1.1.9` use
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate@v1.0")
+remotes::install_gitlab("imb-dev/incubate@v1.1.9")
 ```
 
-The suffix `@develop` points to the latest **development version** from Gitlab.
+The suffix `@develop` points to the latest **development version** on Gitlab.
