@@ -189,7 +189,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   TOL_CRIT <- 1e-7
   distribution <- match.arg(arg = distribution)
   ties <- match.arg(arg = ties)
-  type <- match.arg(arg = tolower(type))
+  type <- tolower(type)
+  type <- match.arg(arg = type)
   par_names <- getDist(distribution = distribution, type = "param")
   stopifnot( is.numeric(x), length(x) > length(par_names), is.numeric(y), length(y) > length(par_names) )
   stopifnot( is.numeric(R), length(R) == 1L, R >= 1L )

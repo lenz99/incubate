@@ -176,9 +176,10 @@ test_that('Confidence intervals', {
 
   fm <- delay_model(x = obs_sim, distribution = 'expon')
 
-  bs_data <- incubate:::bsDataStep(fm, R = 1199, useBoot = FALSE, smd_factor = 0.5)
+  # use default smd_factor
+  bs_data <- incubate:::bsDataStep(fm, R = 1199, useBoot = FALSE)
   # set up identical bs_data from boot-package
-  bs_data_bt <- incubate:::bsDataStep(fm, R = 3, useBoot = TRUE, smd_factor = 0.5)
+  bs_data_bt <- incubate:::bsDataStep(fm, R = 3, useBoot = TRUE)
   bs_data_bt$R <- NCOL(bs_data)
   bs_data_bt$t <- t(bs_data)
 
@@ -189,11 +190,4 @@ test_that('Confidence intervals', {
                 ci_boot <- confint(fm, bs_data = bs_data_bt, bs_infer = .x, useBoot = TRUE)
                 expect_equal(ci_own, ci_boot, tolerance = 1e-3)})
 
-  logInfDF <- expand.grid(bsi = c('lognormal', 'logquantile'),
-                          logsh = c(.0001, .001, .01, .1, .2, .89, 1, 2, 10, 40),
-                          KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
-  purrr::walk2(.x = logInfDF$bsi, .y = logInfDF$logsh,
-              .f = ~expect_equal(confint(fm, bs_data = bs_data, bs_infer = .x, logshift_delay = .y),
-                                 confint(fm, bs_data = bs_data_bt, bs_infer = .x, logshift_delay = .y, useBoot = TRUE),
-                                 tolerance = 1e-3))
 })

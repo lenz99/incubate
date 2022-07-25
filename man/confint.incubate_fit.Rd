@@ -13,7 +13,7 @@
   bs_infer = c("logquantile", "lognormal", "quantile", "quantile0", "normal",
     "normal0"),
   useBoot = FALSE,
-  ..
+  ...
 )
 }
 \arguments{

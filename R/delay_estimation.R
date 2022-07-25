@@ -778,7 +778,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                                           # grid step width at most 0.005
                                           length.out = max(997L, 2L * min(ceiling(R/2), 100L*ceiling(diff(del_interv)))+1L)),
                           # fixing the parameter estimates other than delay
-                          objVal = purrr::map_dbl(.x = delay,
+                          objVal = purrr::map_dbl(.x = .data[["delay"]],
                                                   .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
                                                                        aggregated = FALSE)[[groupIdx]]))
 
@@ -887,7 +887,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                                  bs_data, bs_infer = c('logquantile', 'lognormal', 'quantile', 'quantile0', 'normal', 'normal0'),
-                                 useBoot=FALSE, ..){
+                                 useBoot=FALSE, ...){
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0)
@@ -1058,7 +1058,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 #' This S3-method implementation is quite different from its default method that allows for non-standard evaluation on data frames, primarily for interactive use.
 #' But the name `transform` just fits so nicely to the intended purpose that it is re-used for the probability integral transform.
 #'
-#' @param `_data` a fitted model object of class `incubate_fit`
+#' @param _data a fitted model object of class `incubate_fit`
 #' @param ... currently ignored
 #' @return The transformed data, either a vector (for single group) or a list with entries x and y (in two group scenario)
 #' @export

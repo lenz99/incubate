@@ -7,9 +7,9 @@
 \method{transform}{incubate_fit}(`_data`, ...)
 }
 \arguments{
-\item{...}{currently ignored}
+\item{_data}{a fitted model object of class \code{incubate_fit}}
 
-\item{`_data`}{a fitted model object of class \code{incubate_fit}}
+\item{...}{currently ignored}
 }
 \value{
 The transformed data, either a vector (for single group) or a list with entries x and y (in two group scenario)
