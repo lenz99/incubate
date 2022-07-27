@@ -39,16 +39,17 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values (see code in this script).\n')
   cat('Flexible command line parameter options are:\n')
   cat('  --help\t print this help\n')
+  cat('  --print\t show scenarios to simulate and exit.\n')
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --dist=\t specify distribution that governs the data generation\n')
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
+  cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
   cat('  --slice=\t if given, pick only this number of scenarios for the simulation\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. \n')
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios. Default is no chunking (=0).\n')
   cat('  --workers=\t number of parallel computations using `future.callr` and `future.apply`. The first level of parallelization is across the MC-replications for each simulation setting.\n')
   cat('  --R=\t\t number of samples within parametric bootstrap test: it determines the resolution for our P-value, e.g.,\n\t\t R=100 will allow for P-values at per-cent resolution\n')
   cat('  --mcnrep=\t size of Monte-Carlo study: it is the number of replicated bootstrap data sets on which statistical tests are done.\n')
-  cat('  --print\t show scenarios to simulate and exit.\n')
   quit(save = 'no')
 }
 
@@ -85,8 +86,8 @@ myScenario <- cmdArgs[["scenario"]]
 stopifnot( ! is.null(myScenario), is.character(myScenario), length(myScenario) == 1L )
 myScenario <- match.arg(arg = toupper(myScenario), choices = c('DELAYEQ', 'DELAYGT', 'MS', 'ALL'))
 
-myPrint <- isTRUE(any(c('print', 'p') %in% names(cmdArgs)))
-
+myPrint <- isTRUE(any(c('print', 'p') %in% tolower(names(cmdArgs))))
+myAllN <- isTRUE(any(c('alln', 'a') %in% tolower(names(cmdArgs))))
 
 
 
@@ -97,7 +98,7 @@ if (mySeed > 0L) set.seed(mySeed)
 
 # shape values according to distribution
 
-simSetting <- tidyr::expand_grid(n_x = 8L, #c(8, 10, 12),
+simSetting <- tidyr::expand_grid(n_x = c(8, 10, 12, 15, 20),
                                  delay_x = 5,
                                  delay_y = c(5, 7, 9, 11, 13, 15), #, 20, 100, 1000),
                                  scale_x = c(5, 10), #c(1, 2, 5),
@@ -113,6 +114,12 @@ simSetting <- simSetting %>%
   dplyr::mutate(n_y = n_x, .after = n_x)
 
 
+# default is to use only the smallest sample size
+if (!myAllN){
+  simSetting <- simSetting %>%
+    dplyr::filter(n_x == min(n_x))
+}
+
 #filter only relevant scale_ratio combinations
 # for exponential:
 # [G1] scale_x = 10 & scale_ratio = 1  (rate_x = .1, rate_ratio = 1)
@@ -124,12 +131,14 @@ simSetting <- simSetting %>%
 # dd=5, k=.5|2, scale_x = 10 & scale_ratio = 1
 
 
+# filter based on scale parameters
 # this contains the cases which are needed in the manuscript
-simFilterMS <- if (isExpon) {
+simFilterScale <- if (isExpon) {
   simSetting %>%
     dplyr::filter(dplyr::near(scale_ratio, 1) | dplyr::near(scale_x, 5) & dplyr::near(scale_ratio, 2) |
                     dplyr::near(scale_x, 10) & dplyr::near(scale_ratio, .5)) } else
       tibble::tibble(scale_x = 10, scale_ratio = 1)
+
 
 # filter for target scenario!
 # use all capital letters (see definition of myScenario)
@@ -149,7 +158,7 @@ switch (myScenario,
 
         MS = {
           simSetting <- simSetting %>%
-            dplyr::inner_join(simFilterMS, by = names(simFilterMS))
+            dplyr::inner_join(simFilterScale, by = names(simFilterScale))
         },
 
         ALL = { invisible(NULL) }, # keep everything! (also unused border cases)
