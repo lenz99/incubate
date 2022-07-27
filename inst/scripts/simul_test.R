@@ -44,6 +44,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('  --dist=\t specify distribution that governs the data generation\n')
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
   cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
+  cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
   cat('  --slice=\t if given, pick only this number of scenarios for the simulation\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. \n')
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios. Default is no chunking (=0).\n')
@@ -60,9 +61,9 @@ stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
 
 myDist <- cmdArgs[["dist"]]
 stopifnot( is.character(myDist), length(myDist) == 1L )
-myDist <- match.arg(arg = myDist, choices = c("exponential", "weibull"))
-isExpon <- isTRUE(myDist == 'exponential')
-stopifnot( isExpon || isTRUE(myDist == 'weibull'))
+myDist <- match.arg(arg = tolower(myDist), choices = c("exponential", "weibull"))
+isExpon <- isTRUE(myDist == "exponential")
+stopifnot( isExpon || isTRUE(myDist == "weibull"))
 
 myWorkers <- cmdArgs[["workers"]]
 stopifnot( is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L )
@@ -79,16 +80,16 @@ stopifnot( is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L )
 mySlice <- cmdArgs[["slice"]]
 stopifnot( ! is.null(mySlice), is.numeric(mySlice), length(mySlice) == 1L )
 
-mySeed <- cmdArgs[['seed']]
+mySeed <- cmdArgs[["seed"]]
 stopifnot( is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L )
 
 myScenario <- cmdArgs[["scenario"]]
 stopifnot( ! is.null(myScenario), is.character(myScenario), length(myScenario) == 1L )
-myScenario <- match.arg(arg = toupper(myScenario), choices = c('DELAYEQ', 'DELAYGT', 'MS', 'ALL'))
+myScenario <- match.arg(arg = toupper(myScenario), choices = c("DELAYEQ", "DELAYGT", "MS", "ALL"))
 
-myPrint <- isTRUE(any(c('print', 'p') %in% tolower(names(cmdArgs))))
-myAllN <- isTRUE(any(c('alln', 'a') %in% tolower(names(cmdArgs))))
-
+myPrint <- isTRUE(any(c("print", "p") %in% tolower(names(cmdArgs))))
+myAllN <- isTRUE(any(c("alln", "a") %in% tolower(names(cmdArgs))))
+myScaleSimple <- isTRUE(any(c("scalesimple", "scale", "scales") %in% tolower(names(cmdArgs))))
 
 
 
@@ -120,6 +121,11 @@ if (!myAllN){
     dplyr::filter(n_x == min(n_x))
 }
 
+if (myScaleSimple){
+  simSetting <- simSetting %>%
+    dplyr::filter(dplyr::near(scale_x, 10), dplyr::near(scale_ratio, 1))
+}
+
 #filter only relevant scale_ratio combinations
 # for exponential:
 # [G1] scale_x = 10 & scale_ratio = 1  (rate_x = .1, rate_ratio = 1)
@@ -130,10 +136,9 @@ if (!myAllN){
 # dd=0, k=.5|2, scale_x = 10 & scale_ratio = 1
 # dd=5, k=.5|2, scale_x = 10 & scale_ratio = 1
 
-
 # filter based on scale parameters
 # this contains the cases which are needed in the manuscript
-simFilterScale <- if (isExpon) {
+simFilterMS <- if (isExpon) {
   simSetting %>%
     dplyr::filter(dplyr::near(scale_ratio, 1) | dplyr::near(scale_x, 5) & dplyr::near(scale_ratio, 2) |
                     dplyr::near(scale_x, 10) & dplyr::near(scale_ratio, .5)) } else
@@ -158,7 +163,7 @@ switch (myScenario,
 
         MS = {
           simSetting <- simSetting %>%
-            dplyr::inner_join(simFilterScale, by = names(simFilterScale))
+            dplyr::inner_join(simFilterMS, by = names(simFilterMS))
         },
 
         ALL = { invisible(NULL) }, # keep everything! (also unused border cases)
