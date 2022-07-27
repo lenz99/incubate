@@ -500,7 +500,9 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
 #' Fit a delayed Exponential or Weibull model to one or two given sample(s).
 #'
-#' Maximum product spacing is used to fit the parameters.
+#' Maximum product of spacings estimation is used by default to fit the parameters. Estimation via standard maximum likelihood (`method = 'MLE0`) is available, too,
+#' but MLE yields biased estimates.
+#'
 #' Numerical optimization is done by `stats::optim`.
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group

@@ -36,6 +36,9 @@ delay_model(
 \code{incubate_fit} the delay-model fit object. Or \code{NULL} if optimization failed (e.g. too few observations).
 }
 \description{
-Maximum product spacing is used to fit the parameters.
+Maximum product of spacings estimation is used by default to fit the parameters. Estimation via standard maximum likelihood (\verb{method = 'MLE0}) is available, too,
+but MLE yields biased estimates.
+}
+\details{
 Numerical optimization is done by \code{stats::optim}.
 }
