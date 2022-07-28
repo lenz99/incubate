@@ -5,10 +5,13 @@
 
 # setup --------------------------------------------------------------------
 
+library('incubate')
+cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
+
 library('rlang')
-suppressPackageStartupMessages(library('purrr'))
-suppressPackageStartupMessages(library('dplyr'))
-library('tidyr')
+library('dplyr', warn.conflicts = FALSE)
+library('tidyr', warn.conflicts = FALSE)
+library('purrr')
 library('glue')
 suppressPackageStartupMessages(library('R.utils'))
 
@@ -25,7 +28,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('Gather Monte-Carlo simulation results and save it as a common list.\n')
   cat('Parameter options are:\n')
   cat('  --help\t print this help\n')
-  cat('  --resultsDir=\t specify the directory where to find and to put the result files. Defaults to directory "results".\n')
+  cat('  --resultsDir=\t specify the directory where to find and to put the result files. Defaults to sub-directory "results".\n')
   cat('  --resultsTag=\tspecify a name suffix for results file. Default is "MS".\n')
   cat('  --type=\t what type of results to gather? "test" (default) or "confint"\n')
   cat('  --removeTemp\t flag to clean temporary results file after they have been saved.\n')

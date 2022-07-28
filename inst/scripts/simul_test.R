@@ -99,7 +99,7 @@ if (mySeed > 0L) set.seed(mySeed)
 
 # shape values according to distribution
 
-simSetting <- tidyr::expand_grid(n_x = c(8, 10, 12, 15, 20),
+simSetting <- tidyr::expand_grid(n_x = c(8, 10, 12, 15, 20, 30, 50, 100),
                                  delay_x = 5,
                                  delay_y = c(5, 7, 9, 11, 13, 15), #, 20, 100, 1000),
                                  scale_x = c(5, 10), #c(1, 2, 5),
