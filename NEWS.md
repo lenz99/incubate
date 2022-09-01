@@ -1,3 +1,7 @@
+
+# incubate 1.2.1.9003
+* include restricted mean survival time function for delayed exponential
+
 # incubate 1.2.1
 * fix package help: due to changes in roxygen
 

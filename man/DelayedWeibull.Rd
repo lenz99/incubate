@@ -6,6 +6,7 @@
 \alias{pweib_delayed}
 \alias{qweib_delayed}
 \alias{rweib_delayed}
+\alias{mweib_delayed}
 \title{Delayed Weibull Distribution}
 \usage{
 dweib_delayed(x, delay, shape, scale = 1, ...)
@@ -15,6 +16,8 @@ pweib_delayed(q, delay, shape, scale = 1, ...)
 qweib_delayed(p, delay, shape, scale = 1, ...)
 
 rweib_delayed(n, delay, shape, scale = 1)
+
+mweib_delayed(t = +Inf, delay, shape, scale = 1, ...)
 }
 \arguments{
 \item{x}{A numeric vector of values for which to get the density.}
@@ -32,12 +35,20 @@ rweib_delayed(n, delay, shape, scale = 1)
 \item{p}{A numeric vector of probabilities.}
 
 \item{n}{integer. Number of random observations requested.}
+
+\item{t}{A numeric vector of times that restrict the mean survival. Default is \code{+Inf}, i.e., the unrestricted mean survival time.}
 }
 \value{
-\code{dweib_delayed} gives the density, \code{pweib_delayed} gives the distribution function, \code{qweib_delayed} gives the quantile function,
-and \code{rweib_delayed} generates a pseudo-random sample from the delayed Weibull distribution.
+Functions pertaining to the delayed Weibull distribution:
+\itemize{
+\item \code{dweib_delayed} gives the density
+\item \code{pweib_delayed} gives the distribution function
+\item \code{qweib_delayed} gives the quantile function
+\item \code{rweib_delayed} generates a pseudo-random sample
+\item \code{mweib_delayed} gives the restricted mean survival time
+}
 
-The length of the result is determined by \code{n} for \code{rweib_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions.
+The length of the result is determined by \code{n} for \code{rweib_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions, R's recycling rules apply.
 }
 \description{
 Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters

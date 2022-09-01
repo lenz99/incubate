@@ -6,6 +6,7 @@
 \alias{pexp_delayed}
 \alias{qexp_delayed}
 \alias{rexp_delayed}
+\alias{mexp_delayed}
 \title{Delayed Exponential Distribution}
 \usage{
 dexp_delayed(x, delay, rate = 1, ...)
@@ -15,6 +16,8 @@ pexp_delayed(q, delay, rate = 1, ...)
 qexp_delayed(p, delay, rate = 1, ...)
 
 rexp_delayed(n, delay, rate = 1)
+
+mexp_delayed(t = +Inf, delay, rate = 1, ...)
 }
 \arguments{
 \item{x}{A numeric vector of values for which to get the density.}
@@ -30,15 +33,23 @@ rexp_delayed(n, delay, rate = 1)
 \item{p}{A numeric vector of probabilities.}
 
 \item{n}{integer. Number of random observations requested.}
+
+\item{t}{A numeric vector of times that restrict the mean survival. Default is \code{+Inf}, i.e., the unrestricted mean survival time.}
 }
 \value{
-\code{dexp_delayed} gives the density, \code{pexp_delayed} gives the distribution function, \code{qexp_delayed} gives the quantile function,
-and \code{rexp_delayed} generates a pseudo-random sample from the delayed exponential distribution.
+Functions pertaining to the delayed exponential distribution:
+\itemize{
+\item \code{dexp_delayed} gives the density
+\item \code{pexp_delayed} gives the distribution function
+\item \code{qexp_delayed} gives the quantile function
+\item \code{rexp_delayed} generates a pseudo-random sample
+\item \code{mexp_delayed} gives the restricted mean survival time
+}
 
-The length of the result is determined by \code{n} for \code{rexp_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions.
+The length of the result is determined by \code{n} for \code{rexp_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions, R's recycling rules apply.
 }
 \description{
-Density, distribution function, quantile function and random generation for the delayed exponential distribution with \code{rate}-parameter.
+Density, distribution function, quantile function, random generation and restricted mean survival time function for the delayed exponential distribution with \code{rate}-parameter.
 }
 \details{
 Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the \code{stats}-package.

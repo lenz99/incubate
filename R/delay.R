@@ -5,7 +5,7 @@
 #' Delayed Exponential Distribution
 #'
 #' @description
-#' Density, distribution function, quantile function and random generation for the delayed exponential distribution with `rate`-parameter.
+#' Density, distribution function, quantile function, random generation and restricted mean survival time function for the delayed exponential distribution with `rate`-parameter.
 #'
 #' @details
 #' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
@@ -13,15 +13,20 @@
 #'
 #' @param x A numeric vector of values for which to get the density.
 #' @param q A numeric vector of quantile values.
+#' @param t A numeric vector of times that restrict the mean survival. Default is `+Inf`, i.e., the unrestricted mean survival time.
 #' @param p A numeric vector of probabilities.
 #' @param n integer. Number of random observations requested.
 #' @param delay numeric. The delay, must be non-negative.
 #' @param rate numeric. The event rate, must be non-negative.
 #' @param ... further arguments are passed on to the underlying non-delayed function, e.g., [stats::dexp()]
-#' @return `dexp_delayed` gives the density, `pexp_delayed` gives the distribution function, `qexp_delayed` gives the quantile function,
-#' and `rexp_delayed` generates a pseudo-random sample from the delayed exponential distribution.
+#' @return Functions pertaining to the delayed exponential distribution:
+#' * `dexp_delayed` gives the density
+#' * `pexp_delayed` gives the distribution function
+#' * `qexp_delayed` gives the quantile function
+#' * `rexp_delayed` generates a pseudo-random sample
+#' * `mexp_delayed` gives the restricted mean survival time
 #'
-#' The length of the result is determined by `n` for `rexp_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions.
+#' The length of the result is determined by `n` for `rexp_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions, R's recycling rules apply.
 #' @keywords distribution
 #' @name DelayedExponential
 NULL
@@ -38,6 +43,10 @@ qexp_delayed <- function(p, delay, rate = 1, ...) delay + stats::qexp(p = p, rat
 #' @rdname DelayedExponential
 #' @export
 rexp_delayed <- function(n, delay, rate = 1) delay + stats::rexp(n = n, rate = rate)
+#' @rdname DelayedExponential
+#' @export
+mexp_delayed <- function(t=+Inf, delay, rate = 1, ...) ifelse(test = t <= delay, yes = t,
+                                                              no = delay + 1/rate * pexp_delayed(q=t, delay=delay, rate = rate))
 
 
 #' Delayed Weibull Distribution
@@ -56,16 +65,21 @@ rexp_delayed <- function(n, delay, rate = 1) delay + stats::rexp(n = n, rate = r
 #'
 #' @param x A numeric vector of values for which to get the density.
 #' @param q A numeric vector of quantile values.
+#' @param t A numeric vector of times that restrict the mean survival. Default is `+Inf`, i.e., the unrestricted mean survival time.
 #' @param p A numeric vector of probabilities.
 #' @param n integer. Number of random observations requested.
 #' @param delay numeric. The delay, must be non-negative.
 #' @param shape numeric. Shape parameter, must be positive.
 #' @param scale numeric. Scale parameter (inverse of rate), must be positive.
 #' @param ... further arguments are passed on to the underlying non-delayed function, e.g., [stats::dweibull()]
-#' @return `dweib_delayed` gives the density, `pweib_delayed` gives the distribution function, `qweib_delayed` gives the quantile function,
-#' and `rweib_delayed` generates a pseudo-random sample from the delayed Weibull distribution.
+#' @return Functions pertaining to the delayed Weibull distribution:
+#' * `dweib_delayed` gives the density
+#' * `pweib_delayed` gives the distribution function
+#' * `qweib_delayed` gives the quantile function
+#' * `rweib_delayed` generates a pseudo-random sample
+#' * `mweib_delayed` gives the restricted mean survival time
 #'
-#' The length of the result is determined by `n` for `rweib_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions.
+#' The length of the result is determined by `n` for `rweib_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions, R's recycling rules apply.
 #' @keywords distribution
 #' @name DelayedWeibull
 NULL
@@ -82,6 +96,11 @@ qweib_delayed <- function(p, delay, shape, scale = 1, ...) delay + stats::qweibu
 #' @rdname DelayedWeibull
 #' @export
 rweib_delayed <- function(n, delay, shape, scale = 1) delay + stats::rweibull(n = n, shape = shape, scale = scale)
+#' @rdname DelayedWeibull
+#' @export
+mweib_delayed <- function(t=+Inf, delay, shape, scale = 1, ...) ifelse(test = t <= delay, yes = t,
+                                                                       # make use of lower incomplete gamma function which is calculated as gamma * pgamma
+                                                                       no = delay + scale / shape * gamma(1/shape) * stats::pgamma(q = ((t-delay)/scale)^shape, shape = 1/shape))
 
 
 #' Get delay distribution function
