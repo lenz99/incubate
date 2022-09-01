@@ -18,7 +18,7 @@
 #' @param n integer. Number of random observations requested.
 #' @param delay numeric. The delay, must be non-negative.
 #' @param rate numeric. The event rate, must be non-negative.
-#' @param ... further arguments are passed on to the underlying non-delayed function, e.g., [stats::dexp()]
+#' @param ... further arguments are passed on to the underlying non-delayed function, e.g., `lower.tail=` to [stats::pexp()]
 #' @return Functions pertaining to the delayed exponential distribution:
 #' * `dexp_delayed` gives the density
 #' * `pexp_delayed` gives the distribution function
@@ -33,19 +33,64 @@ NULL
 
 #' @rdname DelayedExponential
 #' @export
-dexp_delayed <- function(x, delay, rate = 1, ...) stats::dexp(x = x - delay, rate = rate, ...)
+dexp_delayed <- function(x, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, log = FALSE) {
+  stopifnot( is.numeric(delay), is.numeric(rate), all(is.finite(delay)), all(is.finite(rate)) )
+  log <- isTRUE(log)
+
+  # check for easy case: only a single delay
+  if ( is.null(delay2) ) return(stats::dexp(x = x - delay, rate = rate, log = log))
+
+  # we need both delay2 AND rate2
+  stopifnot( is.numeric(delay2), is.numeric(rate2) )
+
+  # recycle delay and rate parameters to have common length, respectively
+  ndelayMax <- max(length(delay), length(delay2), na.rm = TRUE)
+  nrateMax <- max(length(rate), length(rate2), na.rm = TRUE)
+
+  delay <- rep_len(delay, length.out = ndelayMax)
+  delay2 <- rep_len(delay2, length.out = ndelayMax)
+
+  rate <- rep_len(rate, length.out = nrateMax)
+  rate2 <- rep_len(rate2, length.out = nrateMax)
+
+  # check delay constraint
+  if (any(delay >= delay2)) {
+    stop("First delay must always antedate the second delay!")
+  }
+
+  # normalizing constant
+  K <- 1L - exp(-rate * (delay2 - delay)) + exp(-rate2 * (delay2 - delay))
+  stopifnot( all(K > 0L) )
+
+
+  dvals <- stats::dexp(x = x - delay, rate = rate, log = log)
+  # check if we have observations in 2nd phase
+  phase2Ind <- which(x >= delay2)
+  if (length(phase2Ind)) dvals[phase2Ind] <- stats::dexp(x = x - delay, rate = rate2, log = log)[phase2Ind]
+
+  if (log) dvals - log(K) else dvals/K
+
+  ## XXX think & continue here
+  #+ density with lower rate starts lower but has smaller decline and will eventually lie above the density with higher rate
+  #+ this means, our density_delayed can jump upwards at delay2 even when rate goes down (rate2 < rate)!!
+  #+ Is this what we want?
+  # ggplot() + xlim(0, 8) +
+  ## geom_function(fun = dexp, args = list(rate = .5)) +
+  ##geom_function(fun = dexp, args = list(rate = .2), col = "red")
+}
+
 #' @rdname DelayedExponential
 #' @export
-pexp_delayed <- function(q, delay, rate = 1, ...) stats::pexp(q = q - delay, rate = rate, ...)
+pexp_delayed <- function(q, delay = 0, rate = 1, ...) stats::pexp(q = q - delay, rate = rate, ...)
 #' @rdname DelayedExponential
 #' @export
-qexp_delayed <- function(p, delay, rate = 1, ...) delay + stats::qexp(p = p, rate = rate, ...)
+qexp_delayed <- function(p, delay = 0, rate = 1, ...) delay + stats::qexp(p = p, rate = rate, ...)
 #' @rdname DelayedExponential
 #' @export
-rexp_delayed <- function(n, delay, rate = 1) delay + stats::rexp(n = n, rate = rate)
+rexp_delayed <- function(n, delay = 0, rate = 1) delay + stats::rexp(n = n, rate = rate)
 #' @rdname DelayedExponential
 #' @export
-mexp_delayed <- function(t=+Inf, delay, rate = 1, ...) ifelse(test = t <= delay, yes = t,
+mexp_delayed <- function(t=+Inf, delay = 0, rate = 1, ...) ifelse(test = t <= delay, yes = t,
                                                               no = delay + 1/rate * pexp_delayed(q=t, delay=delay, rate = rate))
 
 
