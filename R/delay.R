@@ -43,40 +43,30 @@ dexp_delayed <- function(x, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, lo
   # we need both delay2 AND rate2
   stopifnot( is.numeric(delay2), is.numeric(rate2) )
 
-  # recycle delay and rate parameters to have common length, respectively
-  ndelayMax <- max(length(delay), length(delay2), na.rm = TRUE)
-  nrateMax <- max(length(rate), length(rate2), na.rm = TRUE)
+  # manually recycle delay and rate parameters to ensure they have common length, respectively
+  ndelay <- max(length(delay), length(delay2), na.rm = TRUE)
+  nrate <- max(length(rate), length(rate2), na.rm = TRUE)
 
-  delay <- rep_len(delay, length.out = ndelayMax)
-  delay2 <- rep_len(delay2, length.out = ndelayMax)
-
-  rate <- rep_len(rate, length.out = nrateMax)
-  rate2 <- rep_len(rate2, length.out = nrateMax)
+  delay <- rep_len(delay, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
+  rate <- rep_len(rate, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
 
   # check delay constraint
   if (any(delay >= delay2)) {
-    stop("First delay must always antedate the second delay!")
+    stop("First delay phase must always antedate the second delay phase!")
   }
 
   # normalizing constant
-  K <- 1L - exp(-rate * (delay2 - delay)) + exp(-rate2 * (delay2 - delay))
-  stopifnot( all(K > 0L) )
-
+  #K <- (1L - exp(-rate * (delay2 - delay))) + (1L-W)*exp(-rate2 * (delay2 - delay))
+  #stopifnot( all(K > 0L) )
 
   dvals <- stats::dexp(x = x - delay, rate = rate, log = log)
   # check if we have observations in 2nd phase
   phase2Ind <- which(x >= delay2)
-  if (length(phase2Ind)) dvals[phase2Ind] <- stats::dexp(x = x - delay, rate = rate2, log = log)[phase2Ind]
+  if (length(phase2Ind)) dvals[phase2Ind] <- stats::dexp(x = x - delay2, rate = rate2, log = log)[phase2Ind] * exp(-rate * (delay2 - delay))
 
-  if (log) dvals - log(K) else dvals/K
+  #if (log) dvals - log(K) else dvals/K
+  dvals
 
-  ## XXX think & continue here
-  #+ density with lower rate starts lower but has smaller decline and will eventually lie above the density with higher rate
-  #+ this means, our density_delayed can jump upwards at delay2 even when rate goes down (rate2 < rate)!!
-  #+ Is this what we want?
-  # ggplot() + xlim(0, 8) +
-  ## geom_function(fun = dexp, args = list(rate = .5)) +
-  ##geom_function(fun = dexp, args = list(rate = .2), col = "red")
 }
 
 #' @rdname DelayedExponential
