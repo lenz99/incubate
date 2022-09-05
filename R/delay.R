@@ -131,7 +131,33 @@ qexp_delayed <- function(p, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ..
 
 #' @rdname DelayedExponential
 #' @export
-rexp_delayed <- function(n, delay = 0, rate = 1) delay + stats::rexp(n = n, rate = rate)
+rexp_delayed <- function(n, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL) {
+  stopifnot( is.numeric(delay), is.numeric(rate), all(is.finite(delay)), all(is.finite(rate)) )
+
+  # check for easy case: only a single delay
+  if ( is.null(delay2) ) return(delay + stats::rexp(n = n, rate = rate))
+
+  # we need both delay2 AND rate2
+  stopifnot( is.numeric(delay2), is.numeric(rate2) )
+
+  # manually recycle delay and rate parameters to ensure they have common length, respectively
+  ndelay <- max(length(delay), length(delay2), na.rm = TRUE)
+  nrate <- max(length(rate), length(rate2), na.rm = TRUE)
+
+  delay <- rep_len(delay, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
+  rate <- rep_len(rate, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
+
+  # check delay constraint
+  if (any(delay >= delay2)) {
+    stop("First delay phase must always antedate the second delay phase!")
+  }
+
+  # use inverse CDF-method
+  qexp_delayed(p = stats::runif(n = n), delay = delay, rate = rate, delay2 = delay2, rate2 = rate2)
+
+}
+
+
 #' @rdname DelayedExponential
 #' @export
 mexp_delayed <- function(t=+Inf, delay = 0, rate = 1, ...) ifelse(test = t <= delay, yes = t,
