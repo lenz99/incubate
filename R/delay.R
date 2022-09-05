@@ -37,8 +37,9 @@ dexp_delayed <- function(x, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, lo
   stopifnot( is.numeric(delay), is.numeric(rate), all(is.finite(delay)), all(is.finite(rate)) )
   log <- isTRUE(log)
 
+  dvals <- stats::dexp(x = x - delay, rate = rate, log = log)
   # check for easy case: only a single delay
-  if ( is.null(delay2) ) return(stats::dexp(x = x - delay, rate = rate, log = log))
+  if ( is.null(delay2) ) return(dvals)
 
   # we need both delay2 AND rate2
   stopifnot( is.numeric(delay2), is.numeric(rate2) )
@@ -55,11 +56,6 @@ dexp_delayed <- function(x, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, lo
     stop("First delay phase must always antedate the second delay phase!")
   }
 
-  # normalizing constant
-  #K <- (1L - exp(-rate * (delay2 - delay))) + (1L-W)*exp(-rate2 * (delay2 - delay))
-  #stopifnot( all(K > 0L) )
-
-  dvals <- stats::dexp(x = x - delay, rate = rate, log = log)
   # check if we have observations in 2nd phase
   phase2Ind <- which(x >= delay2)
   if (length(phase2Ind)) dvals[phase2Ind] <- stats::dexp(x = x - delay2, rate = rate2, log = log)[phase2Ind] * exp(-rate * (delay2 - delay))
@@ -74,8 +70,10 @@ dexp_delayed <- function(x, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, lo
 pexp_delayed <- function(q, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ...) {
   stopifnot( is.numeric(delay), is.numeric(rate), all(is.finite(delay)), all(is.finite(rate)) )
 
+  pvals <- stats::pexp(q = q - delay, rate = rate, ...)
+
   # check for easy case: only a single delay
-  if ( is.null(delay2) ) return(stats::pexp(q = q - delay, rate = rate, ...))
+  if ( is.null(delay2) ) return(pvals)
 
   # we need both delay2 AND rate2
   stopifnot( is.numeric(delay2), is.numeric(rate2) )
@@ -92,7 +90,6 @@ pexp_delayed <- function(q, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ..
     stop("First delay phase must always antedate the second delay phase!")
   }
 
-  pvals <- stats::pexp(q = q - delay, rate = rate, ...)
   # check if we have observations in 2nd phase
   phase2Ind <- which(q >= delay2)
   if (length(phase2Ind)) pvals[phase2Ind] <- stats::pexp(q = q - delay2 + rate/rate2 * (delay2 - delay), rate = rate2, ...)[phase2Ind]
