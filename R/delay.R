@@ -99,7 +99,36 @@ pexp_delayed <- function(q, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ..
 
 #' @rdname DelayedExponential
 #' @export
-qexp_delayed <- function(p, delay = 0, rate = 1, ...) delay + stats::qexp(p = p, rate = rate, ...)
+qexp_delayed <- function(p, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ...) {
+  stopifnot( is.numeric(delay), is.numeric(rate), all(is.finite(delay)), all(is.finite(rate)) )
+
+  qvals <- delay + stats::qexp(p = p, rate = rate, ...)
+  # check for easy case: only a single delay
+  if ( is.null(delay2) ) return(qvals)
+
+  # we need both delay2 AND rate2
+  stopifnot( is.numeric(delay2), is.numeric(rate2) )
+
+  # manually recycle delay and rate parameters to ensure they have common length, respectively
+  ndelay <- max(length(delay), length(delay2), na.rm = TRUE)
+  nrate <- max(length(rate), length(rate2), na.rm = TRUE)
+
+  delay <- rep_len(delay, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
+  rate <- rep_len(rate, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
+
+  # check delay constraint
+  if (any(delay >= delay2)) {
+    stop("First delay phase must always antedate the second delay phase!")
+  }
+
+  # check if we have observations in 2nd phase
+  phase2Ind <- which(p >= pexp_delayed(q = delay2, delay = delay, rate = rate))
+  if (length(phase2Ind)) qvals[phase2Ind] <- delay2 - rate/rate2 * (delay2 - delay) + stats::qexp(p = p, rate = rate2, ...)[phase2Ind]
+
+  qvals
+
+}
+
 #' @rdname DelayedExponential
 #' @export
 rexp_delayed <- function(n, delay = 0, rate = 1) delay + stats::rexp(n = n, rate = rate)
