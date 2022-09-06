@@ -160,8 +160,33 @@ rexp_delayed <- function(n, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL) {
 
 #' @rdname DelayedExponential
 #' @export
-mexp_delayed <- function(t=+Inf, delay = 0, rate = 1, ...) ifelse(test = t <= delay, yes = t,
-                                                              no = delay + 1/rate * pexp_delayed(q=t, delay=delay, rate = rate))
+mexp_delayed <- function(t=+Inf, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL) {
+  stopifnot( is.numeric(delay), is.numeric(rate), all(is.finite(delay)), all(is.finite(rate)) )
+
+  # calculate for single phase delayed exponential
+  res_mvals <- pmin.int(t, delay) + pexp_delayed(q = if (is.null(delay2)) t else pmin.int(t, delay2),
+                                                 delay = delay, rate = rate) / rate
+
+  # directly return when only single phase
+  if ( is.null(delay2) ) return(res_mvals)
+
+  # we need both delay2 AND rate2
+  stopifnot( is.numeric(delay2), is.numeric(rate2) )
+
+  # manually recycle delay and rate parameters to ensure they have common length, respectively
+  ndelay <- max(length(delay), length(delay2), na.rm = TRUE)
+  nrate <- max(length(rate), length(rate2), na.rm = TRUE)
+
+  delay <- rep_len(delay, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
+  rate <- rep_len(rate, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
+
+  # check delay constraint
+  if (any(delay >= delay2)) {
+    stop("First delay phase must always antedate the second delay phase!")
+  }
+
+  res_mvals + (1L-pexp_delayed(q=delay2, delay=delay, rate = rate)) * pexp_delayed(q=t, delay=delay2, rate = rate2) / rate2
+}
 
 
 #' Delayed Weibull Distribution

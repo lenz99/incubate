@@ -60,32 +60,39 @@ test_that('distribution function of delayed distributions', {
 test_that('(restricted) mean survival time of delayed distributions', {
   # restriction within delay period:
   earlyTP <- seq.int(from = 0, to = 5, length.out = 11)
-  expect_identical(mexp_delayed(t = earlyTP, delay = max(earlyTP), rate = 1/pi), expected = earlyTP)
-  expect_identical(mweib_delayed(t = earlyTP, delay = max(earlyTP), shape = 1/pi, scale = 1/pi), expected = earlyTP)
+  expect_identical(mexp_delayed(t = earlyTP, delay = max(earlyTP), rate = 1/pi),
+                   expected = earlyTP)
+  # two-phase exponential
+  expect_identical(mexp_delayed(t = earlyTP, delay = max(earlyTP), rate = 1/pi, delay2 = max(earlyTP)+1, rate2 = 2/pi),
+                   expected = earlyTP)
+  expect_identical(mweib_delayed(t = earlyTP, delay = max(earlyTP), shape = 1/pi, scale = 1/pi),
+                   expected = earlyTP)
 
   # restriction longer than delay period (for exponential)
-  expect_identical(mexp_delayed(t = 5 + earlyTP, delay = 5, rate = 1/pi), expected = 5 + pi * pexp_delayed(q = 5 + earlyTP, delay = 5, rate = 1/pi))
+  expect_equal(mexp_delayed(t = 5 + earlyTP, delay = 5, rate = 1/pi),
+               expected = 5 + pi * pexp_delayed(q = 5 + earlyTP, delay = 5, rate = 1/pi))
 
-  tPoints <- c(seq.int(from = 6, to = 11, length.out = 13L), +Inf)
+  # 2-phase
+  expect_equal(mexp_delayed(t = 5 + earlyTP, delay = 5, rate = 1/pi, delay2 = 7.5, rate2 = 2/pi),
+               expected = 5 + pi * pexp_delayed(q = pmin.int(5 + earlyTP, 7.5), delay = 5, rate = 1/pi) +
+                 pi/2 * pexp_delayed(q = 5 + earlyTP, delay = 7.5, rate = 2/pi) * exp(-1/pi * (7.5 - 5)))
 
-  # some random delay value
-  delayTimes <- runif(n = 7L, min = 0, max = 7)
+  settingDF <- tidyr::expand_grid(tPoints = c(seq.int(from = 6, to = 11, length.out = 7), +Inf),
+                                  # some random delay value
+                                  delayTimes = runif(n = 7, min = 0, max = 7),
+                                  rates = c(.1, .5, 1, 2, 5))
 
-  settingDF <- tidyr::expand_grid(tPoints = c(seq.int(from = 6, to = 11, length.out = 6), +Inf),
-                     delayTimes = runif(n = 7, min = 0, max = 7),
-                     rates = c(.1, .5, 1, 2, 5))
-
-  # restricted mean survival of exponential coincides with that from weibull with shape =1
+  # restricted mean survival of exponential coincides with that from Weibull with shape =1
   purrr::pwalk(.l = settingDF,
                .f = ~expect_equal(mexp_delayed(t = ..1, delay = ..2, rate = ..3),
                                   mweib_delayed(t = ..1, delay = ..2, shape = 1L, scale = ..3**-1)))
 
-  # simulated data
-  set.seed(1234)
-  simObs1 <- rweib_delayed(n = 123456, delay = 5, shape = 0.5, scale = 2)
-  simObs2 <- rweib_delayed(n = 123456, delay = 5, shape = 2.1, scale = 2)
-
-  expect_equal(mean(pmin.int(simObs1, 6.5)), expected = mweib_delayed(t = 6.5, delay = 5, shape = 0.5, scale = 2), tolerance = .003)
-  expect_equal(mean(pmin.int(simObs2, 6.5)), expected = mweib_delayed(t = 6.5, delay = 5, shape = 2.1, scale = 2), tolerance = .003)
+  # simulated Weibull data
+  expect_equal(mweib_delayed(t = 6.5, delay = 5, shape = 0.5, scale = 2),
+               expected = mean(pmin.int(rweib_delayed(n = 123456, delay = 5, shape = 0.5, scale = 2), 6.5)),
+               tolerance = .003)
+  expect_equal(mweib_delayed(t = 6.5, delay = 5, shape = 2.1, scale = 2),
+               expected = mean(pmin.int(rweib_delayed(n = 123456, delay = 5, shape = 2.1, scale = 2), 6.5)),
+               tolerance = .003)
 })
 
