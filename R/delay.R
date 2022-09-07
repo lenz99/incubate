@@ -272,7 +272,7 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
              par_gr <- purrr::map(par_list, ~ setdiff(., bind))
              # bind parameters first
              purrr::map(par_gr, ~ c(bind,
-                                    paste(rep(., 2L), rep(c("x", "y"), each = length(.)),
+                                    paste(rep.int(., times = 2L), rep(c("x", "y"), each = length(.)),
                                           sep = ".")))
            } else par_list
 

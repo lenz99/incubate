@@ -9,15 +9,15 @@
 \alias{mexp_delayed}
 \title{Delayed Exponential Distribution}
 \usage{
-dexp_delayed(x, delay, rate = 1, ...)
+dexp_delayed(x, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, log = FALSE)
 
-pexp_delayed(q, delay, rate = 1, ...)
+pexp_delayed(q, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ...)
 
-qexp_delayed(p, delay, rate = 1, ...)
+qexp_delayed(p, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ...)
 
-rexp_delayed(n, delay, rate = 1)
+rexp_delayed(n, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL)
 
-mexp_delayed(t = +Inf, delay, rate = 1, ...)
+mexp_delayed(t = +Inf, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL)
 }
 \arguments{
 \item{x}{A numeric vector of values for which to get the density.}
@@ -26,9 +26,9 @@ mexp_delayed(t = +Inf, delay, rate = 1, ...)
 
 \item{rate}{numeric. The event rate, must be non-negative.}
 
-\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Exponential]{stats::dexp()}}}
-
 \item{q}{A numeric vector of quantile values.}
+
+\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \verb{lower.tail=} to \code{\link[stats:Exponential]{stats::pexp()}}}
 
 \item{p}{A numeric vector of probabilities.}
 

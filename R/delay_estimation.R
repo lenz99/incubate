@@ -31,8 +31,8 @@ getPars <- function(par, group = "x", twoGroup, oNames, bind) {
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
 #' or according to standard maximum likelihood estimation ('MLE0').
 #'
-#' Given the observed data this factory method produces an MPSE objective function implementation
-#' which is the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
+#' Given the observed data this factory method produces an objective function
+#' which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
 #'
 #' @details
 #' From the observations, negative or infinite values are discarded. In any case, the objective function is to be minimized.
@@ -64,7 +64,6 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
 
   # data preparation ----
 
-  # Break ties in case of ties='break'
   # @param obs: data vector
   # @return sorted, cleaned up data vector or NULL in case of trouble
   preprocess <- function(obs) {
@@ -236,11 +235,11 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
 
 
   # alas, purrr::iwalk did not work for me here
-  for (na in names(PAR_BOUNDS)) {
-    idx <- startsWith(par_names, prefix = na)
+  for (nam in names(PAR_BOUNDS)) {
+    idx <- startsWith(par_names, prefix = nam)
     if (any(idx)) {
-      lowerVec[idx] <- purrr::chuck(PAR_BOUNDS, na, 'lower')
-      upperVec[idx] <- purrr::chuck(PAR_BOUNDS, na, 'upper')
+      lowerVec[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'lower')
+      upperVec[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'upper')
     } #fi
   } #rof
 
@@ -372,10 +371,10 @@ objFunFactory <- function(x, y=NULL, method = c('MPSE', 'MLE0'), distribution = 
   }# fn getCumDiffs
 
 
-  # objective function like negative mean log-spacings for MPSE
+  # objective function like negative mean log-spacings for MPSE or negative log-likelihood for MSE0
   # Estimate parameters by minimizing this function.
-  # `pars` the parameter vector.
-  # `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
+  # param `pars` the parameter vector.
+  # param `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
   objFun <- function(pars, aggregated = TRUE) {
     stopifnot( length(par_names) == length(pars) )
     pars <- purrr::set_names(pars, par_names)

@@ -34,8 +34,8 @@ objFunFactory(
 the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or \code{NULL} upon errors
 }
 \description{
-Given the observed data this factory method produces an MPSE objective function implementation
-which is the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
+Given the observed data this factory method produces an objective function
+which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
 }
 \details{
 From the observations, negative or infinite values are discarded. In any case, the objective function is to be minimized.
