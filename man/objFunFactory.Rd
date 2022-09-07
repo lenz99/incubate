@@ -8,9 +8,10 @@ or according to standard maximum likelihood estimation ('MLE0').}
 objFunFactory(
   x,
   y = NULL,
-  method = c("MPSE", "MLE0"),
   distribution = c("exponential", "weibull"),
+  twoPhase = FALSE,
   bind = NULL,
+  method = c("MPSE", "MLE0"),
   ties = c("density", "equidist", "random", "error"),
   verbose = 0L
 )
@@ -20,11 +21,13 @@ objFunFactory(
 
 \item{y}{numeric. observations in second group.}
 
-\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLE0} is the standard MLE-method, calculating the likelihood function as the product of density values}
-
 \item{distribution}{character(1). delayed distribution family}
 
+\item{twoPhase}{logical flag. Do we allow for two delay phases where event rate may change? Default is \code{FALSE}, i.e., a single delay phase.}
+
 \item{bind}{character. parameter names that are bind together (i.e. equated) between both groups}
+
+\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLE0} is the standard MLE-method, calculating the likelihood function as the product of density values}
 
 \item{ties}{character. How to handle ties within data of a group.}
 

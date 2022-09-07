@@ -7,6 +7,7 @@
 getDist(
   distribution = c("exponential", "weibull"),
   type = c("cdf", "prob", "density", "random", "param"),
+  twoPhase = FALSE,
   twoGroup = FALSE,
   bind = NULL
 )

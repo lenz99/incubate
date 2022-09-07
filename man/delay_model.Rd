@@ -8,9 +8,10 @@ delay_model(
   x = stop("Specify observations!", call. = FALSE),
   y = NULL,
   distribution = c("exponential", "weibull"),
-  method = c("MPSE", "MLE0"),
+  twoPhase = FALSE,
   bind = NULL,
   ties = c("density", "equidist", "random", "error"),
+  method = c("MPSE", "MLE0"),
   optim_args = NULL,
   verbose = 0
 )
@@ -22,11 +23,11 @@ delay_model(
 
 \item{distribution}{character. Which delayed distribution is assumed? Exponential or Weibull.}
 
-\item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLE0' = standard maximum likelihood estimation}
-
 \item{bind}{character. parameter names that are bind together in 2-group situation.}
 
 \item{ties}{character. How to handle ties.}
+
+\item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLE0' = standard maximum likelihood estimation}
 
 \item{optim_args}{list. optimization arguments to use. Use \code{NULL} to use the data-dependent default values.}
 

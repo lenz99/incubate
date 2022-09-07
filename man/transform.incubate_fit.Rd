@@ -19,6 +19,6 @@ The transformation is the probability integral transform. It uses the cumulative
 All available data in the model fit is transformed.
 }
 \note{
-This S3-method implementation is quite different from its default method that allows for non-standard evaluation on data frames, primarily for interactive use.
-But the name \code{transform} just fits so nicely to the intended purpose that it is re-used for the probability integral transform.
+This S3-method implementation is quite different from its default method that allows for non-standard evaluation on data frames, primarily intended for interactive use.
+But the name \code{transform} fits so nicely to the intended purpose that it is re-used for the probability integral transform, here.
 }
