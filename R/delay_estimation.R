@@ -34,8 +34,11 @@ getPars <- function(par, group = "x", twoGroup, oNames, bind) {
 #' Given the observed data this factory method produces an objective function
 #' which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
 #'
+#' The objective function takes a vector of model parameters as argument.
+#'
 #' @details
-#' From the observations, negative or infinite values are discarded. In any case, the objective function is to be minimized.
+#' From the observations, negative or infinite values are discarded during pre-processing.
+#' In any case, the objective function is to be minimized.
 #'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
@@ -359,13 +362,20 @@ objFunFactory <- function(x, y = NULL,
 
   # log spacings:
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
-  # @return n+1 cumulative diffs on log-scale
+  # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
   getCumDiffs <- function(pars, group) {
     # get() would (by default) start looking in the execution environment of getCumDiffs and would find the object in its parent
     # or: env = rlang::env_parent() # parent of caller env is (normally!?) the function-env
     # or: env = rlang::fn_env(getCumDiffs) # referring directly to the function environment (but requires function obj)
     obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
     pars.gr <- getPars(pars, group = group, twoGroup = twoGroup, oNames = oNames, bind = bind)
+
+    # check constraint
+    # XXX quick fix: delay2 before delay
+    if (twoPhase && pars.gr[['delay2']] <= pars.gr[['delay']]){
+      if (verbose > 0) cat("delay2 ≤ delay\n")
+      return(-(length(obs) + 1) * (stats::plogis(q = pars.gr[['delay']] - pars.gr[['delay2']], scale = obs[[length(obs)]] - obs[[1L]])+.03))
+    }
 
     # calculate spacings
     # contract: data is sorted!
@@ -392,7 +402,7 @@ objFunFactory <- function(x, y = NULL,
   }# fn getCumDiffs
 
 
-  # objective function like negative mean log-spacings for MPSE or negative log-likelihood for MSE0
+  # Objective function like negative mean log-spacings for MPSE or negative log-likelihood for MSE0
   # Estimate parameters by minimizing this function.
   # param `pars` the parameter vector.
   # param `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
@@ -429,7 +439,7 @@ objFunFactory <- function(x, y = NULL,
   }
 
   # attach analytical solution for MLE
-  if ( method == 'MLE0' && ! twoGroup && distribution == 'exponential' ){
+  if ( method == 'MLE0' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
     attr(objFun, which = "opt") <- list(par = c(delay = x[[1L]], rate = 1L/(mean(x) - x[[1L]])),
                                         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
                                         convergence = 0L,

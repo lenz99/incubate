@@ -41,5 +41,8 @@ Given the observed data this factory method produces an objective function
 which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
 }
 \details{
-From the observations, negative or infinite values are discarded. In any case, the objective function is to be minimized.
+The objective function takes a vector of model parameters as argument.
+
+From the observations, negative or infinite values are discarded during pre-processing.
+In any case, the objective function is to be minimized.
 }
