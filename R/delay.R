@@ -267,11 +267,11 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
          random  = c(rexp_delayed, rweib_delayed),
          param   = {
            # XXXX quick fix for 2-phase param
-           if (twoPhase) {
+           if (distribution == 'exponential' && ! twoGroup) {
              stopifnot( ! twoGroup ) # XXX implication of twoGroup=TRUE and bind=.. are not implemented yet!
 
              #return(c("delay", "rate", "delay2", "rate2"))
-             return(rownames(if (isTRUE(transformed)) PARAM_TRANSF_EXP_MAT else PARAM_TRANSF_EXP_INV))
+             return(rownames(if (isTRUE(transformed)) PARAM_TRANSF_EXP_MAT else PARAM_TRANSF_EXP_INV)[seq_len(2L*(1L + twoPhase))])
            }
 
            par_list <- list(exponential = c("delay", "rate"),
