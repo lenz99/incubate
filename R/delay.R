@@ -248,9 +248,11 @@ mweib_delayed <- function(t=+Inf, delay, shape, scale = 1, ...) ifelse(test = t 
 #' @param type character(1). type of function, cdf: cumulative distribution function, density or random function
 #' @param twoGroup logical(1). Do we have two groups?
 #' @param bind character. Names of parameters that are bind between the two groups.
+#' @param transformed flag for type='param': Do we need parameter names transformed (as used inside the optimization function?)
 #' @return selected distribution function or parameter names
+#' @include delay_estimation.R
 getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", "prob", "density", "random", "param"),
-                    twoPhase = FALSE, twoGroup = FALSE, bind = NULL) {
+                    twoPhase = FALSE, twoGroup = FALSE, bind = NULL, transformed = FALSE) {
   distribution <- match.arg(distribution)
   type <- match.arg(type)
 
@@ -264,10 +266,12 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
          # random draw function
          random  = c(rexp_delayed, rweib_delayed),
          param   = {
-           # XXX quick fix for 2-phase param
+           # XXXX quick fix for 2-phase param
            if (twoPhase) {
              stopifnot( ! twoGroup ) # XXX implication of twoGroup=TRUE and bind=.. are not implemented yet!
-             return(c("delay", "rate", "delay2", "rate2"))
+
+             #return(c("delay", "rate", "delay2", "rate2"))
+             return(rownames(if (isTRUE(transformed)) PARAM_TRANSF_EXP_MAT else PARAM_TRANSF_EXP_INV))
            }
 
            par_list <- list(exponential = c("delay", "rate"),

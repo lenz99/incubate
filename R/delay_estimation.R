@@ -5,15 +5,15 @@
 #'
 #' For a one-group setting or when `group=NULL` it simply returns the given parameter.
 #' This is an internal helper function
-#' used in [coef.incubate_fit()], [bsDataStep()] and in the factory method [objFunFactory()] below.
+#' used in [coef.incubate_fit()] and in the factory method [objFunFactory()] below.
 #' @param par named parameters (as simple vector or as list)
 #' @param group character. Which group to extract parameters for?
 #' @param twoGroup flag. Is it a two-group setting?
-#' @param oNames character. Original parameter names from distribution.
+#' @param oNames character. Base parameter names from distribution (names with no group suffixes)
 #' @param bind character. Which parameters are bind together in a two-group setting?
 #' @return named vector of parameters from the relevant group
 getPars <- function(par, group = "x", twoGroup, oNames, bind) {
-  if ( ! twoGroup || is.null(group) ) return(par)
+  if ( ! twoGroup || is.null(group) || ! nzchar(group) ) return(par)
 
   stopifnot( is.character(group), nzchar(group) )
 
@@ -27,6 +27,43 @@ getPars <- function(par, group = "x", twoGroup, oNames, bind) {
   c(par.gr, par[bind])[oNames]
 }
 
+# parameter transformation matrices
+PARAM_TRANSF_EXP_MAT <- matrix(c(1, 0, 0, 0,
+                                 0, 1, 0, 0,
+                                 -1, 0, 1, 0,
+                                 0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                               dimnames = list(c("delay_tr", "rate_tr", "delay2_tr", "rate2_tr")))
+PARAM_TRANSF_EXP_INV <- matrix(c(1, 0, 0, 0,
+                                 0, 1, 0, 0,
+                                 1, 0, 1, 0,
+                                 0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                               dimnames = list(c("delay", "rate", "delay2", "rate2")))
+
+
+#' Transform parameter vector to regular use or to optimization function
+#' @param par numeric parameter vector.
+#' @param toOpt logical. flag indicating which direction to do the transformation.
+#' @return transformed parameters as named numeric vector
+transformPars <- function(par, toOpt = TRUE){
+
+  stopifnot( is.numeric(par), length(par) == NCOL(PARAM_TRANSF_EXP_MAT) )
+  toOpt <- isTRUE(toOpt)
+
+  purrr::set_names(
+    if (toOpt)
+      as.numeric(.mapply(FUN = function(f, x) f(x),
+                         dots = list(c(I, log, log, log),
+                                     as.numeric(PARAM_TRANSF_EXP_MAT %*% par)),
+                         MoreArgs = NULL))
+
+    else as.numeric(PARAM_TRANSF_EXP_INV %*%
+                      as.numeric(.mapply(FUN = function(f, x) f(x),
+                                         dots = list(c(I, exp, exp, exp), par),
+                                         MoreArgs = NULL))),
+    nm = rownames(if (toOpt) PARAM_TRANSF_EXP_MAT else PARAM_TRANSF_EXP_INV))
+
+
+}
 
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
 #' or according to standard maximum likelihood estimation ('MLE0').
@@ -64,7 +101,7 @@ objFunFactory <- function(x, y = NULL,
   twoPhase <- isTRUE(twoPhase)
 
   #standard ('original') names of distribution
-  oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL)
+  oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = FALSE)
   #bind: intersect with oNames enforces the canonical order of dist-parameters and drops empty strings
   bind <- intersect(oNames, bind)
 
@@ -188,11 +225,11 @@ objFunFactory <- function(x, y = NULL,
 
 
   # optimization arguments -----
-  par_names <- getDist(distribution = distribution, type = "param",
-                       twoGroup = twoGroup, bind = bind, twoPhase = twoPhase)
+  optpar_names <- getDist(distribution = distribution, type = "param", transformed = TRUE,
+                       twoPhase = twoPhase, twoGroup = twoGroup, bind = bind)
 
 
-  # get start values for a group of observations
+  # get optimization start values and upper limits based on observations from a single group
   # @return list with par and upper limit for delay
   getParSetting.gr <- function(obs){
     # contract: obs is sorted!
@@ -205,11 +242,10 @@ objFunFactory <- function(x, y = NULL,
                       parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
                                   mean(obs - obs[[1L]] + 2/length(obs))**-1L )
 
+                      # transformation of parameters into optfun-parametrization
                       if (twoPhase)
-                        c(parV0,
-                          # add two parameters for 2nd phase
-                          obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]]) else
-                            parV0
+                        transformPars(par = c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]] + stats::runif(n=1L, min = -.1, max = +.1))) else
+                          parV0
                     },
                     weibull = {
                       # start values from 'Weibull plot'
@@ -245,35 +281,50 @@ objFunFactory <- function(x, y = NULL,
 
 
   # parameter bounds: set lower & upper bounds
-  lowerVec <- upperVec <- purrr::set_names(rep_len(NA_real_, length(par_names)),
-                                           nm = par_names)
+  lowerVec <- upperVec <- purrr::set_names(rep_len(NA_real_, length(optpar_names)),
+                                           nm = optpar_names)
 
-  PAR_LOW <- sqrt(.Machine$double.eps)
-  PAR_BOUNDS <- list(delay = c(lower = 0, upper = NA_real_),
-                     rate  = c(lower = PAR_LOW, upper = +Inf),
-                     shape = c(lower = PAR_LOW, upper = +Inf),
-                     scale = c(lower = PAR_LOW, upper = +Inf))
+  if (twoPhase){
+    #XXXX hardcoded for single group exponential
+    stopifnot( distribution == 'exponential')
+    stopifnot( ! twoGroup )
+    lowerVec[] <- c(0L, -Inf, -Inf, -Inf)
+    upperVec[] <- c(NA_real_, +Inf, NA_real_, +Inf)
+  } else {
+    PAR_LOW <- sqrt(.Machine$double.eps)
+    PAR_BOUNDS <- list(delay = c(lower = 0, upper = NA_real_),
+                       rate  = c(lower = PAR_LOW, upper = +Inf),
+                       shape = c(lower = PAR_LOW, upper = +Inf),
+                       scale = c(lower = PAR_LOW, upper = +Inf))
 
 
-  # alas, purrr::iwalk did not work for me here
-  for (nam in names(PAR_BOUNDS)) {
-    idx <- startsWith(par_names, prefix = nam)
-    if (any(idx)) {
-      lowerVec[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'lower')
-      upperVec[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'upper')
-    } #fi
-  } #rof
+    # alas, purrr::iwalk did not work for me here
+    for (nam in names(PAR_BOUNDS)) {
+      idx <- startsWith(optpar_names, prefix = nam)
+      if (any(idx)) {
+        lowerVec[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'lower')
+        upperVec[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'upper')
+      } #fi
+    } #rof
+
+  }
+
 
   par0_x <- getParSetting.gr(x)
+  # set parameter vector for group 1 and finish upperVec: match delay and delay2
   parV <-
     if (! twoGroup) {
-      # finish upperVec: match delay and delay2
-      upperVec[['delay']] <- par0_x[['delay_upper']]
-      if (twoPhase) upperVec[['delay2']] <- par0_x[['delay2_upper']]
+      if (twoPhase){
+        stopifnot( distribution == 'exponential' )
+        #XXXX hard coded upper limits, e.g. log-transformation for delay2 - delay1
+        upperVec[['delay_tr']]  <- I(par0_x[['delay_upper']])
+        upperVec[['delay2_tr']] <- log(par0_x[['delay2_upper']])
+      } else { # non twoPhase
+        upperVec[['delay']] <- par0_x[['delay_upper']]
+      }
       par0_x[['par']]
 
-    } else {
-      stopifnot( twoGroup )
+    } else { #twoGroup
       stopifnot( ! twoPhase ) #XXX twoPhase not implemented yet!
 
       # all parameters are bound
@@ -352,7 +403,7 @@ objFunFactory <- function(x, y = NULL,
     lower = lowerVec,
     upper = upperVec,
     # QQQ something like exp(trunc(log(par))) where par is the start parameters
-    control = list(parscale = pmin.int(1e11, pmax.int(sqrt(.Machine$double.eps), parV)))
+    control = list(parscale = pmin.int(1e7, pmax.int(sqrt(.Machine$double.eps), abs(parV))))
   )
 
 
@@ -368,14 +419,21 @@ objFunFactory <- function(x, y = NULL,
     # or: env = rlang::env_parent() # parent of caller env is (normally!?) the function-env
     # or: env = rlang::fn_env(getCumDiffs) # referring directly to the function environment (but requires function obj)
     obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
+    # extract relevant parameters (in two group setting) #XXXX what is right oNames for two-group two-phase setting?
     pars.gr <- getPars(pars, group = group, twoGroup = twoGroup, oNames = oNames, bind = bind)
 
-    # check constraint
-    # XXX quick fix: delay2 before delay
-    if (twoPhase && pars.gr[['delay2']] <= pars.gr[['delay']]){
-      if (verbose > 0) cat("delay2 ≤ delay\n")
-      return(-(length(obs) + 1) * (stats::plogis(q = pars.gr[['delay']] - pars.gr[['delay2']], scale = obs[[length(obs)]] - obs[[1L]])+.03))
+    #XXXX back-transformation
+    if (! twoGroup && twoPhase && distribution == 'exponential'){
+      # back-transform parameters to original scale (in CDF):
+      pars.gr <- transformPars(pars.gr, toOpt = FALSE)
+
     }
+    # # check constraint
+    # # XXX quick fix: delay2 before delay
+    # if (twoPhase && pars.gr[['delay2']] <= pars.gr[['delay']]){
+    #   if (verbose > 0) cat("delay2 ≤ delay\n")
+    #   return(-(length(obs) + 1) * (stats::plogis(q = pars.gr[['delay']] - pars.gr[['delay2']], scale = obs[[length(obs)]] - obs[[1L]])+.03))
+    # }
 
     # calculate spacings
     # contract: data is sorted!
@@ -407,8 +465,8 @@ objFunFactory <- function(x, y = NULL,
   # param `pars` the parameter vector.
   # param `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
   objFun <- function(pars, aggregated = TRUE) {
-    stopifnot( length(par_names) == length(pars) )
-    pars <- purrr::set_names(pars, par_names)
+    stopifnot( length(optpar_names) == length(pars) )
+    pars <- purrr::set_names(pars, optpar_names) # getPars in getCumDiffs needs names!
 
     switch(method,
            MPSE = {
@@ -517,7 +575,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     if (! is.null(optObj)){
       stopifnot( 'par' %in% names(optObj) )
       # set canonical names for parameters
-      optObj$par <- purrr::set_names(optObj$par, rlang::env_get(env = objFunEnv, nm = "par_names"))
+      optObj$par <- purrr::set_names(optObj$par, rlang::env_get(env = objFunEnv, nm = "optpar_names"))
       # save optim_args in optimization object (but w/o objective function)
       optim_args$fn <- NULL
       optObj <- append(optObj, values = list(optim_args = optim_args))
@@ -594,6 +652,9 @@ delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NU
   x <- rlang::env_get(env = objFunEnv, nm = "x")
   y <- rlang::env_get(env = objFunEnv, nm = "y", default = NULL)
 
+
+
+
   structure(
     list(
       data = if (twoGroup) list(x = x, y = y) else x,
@@ -604,7 +665,7 @@ delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NU
       bind = bind,
       ties = ties,
       objFun = objFun,
-      par = optObj$par,
+      par = if (twoPhase) transformPars(optObj$par, toOpt = FALSE) else optObj$par,
       val = optObj$value, ##objFun(optObj$par),
       optimizer = purrr::compact(optObj[c('convergence', 'message', 'counts', 'optim_args')])),
     class = "incubate_fit")
@@ -631,7 +692,8 @@ coef.incubate_fit <- function(object, group = NULL, ...){
 
   getPars(object[["par"]], group = group, twoGroup = object[["twoGroup"]],
           # use original parameter names of distribution
-          oNames = getDist(distribution = object[["distribution"]], type = "param", twoPhase = object[["twoPhase"]], twoGroup = FALSE, bind = NULL),
+          oNames = getDist(distribution = object[["distribution"]], type = "param",
+                           twoPhase = object[["twoPhase"]], twoGroup = FALSE, bind = NULL),
           # contract: bind was intersected with parameter names and, hence, has right order
           bind = object[["bind"]])
 }
@@ -790,6 +852,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     groupIdx <- 1L + (twoGroup && group == 'y')
     coefVect <- coef(object) # objective function expects parameters for all involved groups
+    #XXXX think here if it works for transformed coefs: 'delay_tr'
     del_ind <- grep('delay', names(coefVect)) # indices of coefficients that involve delay, e.g. 'delay' or 'delay.x' or 'delay.y'
     # in case of a delay per group ('delay.x' and 'delay.y') use the right one
     if (length(del_ind) > 1L) del_ind <- del_ind[[groupIdx]]
@@ -820,8 +883,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                                                   .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
                                                                        aggregated = FALSE)[[groupIdx]]))
 
-      # we like to drop last entry (delay = 1st observation) as objective function tends to explode
-      # but we have to keep last entry if it corresponds to the delay estimate (e.g., as is the case for MLE0-fitting)
+    # we like to drop last entry (delay = 1st observation) as objective function tends to explode
+    # but we have to keep last entry if it corresponds to the delay estimate (e.g., as is the case for MLE0-fitting)
     if (delayCandDF$delay[NROW(delayCandDF)] > del_coef) delayCandDF <- delayCandDF[-NROW(delayCandDF),, drop = FALSE]
     # relative change to optimal value, will be negative as objective function is minimized
     delayCandDF$objValInv <- (object$val - delayCandDF$objVal) / (object$val+.01)

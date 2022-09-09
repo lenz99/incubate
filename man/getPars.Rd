@@ -13,7 +13,7 @@ getPars(par, group = "x", twoGroup, oNames, bind)
 
 \item{twoGroup}{flag. Is it a two-group setting?}
 
-\item{oNames}{character. Original parameter names from distribution.}
+\item{oNames}{character. Base parameter names from distribution (names with no group suffixes)}
 
 \item{bind}{character. Which parameters are bind together in a two-group setting?}
 }
@@ -26,5 +26,5 @@ The parameters of the requested group are named using the canonical parameter na
 \details{
 For a one-group setting or when \code{group=NULL} it simply returns the given parameter.
 This is an internal helper function
-used in \code{\link[=coef.incubate_fit]{coef.incubate_fit()}}, \code{\link[=bsDataStep]{bsDataStep()}} and in the factory method \code{\link[=objFunFactory]{objFunFactory()}} below.
+used in \code{\link[=coef.incubate_fit]{coef.incubate_fit()}} and in the factory method \code{\link[=objFunFactory]{objFunFactory()}} below.
 }

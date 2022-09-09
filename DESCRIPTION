@@ -1,7 +1,7 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.2.1.9006
-Date: 2022-09-07
+Version: 1.2.1.9007
+Date: 2022-09-09
 Authors@R: 
     person(given = "Matthias",
            family = "Kuhn",
@@ -44,3 +44,10 @@ RoxygenNote: 7.2.1
 Config/testthat/edition: 3
 Depends: 
     R (>= 2.10)
+Collate: 
+    'data.R'
+    'delay_estimation.R'
+    'delay.R'
+    'delay_test.R'
+    'incubate-package.R'
+    'utils.R'

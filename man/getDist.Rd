@@ -9,7 +9,8 @@ getDist(
   type = c("cdf", "prob", "density", "random", "param"),
   twoPhase = FALSE,
   twoGroup = FALSE,
-  bind = NULL
+  bind = NULL,
+  transformed = FALSE
 )
 }
 \arguments{
@@ -20,6 +21,8 @@ getDist(
 \item{twoGroup}{logical(1). Do we have two groups?}
 
 \item{bind}{character. Names of parameters that are bind between the two groups.}
+
+\item{transformed}{flag for type='param': Do we need parameter names transformed (as used inside the optimization function?)}
 }
 \value{
 selected distribution function or parameter names

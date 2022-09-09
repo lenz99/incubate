@@ -191,7 +191,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   ties <- match.arg(arg = ties)
   type <- tolower(type)
   type <- match.arg(arg = type)
-  par_names <- getDist(distribution = distribution, type = "param")
+  par_names <- getDist(distribution = distribution, type = "param", transformed = FALSE)
   stopifnot( is.numeric(x), length(x) > length(par_names), is.numeric(y), length(y) > length(par_names) )
   stopifnot( is.numeric(R), length(R) == 1L, R >= 1L )
   stopifnot( is.character(param), length(param) >= 1L, nzchar(param) )
@@ -464,7 +464,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
   distribution <- match.arg(distribution)
   test <- match.arg(arg = tolower(test))
   ranFun <- getDist(distribution, type = "r")
-  par_names <- getDist(distribution, type = "param")
+  par_names <- getDist(distribution, type = "param", transformed = FALSE)
   param <- match.arg(param, choices = par_names)
 
   stopifnot( is.null(n) || (is.numeric(n) && length(n) == 1L && is.finite(n) ))
