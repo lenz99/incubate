@@ -65,6 +65,30 @@ transformPars <- function(par, toOpt = TRUE){
 
 }
 
+#' Get scaling information for optimization routine.
+#'
+#' The scale per parameter corresponds to the stepwidth within the optimizaiton routing.
+#' @param parV named numeric parameter vector
+#' @return vector of parameter scaling
+scalePars <- function(parV, lowerB = -Inf, upperB = +Inf){
+  if (is.null(lowerB)) lowerB <- -Inf
+  if (is.null(upperB)) upperB <- +Inf
+
+  stopifnot( is.numeric(parV), is.numeric(lowerB), is.numeric(upperB))
+  stopifnot( length(lowerB) == 1L || length(lowerB) == length(parV) )
+  stopifnot( length(upperB) == 1L || length(upperB) == length(parV) )
+
+  # scale vector: default value is 1
+  scVect <- rep.int(1, times = length(parV))
+
+  idx.nonLog <- which(startsWith(names(parV), "delay1"))
+  scVect[idx.nonLog] <- (parV[idx.nonLog]+.03)**.3 # ca. 3th root
+
+  # enforce upper and lower bounds
+  pmax.int(lowerB, pmin.int(upperB, scVect))
+}
+
+
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
 #' or according to standard maximum likelihood estimation ('MLE0').
 #'
@@ -397,13 +421,15 @@ objFunFactory <- function(x, y = NULL,
 
   stopifnot( ! any(is.na(lowerVec), is.na(upperVec)) )
 
+
+
   optim_args <- list(
     par = parV,
     method = "L-BFGS-B",
     lower = lowerVec,
     upper = upperVec,
-    # QQQ something like exp(trunc(log(par))) where par is the start parameters
-    control = list(parscale = pmin.int(1e7, pmax.int(sqrt(.Machine$double.eps), abs(parV))))
+    # Most parameters are on log-scale.
+    control = list(parscale = scalePars(parV, lowerB = lowerVec, upperB = upperVec))
   )
 
 
@@ -549,10 +575,8 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
         optim_args[['par']] <- optObj$par  # purrr::assign_in(where = "par", value = optObj$par)
 
         if ( isTRUE("parscale" %in% names(optim_args[["control"]])) ){
-          newparsc <- abs(optim_args[['par']])
-          newparsc[which(newparsc < 1e-7)] <- 1e-7
-          newparsc[which(newparsc > 1e8)] <- 1e8
-          optim_args[['control']][['parscale']] <- newparsc
+          optim_args[['control']][['parscale']] <- scalePars(optim_args[['par']],
+                                                             lowerB = optim_args[['lower']], upperB = optim_args[['upper']])
         }
 
         # optim: 2nd attempt
