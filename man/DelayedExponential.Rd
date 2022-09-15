@@ -9,22 +9,33 @@
 \alias{mexp_delayed}
 \title{Delayed Exponential Distribution}
 \usage{
-dexp_delayed(x, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, log = FALSE)
+dexp_delayed(
+  x,
+  delay1 = 0,
+  rate1 = 1,
+  delay2 = NULL,
+  rate2 = NULL,
+  log = FALSE
+)
 
-pexp_delayed(q, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ...)
+pexp_delayed(q, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, ...)
 
-qexp_delayed(p, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL, ...)
+qexp_delayed(p, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, ...)
 
-rexp_delayed(n, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL)
+rexp_delayed(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL)
 
-mexp_delayed(t = +Inf, delay = 0, rate = 1, delay2 = NULL, rate2 = NULL)
+mexp_delayed(t = +Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL)
 }
 \arguments{
 \item{x}{A numeric vector of values for which to get the density.}
 
-\item{delay}{numeric. The delay, must be non-negative.}
+\item{delay1}{numeric. The first delay, must be non-negative.}
 
-\item{rate}{numeric. The event rate, must be non-negative.}
+\item{rate1}{numeric. The event rate, must be non-negative.}
+
+\item{delay2}{numeric. The second delay, must be non-negative.}
+
+\item{rate2}{numeric. The second event rate, must be non-negative.}
 
 \item{q}{A numeric vector of quantile values.}
 

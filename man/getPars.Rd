@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{getPars}
 \alias{getPars}
-\title{Extract the parameters for the specified group.}
+\title{Extract the parameters for the specified group from a given named vector.}
 \usage{
 getPars(par, group = "x", twoGroup, oNames, bind)
 }
@@ -24,7 +24,9 @@ named vector of parameters from the relevant group
 The parameters of the requested group are named using the canonical parameter names of the distribution.
 }
 \details{
-For a one-group setting or when \code{group=NULL} it simply returns the given parameter.
+For a one-group setting or when \code{group=NULL}, it simply returns the given parameter as is.
+For a two-group setting, the parameter names are returned for the given group, without the group-specific suffix in canonical order.
+
 This is an internal helper function
 used in \code{\link[=coef.incubate_fit]{coef.incubate_fit()}} and in the factory method \code{\link[=objFunFactory]{objFunFactory()}} below.
 }

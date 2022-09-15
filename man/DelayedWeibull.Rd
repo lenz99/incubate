@@ -9,24 +9,18 @@
 \alias{mweib_delayed}
 \title{Delayed Weibull Distribution}
 \usage{
-dweib_delayed(x, delay, shape, scale = 1, ...)
+dweib_delayed(x, delay1, shape1, scale1 = 1, ...)
 
-pweib_delayed(q, delay, shape, scale = 1, ...)
+pweib_delayed(q, delay1, shape1, scale1 = 1, ...)
 
-qweib_delayed(p, delay, shape, scale = 1, ...)
+qweib_delayed(p, delay1, shape1, scale1 = 1, ...)
 
-rweib_delayed(n, delay, shape, scale = 1)
+rweib_delayed(n, delay1, shape1, scale1 = 1)
 
-mweib_delayed(t = +Inf, delay, shape, scale = 1, ...)
+mweib_delayed(t = +Inf, delay1, shape1, scale1 = 1, ...)
 }
 \arguments{
 \item{x}{A numeric vector of values for which to get the density.}
-
-\item{delay}{numeric. The delay, must be non-negative.}
-
-\item{shape}{numeric. Shape parameter, must be positive.}
-
-\item{scale}{numeric. Scale parameter (inverse of rate), must be positive.}
 
 \item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Weibull]{stats::dweibull()}}}
 
@@ -37,6 +31,12 @@ mweib_delayed(t = +Inf, delay, shape, scale = 1, ...)
 \item{n}{integer. Number of random observations requested.}
 
 \item{t}{A numeric vector of times that restrict the mean survival. Default is \code{+Inf}, i.e., the unrestricted mean survival time.}
+
+\item{delay}{numeric. The delay, must be non-negative.}
+
+\item{shape}{numeric. Shape parameter, must be positive.}
+
+\item{scale}{numeric. Scale parameter (inverse of rate), must be positive.}
 }
 \value{
 Functions pertaining to the delayed Weibull distribution:

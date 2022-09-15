@@ -2,18 +2,20 @@
 % Please edit documentation in R/delay_estimation.R
 \name{transformPars}
 \alias{transformPars}
-\title{Transform parameter vector to regular use or to optimization function}
+\title{Transform parameter vector of single group from regular use <=> optimization function
+It parses the parameter names to find out if it is twoPhase, twoGroup and which direction to translate (toOpt=).}
 \usage{
-transformPars(par, toOpt = TRUE)
+transformPars(parV, distribution = c("exponential", "weibull"))
 }
 \arguments{
-\item{par}{numeric parameter vector.}
+\item{parV}{numeric parameter vector of a single group}
 
-\item{toOpt}{logical. flag indicating which direction to do the transformation.}
+\item{distribution}{character name. Exponential or Weibull}
 }
 \value{
 transformed parameters as named numeric vector
 }
 \description{
-Transform parameter vector to regular use or to optimization function
+Transform parameter vector of single group from regular use <=> optimization function
+It parses the parameter names to find out if it is twoPhase, twoGroup and which direction to translate (toOpt=).
 }

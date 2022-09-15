@@ -18,11 +18,11 @@ getDist(
 
 \item{type}{character(1). type of function, cdf: cumulative distribution function, density or random function}
 
-\item{twoGroup}{logical(1). Do we have two groups?}
+\item{twoGroup}{logical(1). For type='param', do we have two groups?}
 
-\item{bind}{character. Names of parameters that are bind between the two groups.}
+\item{bind}{character. For type='param', names of parameters that are bind between the two groups.}
 
-\item{transformed}{flag for type='param': Do we need parameter names transformed (as used inside the optimization function?)}
+\item{transformed}{logical(1). For type='param', do we need parameter names transformed (as used inside the optimization function?)}
 }
 \value{
 selected distribution function or parameter names

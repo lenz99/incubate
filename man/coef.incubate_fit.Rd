@@ -4,10 +4,12 @@
 \alias{coef.incubate_fit}
 \title{Coefficients of a delay-model fit.}
 \usage{
-\method{coef}{incubate_fit}(object, group = NULL, ...)
+\method{coef}{incubate_fit}(object, transformed = FALSE, group = NULL, ...)
 }
 \arguments{
 \item{object}{object that is a \code{incubate_fit}}
+
+\item{transformed}{flag. Do we request the transformed parameters as used within the optimization?}
 
 \item{group}{character string to request the canonical parameter for one group}
 

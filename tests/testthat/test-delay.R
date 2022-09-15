@@ -9,12 +9,12 @@ test_that('density of delayed distributions', {
   shapeVals <- c(.0001, .0052, .14, .87, 1.26, 3.9, 14.8, 21, rpois(n=3, lambda = 8))
 
   # delayed exponential with delay=0 coincides with stats::dexp
-  purrr::walk(.x = rateVals, .f = ~expect_identical(dexp_delayed(x = tPoints, delay = 0L, rate = .x),
+  purrr::walk(.x = rateVals, .f = ~expect_identical(dexp_delayed(x = tPoints, delay1 = 0L, rate1 = .x),
                                                     stats::dexp(x = tPoints, rate = .x)))
 
   # delayed Weibull with delay=0 coincides with stats::dweibull
   purrr::walk2(.x = rateVals**-1, .y = shapeVals,
-              .f = ~expect_identical(dweib_delayed(x = tPoints, delay = 0L, scale = .x, shape = .y),
+              .f = ~expect_identical(dweib_delayed(x = tPoints, delay1 = 0L, scale1 = .x, shape1 = .y),
                                      stats::dweibull(x = tPoints, scale = .x, shape = .y)))
 
   # delayed exponential coincides with delayed weibull with shape = 1 fixed
@@ -22,13 +22,13 @@ test_that('density of delayed distributions', {
   delayTimes <- unique(c(delayTimes, rpois(n=length(rateVals) - length(delayTimes), lambda = 11)))
   delayTimes <- c(delayTimes, rnorm(n = length(rateVals) - length(delayTimes), mean = 7, sd = .71))
   purrr::walk2(.x = delayTimes, .y = rateVals,
-               .f = ~expect_equal(dexp_delayed(x = tPoints, delay = .x, rate = .y),
-                                  dweib_delayed(x = tPoints, delay = .x, shape = 1L, scale = .y**-1)))
+               .f = ~expect_equal(dexp_delayed(x = tPoints,  delay1 = .x, rate1 = .y),
+                                  dweib_delayed(x = tPoints, delay1 = .x, shape1 = 1L, scale1 = .y**-1)))
 
   # delayed exponential density differs by the factor exp(lambda * alpha) from the standard delay density
   #+ on log-scale, which is numerically more robust, this becomes a difference by lambda * alpha
   purrr::walk2(.x  = delayTimes, .y = rateVals,
-               .f = ~ expect_equal(dexp_delayed(x = tPoints, delay = .x, rate = .y, log=TRUE),
+               .f = ~ expect_equal(dexp_delayed(x = tPoints, delay1 = .x, rate1 = .y, log = TRUE),
                                    dplyr::if_else(tPoints < .x, true = -Inf, false = dexp(x = tPoints, rate = .y, log = TRUE) + .x * .y),
                                    tolerance = .01))
 
@@ -41,41 +41,42 @@ test_that('distribution function of delayed distributions', {
   rateVals <- c(.1, .52, 1.4, 1.58, 3.9, 11.2)
   shapeVals <- c(.001, .14, .84, 1.6, 5.9, 13.8)
   # CDF of delayed exponential with delay=0 coincides with stats::pexp
-  purrr::walk(.x = rateVals, .f = ~expect_identical(pexp_delayed(q = qPoints, delay = 0L, rate = .x),
+  purrr::walk(.x = rateVals, .f = ~expect_identical(pexp_delayed(q = qPoints, delay1 = 0L, rate1 = .x),
                                                            stats::pexp(q = qPoints, rate = .x)))
 
   # CDF of delayed Weibull with delay=0 coincides with stats::pweibull
   purrr::walk2(.x = rateVals**-1, .y = shapeVals,
-               .f = ~expect_identical(pweib_delayed(q = qPoints, delay = 0L, scale = .x, shape = .y),
+               .f = ~expect_identical(pweib_delayed(q = qPoints, delay1 = 0L, scale1 = .x, shape1 = .y),
                                       stats::pweibull(q = qPoints, scale = .x, shape = .y)))
 
   # delayed exponential coincides with delayed weibull with shape = 1 fixed
   delayTimes <- c(0, 1, 4, 7, 11, 13)
   purrr::walk2(.x = delayTimes, .y = rateVals,
-               .f = ~expect_equal(pexp_delayed(q = qPoints, delay = .x, rate = .y),
-                                  pweib_delayed(q = qPoints, delay = .x, shape = 1L, scale = .y**-1)))
+               .f = ~expect_equal(pexp_delayed(q = qPoints,  delay1 = .x, rate1 = .y),
+                                  pweib_delayed(q = qPoints, delay1 = .x, shape1 = 1L, scale1 = .y**-1)))
 })
 
 
 test_that('(restricted) mean survival time of delayed distributions', {
   # restriction within delay period:
   earlyTP <- seq.int(from = 0, to = 5, length.out = 11)
-  expect_identical(mexp_delayed(t = earlyTP, delay = max(earlyTP), rate = 1/pi),
+  expect_identical(mexp_delayed(t = earlyTP, delay1 = max(earlyTP), rate1 = 1/pi),
                    expected = earlyTP)
   # two-phase exponential
-  expect_identical(mexp_delayed(t = earlyTP, delay = max(earlyTP), rate = 1/pi, delay2 = max(earlyTP)+1, rate2 = 2/pi),
+  expect_identical(mexp_delayed(t = earlyTP, delay1 = max(earlyTP), rate1 = 1/pi, delay2 = max(earlyTP)+1, rate2 = 2/pi),
                    expected = earlyTP)
-  expect_identical(mweib_delayed(t = earlyTP, delay = max(earlyTP), shape = 1/pi, scale = 1/pi),
+  expect_identical(mweib_delayed(t = earlyTP, delay1 = max(earlyTP), shape1 = 1/pi, scale1 = 1/pi),
                    expected = earlyTP)
 
   # restriction longer than delay period (for exponential)
-  expect_equal(mexp_delayed(t = 5 + earlyTP, delay = 5, rate = 1/pi),
-               expected = 5 + pi * pexp_delayed(q = 5 + earlyTP, delay = 5, rate = 1/pi))
+  expect_equal(mexp_delayed(t = 5 + earlyTP, delay1 = 5, rate1 = 1/pi),
+               expected = 5 + pi * pexp_delayed(q = 5 + earlyTP, delay1 = 5, rate1 = 1/pi))
 
   # 2-phase
-  expect_equal(mexp_delayed(t = 5 + earlyTP, delay = 5, rate = 1/pi, delay2 = 7.5, rate2 = 2/pi),
-               expected = 5 + pi * pexp_delayed(q = pmin.int(5 + earlyTP, 7.5), delay = 5, rate = 1/pi) +
-                 pi/2 * pexp_delayed(q = 5 + earlyTP, delay = 7.5, rate = 2/pi) * exp(-1/pi * (7.5 - 5)))
+  expect_equal(mexp_delayed(t = 5 + earlyTP, delay1 = 5, rate1 = 1/pi, delay2 = 7.5, rate2 = 2/pi),
+               expected = 5 + pi * pexp_delayed(q = pmin.int(5 + earlyTP, 7.5), delay1 = 5, rate1 = 1/pi) +
+                 pi/2 * pexp_delayed(q = 5 + earlyTP, delay1 = 7.5, rate1 = 2/pi) * exp(-1/pi * (7.5 - 5)))
+
 
   settingDF <- tidyr::expand_grid(tPoints = c(seq.int(from = 6, to = 11, length.out = 7), +Inf),
                                   # some random delay value
@@ -84,15 +85,15 @@ test_that('(restricted) mean survival time of delayed distributions', {
 
   # restricted mean survival of exponential coincides with that from Weibull with shape =1
   purrr::pwalk(.l = settingDF,
-               .f = ~expect_equal(mexp_delayed(t = ..1, delay = ..2, rate = ..3),
-                                  mweib_delayed(t = ..1, delay = ..2, shape = 1L, scale = ..3**-1)))
+               .f = ~expect_equal(mexp_delayed(t = ..1,  delay1 = ..2, rate1 = ..3),
+                                  mweib_delayed(t = ..1, delay1 = ..2, shape = 1L, scale1 = ..3**-1)))
 
   # simulated Weibull data
-  expect_equal(mweib_delayed(t = 6.5, delay = 5, shape = 0.5, scale = 2),
-               expected = mean(pmin.int(rweib_delayed(n = 123456, delay = 5, shape = 0.5, scale = 2), 6.5)),
+  expect_equal(mweib_delayed(t = 6.5, delay1 = 5, shape1 = 0.5, scale1 = 2),
+               expected = mean(pmin.int(rweib_delayed(n = 123456, delay1 = 5, shape1 = 0.5, scale1 = 2), 6.5)),
                tolerance = .003)
-  expect_equal(mweib_delayed(t = 6.5, delay = 5, shape = 2.1, scale = 2),
-               expected = mean(pmin.int(rweib_delayed(n = 123456, delay = 5, shape = 2.1, scale = 2), 6.5)),
+  expect_equal(mweib_delayed(t = 6.5, delay1 = 5, shape1 = 2.1, scale1 = 2),
+               expected = mean(pmin.int(rweib_delayed(n = 123456, delay = 5, shape1 = 2.1, scale1 = 2), 6.5)),
                tolerance = .003)
 })
 
