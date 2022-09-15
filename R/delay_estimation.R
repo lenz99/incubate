@@ -1,108 +1,129 @@
 
-#' Extract the parameters for the specified group from a given named vector.
+
+
+#' Extract certain parameters from a given named parameter vector.
 #'
-#' The parameters of the requested group are named using the canonical parameter names of the distribution.
+#' This routine handles parameter vectors for one or two groups, it knows about bound parameters and
+#' it can also transform the given parameters from the standard form (as used in the delayed distribution functions)
+#' to the internal parametrization as used by the optimization function, and vice versa.
 #'
-#' For a one-group setting or when `group=NULL`, it simply returns the given parameter as is.
-#' For a two-group setting, the parameter names are returned for the given group, without the group-specific suffix in canonical order.
+#' When parameters for a single group are requested the parameters are always returned in the canonical order of the distribution.
+#' Otherwise, the order of parameters is unchanged.
+#' It parses the parameter names to find out if it is twoPhase, twoGroup and which direction to transform (if `transform=TRUE`).
 #'
 #' This is an internal helper function
-#' used in [coef.incubate_fit()] and in the factory method [objFunFactory()] below.
-#' @param par named parameters (as simple vector or as list)
-#' @param group character. Which group to extract parameters for?
-#' @param twoGroup flag. Is it a two-group setting?
-#' @param oNames character. Base parameter names from distribution (names with no group suffixes)
-#' @param bind character. Which parameters are bind together in a two-group setting?
-#' @return named vector of parameters from the relevant group
-getPars <- function(par, group = "x", twoGroup, oNames, bind) {
-  if ( ! twoGroup || is.null(group) || ! nzchar(group) ) return(par)
-
-  stopifnot( is.character(group), nzchar(group) )
-
-  # extract all group parameters and restore original name (e.g. remove ".x")
-  par.gr <- purrr::set_names(par[grepl(pattern = paste0(".", group), x = names(par), fixed = TRUE)],
-                             nm = setdiff(oNames, bind))
-
-  # restore original order
-  # contract: bind is intersected (only valid names, canonical order)
-  # contract: bind comes first in par
-  c(par.gr, par[bind])[oNames]
-}
-
-# parameter transformation matrices
-PARAM_TRANSF_EXP_MAT <- matrix(c(1, 0, 0, 0,
-                                 0, 1, 0, 0,
-                                 -1, 0, 1, 0,
-                                 0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                               dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr")))
-PARAM_TRANSF_EXP_INV <- matrix(c(1, 0, 0, 0,
-                                 0, 1, 0, 0,
-                                 1, 0, 1, 0,
-                                 0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                               dimnames = list(c("delay1", "rate1", "delay2", "rate2")))
-
-
-
-#' Transform parameter vector of single group from regular use <=> optimization function
-#' It parses the parameter names to find out if it is twoPhase, twoGroup and which direction to translate (toOpt=).
-#' @param parV numeric parameter vector of a single group
+#' used in [delay_model()], in the factory method [objFunFactory()] and in [coef.incubate_fit()].
+#' @param parV numeric parameter vector (for single group or two groups)
 #' @param distribution character name. Exponential or Weibull
-#' @return transformed parameters as named numeric vector
-transformPars <- function(parV, distribution = c('exponential', 'weibull')) {
+#' @param group character. Extract only parameters for specified group.
+#' @param transform logical. Do we want to transform the parameter vector?
+#' @return requested parameters as named numeric vector
+extractPars <- function(parV, distribution = c('exponential', 'weibull'), group = NULL, transform = FALSE) {
 
   stopifnot( is.numeric(parV), all(nzchar(names(parV))) )
   distribution <- match.arg(distribution)
-  stopifnot( distribution == 'exponential') #XXX Weibull not supported, yet
 
   pNames <- names(parV)
 
-  # toOpt when not all parameter names contain '_tr'
+  # isTransformed when all parameter names contain '_tr'
   trNames <- grepl(pattern = "_tr", pNames, fixed = TRUE)
   stopifnot( sum(trNames) %in% c(0L, length(parV)) )
-  toOpt <- ! all(trNames)
+  isTransformed <- all(trNames)
   twoPhase <- any(grepl(pattern = "delay2", pNames, fixed = TRUE))
+  # parameter names of single group where we start from!
+  oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
 
   idx.nongrp <- which(!grepl(pattern = paste0("[.][xy]$"), pNames))
-  twoGroup <- length(idx.nongrp) < length(parV) #is there any .x or .y parameter name? could also be two group but all bound..
+  #Is there any .x or .y parameter name?
+  #+when two group but all parameters bound then isTwoGroup = FALSE
+  isTwoGroup <- length(idx.nongrp) < length(parV)
 
-  oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = !toOpt)
-  pNames_trgt <- if (toOpt) {
-    purrr::map_chr(strsplit(pNames, split = ".", fixed = TRUE),
-                   .f = function(s) if (length(s) == 1L) paste0(s, "_tr") else paste0(s[[1L]], "_tr.", s[[2L]]))
-  } else sub(pattern = "_tr", replacement = "", pNames, fixed = TRUE)
+  # if no transformation required, simply extract the relevant parameters
+  if ( transform ){
+
+    stopifnot( distribution == 'exponential') #XXX Weibull not supported for transformation, yet
+
+    # parameter transformation matrices
+    PARAM_TRANSF_EXP_MAT <- matrix(c(1, 0, 0, 0,
+                                     0, 1, 0, 0,
+                                     -1, 0, 1, 0,
+                                     0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                   dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr")))
+    PARAM_TRANSF_EXP_INV <- matrix(c(1, 0, 0, 0,
+                                     0, 1, 0, 0,
+                                     1, 0, 1, 0,
+                                     0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                   dimnames = list(c("delay1", "rate1", "delay2", "rate2")))
+
+    # transform parameter vector for a single group
+    # parV1: parameter vector for a single group
+    transformPars1 <- function(parV1){
+      stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_EXP_MAT) )
+
+      purrr::set_names(
+        if (isTransformed) {
+          as.numeric(PARAM_TRANSF_EXP_INV[seq_along(parV1), seq_along(parV1)] %*%
+                       as.numeric(.mapply(FUN = function(f, x) f(x),
+                                          dots = list(c(I, exp, exp, exp)[seq_along(parV1)], parV1),
+                                          MoreArgs = NULL)))
+        } else {
+          as.numeric(.mapply(FUN = function(f, x) f(x),
+                             dots = list(c(I, log, log, log)[seq_along(parV1)],
+                                         as.numeric(PARAM_TRANSF_EXP_MAT[seq_along(parV1), seq_along(parV1)] %*% parV1)),
+                             MoreArgs = NULL))},
+
+        nm = rownames(if (isTransformed) PARAM_TRANSF_EXP_INV else PARAM_TRANSF_EXP_MAT)[seq_along(parV1)])
+    }
+
+    # update parameter vector according to transformation
+    parV <- if (isTwoGroup) {
+      # target parameter names
+      pNames_trgt <- if (isTransformed) {
+        sub(pattern = "_tr", replacement = "", pNames, fixed = TRUE) # remove '_tr' string
+      } else {
+        purrr::map_chr(strsplit(pNames, split = ".", fixed = TRUE),
+                       .f = function(s)
+                         if (length(s) == 1L)
+                           paste0(s, "_tr") else
+                             paste0(s[[1L]], "_tr.", s[[2L]]))
+      }
+
+      h <- purrr::map(.x = c("x", "y"),
+                      .f = ~ {
+                        idx.grp <- which(grepl(pattern = paste0("[.]", .x, "$"), pNames))
+                        # drop group naming: last to letters
+                        pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
+                        # apply transform
+                        transformPars1(parV1 = c(parV[idx.nongrp], purrr::set_names(parV[idx.grp], nm = pNms_grp))[oNames]) })
+      # charmatch(oNames, pNames_trgt)??
+      purrr::set_names(c(h[[1L]][pNames_trgt[idx.nongrp]], unlist(purrr::map(h, .f = ~ .x[! names(.x) %in% pNames_trgt[idx.nongrp]]))),
+                       nm = pNames_trgt)
+    } else transformPars1(parV1 = parV)
+
+    # reflect transformation in meta-data
+    isTransformed <- ! isTransformed
+    pNames <- names(parV)
+    oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
+  }# transform
 
 
-  ## handler of parameter vector of single group
-  handleParsSingleGroup <- function(parV1){
-    stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_EXP_MAT) )
+  # return:
+  # single group extraction required?
+  if ( ! isTwoGroup || is.null(group) || length(group) != 1L || ! group %in% c('x', 'y') ) parV else {
 
-    purrr::set_names(
-      if (toOpt)
-        as.numeric(.mapply(FUN = function(f, x) f(x),
-                           dots = list(c(I, log, log, log)[seq_along(parV1)],
-                                       as.numeric(PARAM_TRANSF_EXP_MAT[seq_along(parV1), seq_along(parV1)] %*% parV1)),
-                           MoreArgs = NULL))
+    stopifnot( is.character(group), nzchar(group) )
 
-      else as.numeric(PARAM_TRANSF_EXP_INV[seq_along(parV1), seq_along(parV1)] %*%
-                        as.numeric(.mapply(FUN = function(f, x) f(x),
-                                           dots = list(c(I, exp, exp, exp)[seq_along(parV1)], parV1),
-                                           MoreArgs = NULL))),
-      nm = rownames(if (toOpt) PARAM_TRANSF_EXP_MAT else PARAM_TRANSF_EXP_INV)[seq_along(parV1)])
+    # extract all group parameters and restore original name (e.g. remove ".x")
+    parV.gr <- purrr::set_names(parV[grepl(pattern = paste0(".", group), x = pNames, fixed = TRUE)],
+                               nm = setdiff(oNames, pNames[idx.nongrp]))
+
+    # restore original order
+    # contract: bind is intersected (only valid names, canonical order)
+    c(parV.gr, parV[pNames[idx.nongrp]])[oNames]
   }
 
-  if (twoGroup){
-    h <- purrr::map(.x = c("x", "y"),
-               .f = ~ {
-                 idx.grp <- which(grepl(pattern = paste0("[.]", .x, "$"), pNames))
-                 # drop group naming: last to letters
-                 pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
-                 # apply transform
-                 handleParsSingleGroup(parV1 = c(parV[idx.nongrp], purrr::set_names(parV[idx.grp], nm = pNms_grp))[oNames]) })
-    # charmatch(oNames, pNames_trgt)??
-    purrr::set_names(c(h[[1L]][pNames_trgt[idx.nongrp]], unlist(purrr::map(h, .f = ~ .x[! names(.x) %in% pNames_trgt[idx.nongrp]]))),
-                     nm = pNames_trgt)
-  } else handleParsSingleGroup(parV1 = parV)
 }
+
 
 #' Get scaling information for optimization routine.
 #'
@@ -165,7 +186,6 @@ objFunFactory <- function(x, y = NULL,
 
   #standard ('original') names of distribution
   oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = FALSE)
-  oNames_tr <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = TRUE)
   #bind: intersect with oNames enforces the canonical order of dist-parameters and drops unused parameters and empty strings
   bind <- intersect(oNames, bind)
 
@@ -315,7 +335,7 @@ objFunFactory <- function(x, y = NULL,
 
                       parV0 <- purrr::set_names(parV0, nm = oNames)
                       # transformation of parameters into optfun-parametrization
-                      transformPars(parV = parV0, distribution = distribution)
+                      extractPars(parV = parV0, distribution = distribution, transform = TRUE)
                     },
                     weibull = {
                       # start values from 'Weibull plot'
@@ -529,24 +549,12 @@ objFunFactory <- function(x, y = NULL,
     # or: env = rlang::env_parent() # parent of caller env is (normally!?) the function-env
     # or: env = rlang::fn_env(getCumDiffs) # referring directly to the function environment (but requires function obj)
     obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
-    # extract relevant parameters (in two group setting) #XXXX what is right oNames for two-group two-phase setting?
-    pars.gr <- getPars(pars, group = group, twoGroup = twoGroup, oNames = oNames_tr,
-                       bind = if (distribution == 'exponential') paste0(bind, "_tr") else bind) #XXX Weibull needs implementation
-    if (verbose > 1L){
-      cat(glue("Parameter vector for group {group} before back-transformation: ",
-               "{paste(names(pars.gr), round(pars.gr,2), sep = ': ', collapse = ', ')}\n"))
-    }
+    # back-transform parameters to original scale (for CDF)
+    pars.gr <- extractPars(pars, distribution = "exponential", group = group, transform = TRUE)
 
-    if (distribution == 'exponential'){
-      # back-transform parameters to original scale (in CDF):
-      pars.gr <- transformPars(pars.gr, distribution = "exponential")
-      if (verbose > 1L){
-        cat(glue("Parameter vector for group {group} after back-transformation: ",
-                 "{paste(names(pars.gr), round(pars.gr, 2), sep = ': ', collapse = ', ')}\n"))
-      }
-    } else {
-      #XXXX back-transformation
-      warning("Back-transformation from opt-pars to CDF-pars not implemented yet for Weibull!", call. = FALSE)
+    if (verbose > 1L){
+      cat(glue("Parameter vector for group {group} after back-transformation: ",
+               "{paste(names(pars.gr), round(pars.gr, 2), sep = ': ', collapse = ', ')}"), "\n")
     }
 
     # calculate spacings
@@ -580,7 +588,7 @@ objFunFactory <- function(x, y = NULL,
   # param `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
   objFun <- function(pars, aggregated = TRUE) {
     stopifnot( length(optpar_names) == length(pars) )
-    pars <- purrr::set_names(pars, optpar_names) # getPars in getCumDiffs needs names!
+    pars <- purrr::set_names(pars, optpar_names) # extractPars in getCumDiffs needs names!
 
     switch(method,
            MPSE = {
@@ -776,7 +784,7 @@ delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NU
       bind = bind,
       ties = ties,
       objFun = objFun,
-      par = transformPars(optObj$par, distribution = distribution),
+      par = extractPars(optObj$par, distribution = distribution, transform = TRUE),
       val = optObj$value, ##objFun(optObj$par),
       optimizer = purrr::compact(c(list(parOpt = optObj$par), optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")
@@ -804,15 +812,8 @@ coef.incubate_fit <- function(object, transformed = FALSE, group = NULL, ...){
   transformed <- isTRUE(transformed)
   stopifnot( object[["distribution"]] == 'exponential' || ! transformed ) #XXX currently transformation only implemented for 'expon'
 
-  getPars(if (transformed) purrr::chuck(object, "optimizer", "parOpt") else purrr::chuck(object, "par"),
-          group = group, twoGroup = object[["twoGroup"]],
-          # use original parameter names of distribution
-          oNames = getDist(distribution = object[["distribution"]], type = "param",
-                           transformed = transformed,
-                           twoPhase = object[["twoPhase"]], twoGroup = FALSE, bind = NULL),
-          # contract: bind was intersected with parameter names and, hence, has right order
-          bind = if (transformed) paste0(object[["bind"]], "_tr") else object[["bind"]])
-
+  extractPars(parV = if (transformed) purrr::chuck(object, "optimizer", "parOpt") else object[["par"]],
+              distribution = object[["distribution"]], group = group, transform = FALSE)
 }
 
 #' @export
