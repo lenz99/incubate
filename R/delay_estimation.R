@@ -91,11 +91,11 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
       h <- purrr::map(.x = c("x", "y"),
                       .f = ~ {
                         idx.grp <- which(grepl(pattern = paste0("[.]", .x, "$"), pNames))
-                        # drop group naming: last to letters
+                        # drop group naming: last two letters
                         pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
-                        # apply transform
+                        # apply transform on 1-group parameter vector in canonical order!
                         transformPars1(parV1 = c(parV[idx.nongrp], purrr::set_names(parV[idx.grp], nm = pNms_grp))[oNames]) })
-      # charmatch(oNames, pNames_trgt)??
+
       purrr::set_names(c(h[[1L]][pNames_trgt[idx.nongrp]], unlist(purrr::map(h, .f = ~ .x[! names(.x) %in% pNames_trgt[idx.nongrp]]))),
                        nm = pNames_trgt)
     } else transformPars1(parV1 = parV)
@@ -107,7 +107,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
   }# transform
 
 
-  # return:
+  # return parameter vector
   # single group extraction required?
   if ( ! isTwoGroup || is.null(group) || length(group) != 1L || ! group %in% c('x', 'y') ) parV else {
 
@@ -620,7 +620,7 @@ objFunFactory <- function(x, y = NULL,
 
   # attach analytical solution for MLE
   if ( method == 'MLE0' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
-    attr(objFun, which = "opt") <- list(par = c(delay = x[[1L]], rate = 1L/(mean(x) - x[[1L]])),
+    attr(objFun, which = "opt") <- list(par = extractPars(parV = c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]])), transform = TRUE), #expect transformed parameters
                                         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
                                         convergence = 0L,
                                         message = "analytic solution for standard MLE ('MLE0')",
@@ -784,8 +784,8 @@ delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NU
       bind = bind,
       ties = ties,
       objFun = objFun,
-      par = extractPars(optObj$par, distribution = distribution, transform = TRUE),
-      val = optObj$value, ##objFun(optObj$par),
+      par = extractPars(optObj$par, distribution = distribution, transform = TRUE), # keep in sync with update()!
+      val = optObj$value,
       optimizer = purrr::compact(c(list(parOpt = optObj$par), optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")
 }
@@ -839,9 +839,12 @@ update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
   if (is.null(optObj)) return(invisible(NULL))
 
   # update all relevant fields in the list
-  object[c("par", "val", "optimizer")] <- list(par = optObj$par, val = optObj$value,
+  object[c("par", "val", "optimizer")] <- list(par = extractPars(optObj$par, distribution = object[["distribution"]], transform = TRUE),
+                                               val = optObj$value,
                                                # drop NULLs from list (e.g. if optim_args is not present)
-                                               optimizer = purrr::compact(optObj[c("convergence", "message", "counts", "optim_args")]))
+                                               optimizer = purrr::compact(c(
+                                                 list(parOpt = optObj$par),
+                                                 optObj[c("convergence", "message", "counts", "optim_args")])))
 
   object
 }
