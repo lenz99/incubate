@@ -115,7 +115,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
 
     # extract all group parameters and restore original name (e.g. remove ".x")
     parV.gr <- purrr::set_names(parV[grepl(pattern = paste0(".", group), x = pNames, fixed = TRUE)],
-                               nm = setdiff(oNames, pNames[idx.nongrp]))
+                                nm = setdiff(oNames, pNames[idx.nongrp]))
 
     # restore original order
     # contract: bind is intersected (only valid names, canonical order)
@@ -360,6 +360,7 @@ objFunFactory <- function(x, y = NULL,
                          start_scale )
                       #XXXX transform, please!
                     },
+                    # default:
                     stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
     )
 
@@ -406,14 +407,14 @@ objFunFactory <- function(x, y = NULL,
 
       # all parameters are bound
       if ( length(bind) == length(oNames) ) {
-        # treat x and y as a single group for start value heuristic
+
+        # treat x and y as a single group for upper limit & start value heuristic
         par0_xy <- getParSetting.gr(c(x,y))
 
         upperB['delay1_tr'] <- par0_xy[['delay1_upper']]
         if (twoPhase) upperB[['delay2_tr']] <- par0_xy[['delay2_upper']]
 
         par0_xy[['par']]
-
 
       } else { #twoGroup, not all params bound!
 
@@ -430,7 +431,7 @@ objFunFactory <- function(x, y = NULL,
           upperB['delay1_tr.y'] <- par0_y[['delay1_upper']]
         } # fi
 
-        if (twoPhase){
+        if (twoPhase) {
           if ('delay2' %in% bind){
             upperB[['delay2_tr']] <- max(par0_x[['delay2_upper']], par0_y[['delay2_upper']])
           } else {
@@ -440,7 +441,9 @@ objFunFactory <- function(x, y = NULL,
         }
 
         # return start value
-        if (distribution == 'exponential') {
+        if ( is.null(bind) ){ # two groups unbound
+          c(start_x, start_y)
+        } else if (distribution == 'exponential') {
 
           switch( EXPR = paste(bind, collapse = '+'),
                   delay1 = {
@@ -453,7 +456,9 @@ objFunFactory <- function(x, y = NULL,
                   },
                   delay2 = {
                     stopifnot(twoPhase)
-                    c((start_x[[3L]] + start_y[[3L]]) / 2L, start_x[-3L], start_y[-3L])
+                    # arithmetic mean of log-scaled delay2-start values
+                    c((start_x[[3L]] + start_y[[3L]]) / 2L,
+                      start_x[-3L], start_y[-3L])
                   },
                   rate2 = {
                     stopifnot(twoPhase)
@@ -461,28 +466,61 @@ objFunFactory <- function(x, y = NULL,
                     c((start_x[[4L]] + start_y[[4L]]) / 2L,
                       start_x[-4L], start_y[-4L])
 
-                  }, #XXX check here logic if appropriate for transformed parameters
+                  },
                   `delay1+rate1` = {
                     stopifnot(twoPhase) #otherwise, we would have bound all parameters which is already handled above!
-                    c(min(start_x[[1L]], start_y[[1L]]), 2L * start_x[[2L]] * start_y[[2L]] / (start_x[[2L]] + start_y[[2L]]),
+                    # min for delay1, mean for rate1 on log-scale
+                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[2L]] + start_y[[2L]]) / 2L,
                       start_x[-c(1L, 2L)], start_y[-c(1L, 2L)])
                   },
                   `delay1+delay2` = {
                     stopifnot(twoPhase)
-                    c(min(start_x[[1L]], start_y[[1L]]), min(start_x[[3L]], start_y[[3L]]),
+                    # min for delay1, mean for log-scaled delay2
+                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[3L]] + start_y[[3L]])/2L,
                       start_x[-c(1L, 3L)], start_y[-c(1L, 3L)])
                   },
                   `delay1+rate2` = {
                     stopifnot(twoPhase)
-                    c(min(start_x[[1L]], start_y[[1L]]), 2L * start_x[[4L]] * start_y[[4L]] / (start_x[[4L]] + start_y[[4L]]),
+                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[4L]] + start_y[[4L]]) / 2L,
                       start_x[-c(1L, 4L)], start_y[-c(1L, 4L)])
                   },
-                  #XXX continue here: add missing cases!
+                  `rate1+delay2` = {
+                    stopifnot(twoPhase)
+                    c((start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[3L]]+start_y[[3L]]) / 2L,
+                      start_x[-c(2L, 3L)], start_y[-c(2L, 3L)])
+                  },
+                  `rate1+rate2` = {
+                    stopifnot(twoPhase)
+                    c((start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
+                      start_x[-c(2L, 4L)], start_y[-c(2L, 4L)])
+                  },
+                  `delay2+rate2` = {
+                    stopifnot(twoPhase)
+                    c((start_x[[3L]]+start_y[[3L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
+                      start_x[-c(3L, 4L)], start_y[-c(3L, 4L)])
+                  },
+                  `delay1+rate1+delay2` = {
+                    stopifnot(twoPhase)
+                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[3L]]+start_y[[3L]]) / 2L,
+                      start_x[[4L]], start_y[[4L]])
+                  },
+                  `delay1+rate1+rate2` = {
+                    stopifnot(twoPhase)
+                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
+                      start_x[[3L]], start_y[[3L]])
+                  },
+                  `delay1+delay2+rate2` = {
+                    stopifnot(twoPhase)
+                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[3L]]+start_y[[3L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
+                      start_x[[2L]], start_y[[2L]])
+                  },
+                  `rate1+delay2+rate2` = {
+                    stopifnot(twoPhase)
+                    c((start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[3L]]+start_y[[3L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
+                      start_x[[1L]], start_y[[1L]])
+                  },
                   # default
-                  {
-                    stopifnot( is.null(bind) )
-                    c(start_x, start_y)
-                  }
+                  stop("This bind-configuration is not implemented!", call. = FALSE)
           )
 
         } else {
@@ -509,14 +547,12 @@ objFunFactory <- function(x, y = NULL,
                   `shape1+scale1` = {
                     c(sqrt(start_x[[2L]] * start_y[[2L]]), (start_x[[3L]] + start_y[[3L]])/2L, start_x[[1L]], start_y[[1L]])
                   },
-                  # default: bind=NULL
-                  {
-                    stopifnot( is.null(bind) )
-                    c(start_x, start_y)
-                  })
+                  # default
+                  stop("This bind-configuration is not implemented!", call. = FALSE)
+          )
 
         } # weibull
-      } #twoGroup, not all params bound!
+      } #twoGrp, not all params bound!
     } # twoGrp
 
   # ensure we have names of transformed parameters
