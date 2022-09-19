@@ -8,6 +8,7 @@ test_that('density of delayed distributions', {
   rateVals <- c(.06, .32, .821, 1.14, 1.78, 2.19, 5.116, 11.2, rlnorm(n=3, meanlog = 1, sdlog = 3))
   shapeVals <- c(.0001, .0052, .14, .87, 1.26, 3.9, 14.8, 21, rpois(n=3, lambda = 8))
 
+
   # delayed exponential with delay=0 coincides with stats::dexp
   purrr::walk(.x = rateVals, .f = ~expect_identical(dexp_delayed(x = tPoints, delay1 = 0L, rate1 = .x),
                                                     stats::dexp(x = tPoints, rate = .x)))
@@ -17,13 +18,36 @@ test_that('density of delayed distributions', {
               .f = ~expect_identical(dweib_delayed(x = tPoints, delay1 = 0L, scale1 = .x, shape1 = .y),
                                      stats::dweibull(x = tPoints, scale = .x, shape = .y)))
 
-  # delayed exponential coincides with delayed weibull with shape = 1 fixed
   delayTimes <- c(0, 1, 4, 7, 11, 13) + .11
   delayTimes <- unique(c(delayTimes, rpois(n=length(rateVals) - length(delayTimes), lambda = 11)))
   delayTimes <- c(delayTimes, rnorm(n = length(rateVals) - length(delayTimes), mean = 7, sd = .71))
+
+  # either argument delay=/rate= or delay1=/rate1= can be used
+  purrr::walk2(.x = delayTimes, .y = rateVals,
+               .f = ~expect_identical(dexp_delayed(x = tPoints, delay = .x, rate = .y),
+                                      dexp_delayed(x = tPoints, delay1 = .x, rate1 = .y)))
+  purrr::walk2(.x = delayTimes, .y = rateVals,
+               .f = ~expect_identical(dexp_delayed(x = tPoints, delay = .x, rate = .y),
+                                      dexp_delayed(x = tPoints, delay1 = .x, rate = .y)))
+  purrr::walk2(.x = delayTimes, .y = rateVals,
+               .f = ~expect_identical(dexp_delayed(x = tPoints, delay = .x, rate1 = .y),
+                                      dexp_delayed(x = tPoints, delay1 = .x, rate = .y)))
+  # using both delay= and delay1= results in a warning
+  expect_warning(dexp_delayed(x = tPoints, delay = 5, delay1 = 8), regexp = "is ignored")
+  # using both rate= and rate1= results in a warning
+  expect_warning(dexp_delayed(x = tPoints, delay = 3, rate = 1.1, rate1 = .8), regexp = "is ignored")
+
+  # delayed exponential coincides with delayed weibull with shape = 1 fixed
   purrr::walk2(.x = delayTimes, .y = rateVals,
                .f = ~expect_equal(dexp_delayed(x = tPoints,  delay1 = .x, rate1 = .y),
                                   dweib_delayed(x = tPoints, delay1 = .x, shape1 = 1L, scale1 = .y**-1)))
+
+  # using both delay= and delay1= results in a warning
+  expect_warning(dweib_delayed(x = tPoints, delay = 5, delay1 = 8, shape = .2), regexp = "is ignored")
+  # using both scale= and scale1= results in a warning
+  expect_warning(dweib_delayed(x = tPoints, delay = 3, shape = 1.8, scale = 1.1, scale1 = .8), regexp = "is ignored")
+  # using both shape= and shape1= results in a warning
+  expect_warning(dweib_delayed(x = tPoints, delay = 3, shape = 1.8, shape1 = 1.3, scale = .8), regexp = "is ignored")
 
   # delayed exponential density differs by the factor exp(lambda * alpha) from the standard delay density
   #+ on log-scale, which is numerically more robust, this becomes a difference by lambda * alpha

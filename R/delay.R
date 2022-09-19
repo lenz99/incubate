@@ -18,6 +18,8 @@
 #' @param n integer. Number of random observations requested.
 #' @param delay1 numeric. The first delay, must be non-negative.
 #' @param rate1 numeric. The event rate, must be non-negative.
+#' @param delay numeric. Alias for first delay.
+#' @param rate numeric. Alias for first rate.
 #' @param delay2 numeric. The second delay, must be non-negative.
 #' @param rate2 numeric. The second event rate, must be non-negative.
 #' @param ... further arguments are passed on to the underlying non-delayed function, e.g., `lower.tail=` to [stats::pexp()]
@@ -35,13 +37,18 @@ NULL
 
 #' @rdname DelayedExponential
 #' @export
-dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, log = FALSE) {
+dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL, log = FALSE) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
+
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
-  log <- isTRUE(log)
 
   dvals <- stats::dexp(x = x - delay1, rate = rate1, log = log)
   # check for easy case: only a single delay
-  if ( is.null(delay2) ) return(dvals)
+  if ( is.null(delay2) ) {
+    if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
+    return(dvals)
+  }
 
   # we need both delay2 AND rate2
   stopifnot( is.numeric(delay2), is.numeric(rate2) )
@@ -69,7 +76,10 @@ dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 
 #' @rdname DelayedExponential
 #' @export
-pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, ...) {
+pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL, ...) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
+
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   pvals <- stats::pexp(q = q - delay1, rate = rate1, ...)
@@ -101,7 +111,10 @@ pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 
 #' @rdname DelayedExponential
 #' @export
-qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, ...) {
+qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL, ...) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
+
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   qvals <- delay1 + stats::qexp(p = p, rate = rate1, ...)
@@ -133,7 +146,10 @@ qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 
 #' @rdname DelayedExponential
 #' @export
-rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL) {
+rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
+
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   # check for easy case: only a single delay
@@ -162,7 +178,10 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL) 
 
 #' @rdname DelayedExponential
 #' @export
-mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL) {
+mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
+
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   # calculate for single phase delayed exponential
@@ -210,9 +229,12 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = N
 #' @param t A numeric vector of times that restrict the mean survival. Default is `+Inf`, i.e., the unrestricted mean survival time.
 #' @param p A numeric vector of probabilities.
 #' @param n integer. Number of random observations requested.
-#' @param delay numeric. The delay, must be non-negative.
-#' @param shape numeric. Shape parameter, must be positive.
-#' @param scale numeric. Scale parameter (inverse of rate), must be positive.
+#' @param delay1 numeric. The delay, must be non-negative.
+#' @param shape1 numeric. Shape parameter, must be positive.
+#' @param scale1 numeric. Scale parameter (inverse of rate), must be positive.
+#' @param delay numeric. Alias for delay.
+#' @param shape numeric. Alias for shape.
+#' @param scale numeric. Alias for scale.
 #' @param ... further arguments are passed on to the underlying non-delayed function, e.g., [stats::dweibull()]
 #' @return Functions pertaining to the delayed Weibull distribution:
 #' * `dweib_delayed` gives the density
@@ -228,21 +250,55 @@ NULL
 
 #' @rdname DelayedWeibull
 #' @export
-dweib_delayed <- function(x, delay1, shape1, scale1 = 1, ...) stats::dweibull(x = x - delay1, shape = shape1, scale = scale1, ...)
+dweib_delayed <- function(x, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1, ...) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
+  if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
+
+  stats::dweibull(x = x - delay1, shape = shape1, scale = scale1, ...)
+}
+
 #' @rdname DelayedWeibull
 #' @export
-pweib_delayed <- function(q, delay1, shape1, scale1 = 1, ...) stats::pweibull(q = q - delay1, shape = shape1, scale = scale1, ...)
+pweib_delayed <- function(q, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1, ...) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
+  if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
+
+  stats::pweibull(q = q - delay1, shape = shape1, scale = scale1, ...)
+}
+
 #' @rdname DelayedWeibull
 #' @export
-qweib_delayed <- function(p, delay1, shape1, scale1 = 1, ...) delay1 + stats::qweibull(p = p, shape = shape1, scale = scale1, ...)
+qweib_delayed <- function(p, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1, ...) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
+  if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
+
+  delay1 + stats::qweibull(p = p, shape = shape1, scale = scale1, ...)
+}
+
 #' @rdname DelayedWeibull
 #' @export
-rweib_delayed <- function(n, delay1, shape1, scale1 = 1) delay1 + stats::rweibull(n = n, shape = shape1, scale = scale1)
+rweib_delayed <- function(n, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1){
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
+  if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
+
+  delay1 + stats::rweibull(n = n, shape = shape1, scale = scale1)
+}
+
 #' @rdname DelayedWeibull
 #' @export
-mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, ...) ifelse(test = t <= delay1, yes = t,
-                                                                       # make use of lower incomplete gamma function which is calculated as gamma * pgamma
-                                                                       no = delay1 + scale1 / shape1 * gamma(1/shape1) * stats::pgamma(q = ((t-delay1)/scale1)^shape1, shape = 1/shape1))
+mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1, ...) {
+  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+  if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
+  if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
+
+  ifelse(test = t <= delay1, yes = t,
+         # make use of lower incomplete gamma function which is calculated as gamma * pgamma
+         no = delay1 + scale1 / shape1 * gamma(1/shape1) * stats::pgamma(q = ((t-delay1)/scale1)^shape1, shape = 1/shape1))
+}
 
 
 #' Get delay distribution function

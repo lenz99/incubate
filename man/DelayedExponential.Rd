@@ -13,18 +13,54 @@ dexp_delayed(
   x,
   delay1 = 0,
   rate1 = 1,
+  delay = delay1,
+  rate = rate1,
   delay2 = NULL,
   rate2 = NULL,
   log = FALSE
 )
 
-pexp_delayed(q, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, ...)
+pexp_delayed(
+  q,
+  delay1 = 0,
+  rate1 = 1,
+  delay = delay1,
+  rate = rate1,
+  delay2 = NULL,
+  rate2 = NULL,
+  ...
+)
 
-qexp_delayed(p, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, ...)
+qexp_delayed(
+  p,
+  delay1 = 0,
+  rate1 = 1,
+  delay = delay1,
+  rate = rate1,
+  delay2 = NULL,
+  rate2 = NULL,
+  ...
+)
 
-rexp_delayed(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL)
+rexp_delayed(
+  n,
+  delay1 = 0,
+  rate1 = 1,
+  delay = delay1,
+  rate = rate1,
+  delay2 = NULL,
+  rate2 = NULL
+)
 
-mexp_delayed(t = +Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL)
+mexp_delayed(
+  t = +Inf,
+  delay1 = 0,
+  rate1 = 1,
+  delay = delay1,
+  rate = rate1,
+  delay2 = NULL,
+  rate2 = NULL
+)
 }
 \arguments{
 \item{x}{A numeric vector of values for which to get the density.}
@@ -32,6 +68,10 @@ mexp_delayed(t = +Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL)
 \item{delay1}{numeric. The first delay, must be non-negative.}
 
 \item{rate1}{numeric. The event rate, must be non-negative.}
+
+\item{delay}{numeric. Alias for first delay.}
+
+\item{rate}{numeric. Alias for first rate.}
 
 \item{delay2}{numeric. The second delay, must be non-negative.}
 
