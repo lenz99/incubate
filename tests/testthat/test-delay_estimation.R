@@ -117,10 +117,7 @@ test_that("Fit delayed Weibull with MPSE", {
   coef_maxFl <- coef(fd_maxFl)
 
   expect_identical(purrr::chuck(fd_maxFl, 'optimizer', 'convergence'), expected = 0L)
-  expect_equal(coef_maxFl[1L], expected = c(delay=0.244), tolerance = .01)
-  expect_equal(coef_maxFl[2L], expected = c(shape=1.310), tolerance = .01)
-  expect_equal(coef_maxFl[3L], expected = c(scale=.202),  tolerance = .01)
-
+  expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .005)
 
   # beach pollution
   # from Steen & Stickler (1976)
@@ -139,7 +136,7 @@ test_that("Fit delayed Weibull with MPSE", {
   expect_identical(purrr::chuck(fd_poll, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_poll), expected = 3L)
   expect_lt(objFun_poll(coef_poll), expected = 3.75)
-  expect_equal(coef_poll, expected = c(delay=1085, shape=0.95, scale=6562), tolerance = .001)
+  expect_equal(coef_poll, expected = c(delay1=1085, shape1=0.95, scale1=6562), tolerance = .001)
 
   # fit in two groups
   fd_wb2 <- incubate::delay_model(x = maxFloodLvl, y = pollution, distribution = "weib")
@@ -147,25 +144,22 @@ test_that("Fit delayed Weibull with MPSE", {
 
   expect_identical(purrr::chuck(fd_wb2, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_wb2), expected = 2L*3L)
-  expect_equal(as.numeric(coef_wb2[1L]), expected = as.numeric(coef_maxFl[1L]), tolerance = .001)
-  expect_equal(as.numeric(coef_wb2[2L]), expected = as.numeric(coef_maxFl[2L]), tolerance = .001)
-  expect_equal(as.numeric(coef_wb2[3L]), expected = as.numeric(coef_maxFl[3L]), tolerance = .001)
-  expect_equal(as.numeric(coef_wb2[4L]), expected = as.numeric(coef_poll[1L]), tolerance = .001)
-  expect_equal(as.numeric(coef_wb2[5L]), expected = as.numeric(coef_poll[2L]), tolerance = .001)
-  expect_equal(as.numeric(coef_wb2[6L]), expected = as.numeric(coef_poll[3L]), tolerance = .001)
+  expect_equal(as.numeric(coef_wb2[1:3]), expected = as.numeric(coef_maxFl), tolerance = .001)
+  # there might occur quite some differences in the coefficients
+  expect_equal(as.numeric(coef_wb2[4:6]), expected = as.numeric(coef_poll), tolerance = .25)
 
   # fit model for two groups with binding
   set.seed(20210430)
-  fd_wb2b <- delay_model(x = rweib_delayed(n=37, delay = 7, shape = .8, scale = 3),
-                                   y = rweib_delayed(n=51, delay = 5, shape = 1.2, scale = 1.5),
-                                   distribution = "weib", bind = "delay")
+  fd_wb2b <- delay_model(x = rweib_delayed(n=37, delay1 = 7, shape1 = .8, scale1 = 3),
+                                   y = rweib_delayed(n=51, delay1 = 5, shape1 = 1.2, scale1 = 1.5),
+                                   distribution = "weib", bind = "delay1")
 
   coef_wb2b <- coef(fd_wb2b)
 
   expect_identical(purrr::chuck(fd_wb2b, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_wb2b), expected = 2L*3L-1L) #delay is bound
   # expect a delay close to the minimum of the two true delay parameters
-  expect_equal(coef_wb2b[1L], expected = c(delay = 5), tolerance = .02)
+  expect_equal(coef_wb2b[1L], expected = c(delay1 = 5), tolerance = .02)
 })
 
 

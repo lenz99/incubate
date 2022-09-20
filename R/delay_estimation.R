@@ -38,41 +38,58 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
   #+when two group but all parameters bound then isTwoGroup = FALSE
   isTwoGroup <- length(idx.nongrp) < length(parV)
 
+  # transform parameters if requested
   # if no transformation required, simply extract the relevant parameters
   if ( transform ){
 
-    stopifnot( distribution == 'exponential') #XXX Weibull not supported for transformation, yet
-
-    # parameter transformation matrices
-    PARAM_TRANSF_EXP_MAT <- matrix(c(1, 0, 0, 0,
-                                     0, 1, 0, 0,
-                                     -1, 0, 1, 0,
-                                     0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                   dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr")))
-    PARAM_TRANSF_EXP_INV <- matrix(c(1, 0, 0, 0,
-                                     0, 1, 0, 0,
-                                     1, 0, 1, 0,
-                                     0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                   dimnames = list(c("delay1", "rate1", "delay2", "rate2")))
-
     # transform parameter vector for a single group
-    # parV1: parameter vector for a single group
+    # @param parV1: parameter vector for a single group
+    # @return transformed parameter vector
     transformPars1 <- function(parV1){
-      stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_EXP_MAT) )
+
+      # parameter transformation matrices
+      PARAM_TRANSF_M <- list(exponential = matrix(c(1, 0, 0, 0,
+                                                    0, 1, 0, 0,
+                                                    -1, 0, 1, 0,
+                                                    0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                                  dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
+                             weibull = {
+                               m <- diag(nrow = 6L)
+                               rownames(m) <- paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr")
+                               m})[[distribution]]
+      PARAM_TRANSF_MINV <- list(exponential = matrix(c(1, 0, 0, 0,
+                                                       0, 1, 0, 0,
+                                                       1, 0, 1, 0,
+                                                       0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                                     dimnames = list(c("delay1", "rate1", "delay2", "rate2"))),
+                                weibull = {
+                                  m <- diag(nrow = 6L)
+                                  rownames(m) <- c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")
+                                  m
+                                })[[distribution]]
+
+
+      PARAM_TRANSF_F <- list(exponential = c(identity, exp, exp, exp),
+                             weibull = c(identity, identity, identity, identity, identity, identity))[[distribution]]
+      PARAM_TRANSF_FINV <- list(exponential = c(identity, log, log, log),
+                                weibull = c(identity, identity, identity, identity, identity, identity))[[distribution]]
+
+      stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F) )
+
 
       purrr::set_names(
         if (isTransformed) {
-          as.numeric(PARAM_TRANSF_EXP_INV[seq_along(parV1), seq_along(parV1)] %*%
+          as.numeric(PARAM_TRANSF_MINV[seq_along(parV1), seq_along(parV1)] %*%
                        as.numeric(.mapply(FUN = function(f, x) f(x),
-                                          dots = list(c(I, exp, exp, exp)[seq_along(parV1)], parV1),
+                                          dots = list(PARAM_TRANSF_F[seq_along(parV1)], parV1),
                                           MoreArgs = NULL)))
         } else {
           as.numeric(.mapply(FUN = function(f, x) f(x),
-                             dots = list(c(I, log, log, log)[seq_along(parV1)],
-                                         as.numeric(PARAM_TRANSF_EXP_MAT[seq_along(parV1), seq_along(parV1)] %*% parV1)),
+                             dots = list(PARAM_TRANSF_FINV[seq_along(parV1)],
+                                         as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1)),
                              MoreArgs = NULL))},
 
-        nm = rownames(if (isTransformed) PARAM_TRANSF_EXP_INV else PARAM_TRANSF_EXP_MAT)[seq_along(parV1)])
+        nm = rownames(if (isTransformed) PARAM_TRANSF_MINV else PARAM_TRANSF_M)[seq_along(parV1)])
     }
 
     # update parameter vector according to transformation
@@ -330,14 +347,15 @@ objFunFactory <- function(x, y = NULL,
                       parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
                                   mean(obs - obs[[1L]] + 2/length(obs))**-1L )
 
-                      # two extra parameters when 2-phase exponential
+                      # two extra parameters when exponential with *two* phases
                       if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]])
 
                       parV0 <- purrr::set_names(parV0, nm = oNames)
                       # transformation of parameters into optfun-parametrization
-                      extractPars(parV = parV0, distribution = distribution, transform = TRUE)
+                      extractPars(parV = parV0, distribution = "exponential", transform = TRUE)
                     },
                     weibull = {
+                      stopifnot( ! twoPhase) #XXXX 2-phase not supported yet for Weibull!
                       # start values from 'Weibull plot'
                       #+using the empirical distribution function
                       ## in MASS::fitdistr they simplify:
@@ -355,10 +373,13 @@ objFunFactory <- function(x, y = NULL,
                       start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
 
 
-                      c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
+                      parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
                          start_shape,
                          start_scale )
-                      #XXXX transform, please!
+
+                      parV0 <- purrr::set_names(parV0, nm = oNames)
+                      # transformation of parameters into optfun-parametrization
+                      extractPars(parV = parV0, distribution = "weibull", transform = TRUE)
                     },
                     # default:
                     stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
@@ -379,8 +400,8 @@ objFunFactory <- function(x, y = NULL,
   PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),
-                     shape = c(lower = -Inf, upper = +Inf),
-                     scale = c(lower = -Inf, upper = +Inf))
+                     shape = c(lower = sqrt(.Machine$double.eps), upper = +Inf), ##XXXX for the time being, as we are untransformed in Weibull ## -Inf
+                     scale = c(lower = sqrt(.Machine$double.eps), upper = +Inf)) ##XXXX scale = -Inf
 
 
   # alas, purrr::iwalk did not work for me here
@@ -586,7 +607,7 @@ objFunFactory <- function(x, y = NULL,
     # or: env = rlang::fn_env(getCumDiffs) # referring directly to the function environment (but requires function obj)
     obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
     # back-transform parameters to original scale (for CDF)
-    pars.gr <- extractPars(pars, distribution = "exponential", group = group, transform = TRUE)
+    pars.gr <- extractPars(pars, distribution = distribution, group = group, transform = TRUE)
 
     if (verbose > 1L){
       cat(glue("Parameter vector for group {group} after back-transformation: ",
@@ -656,7 +677,8 @@ objFunFactory <- function(x, y = NULL,
 
   # attach analytical solution for MLE
   if ( method == 'MLE0' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
-    attr(objFun, which = "opt") <- list(par = extractPars(parV = c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]])), transform = TRUE), #expect transformed parameters
+    attr(objFun, which = "opt") <- list(par = extractPars(parV = c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]])),
+                                                          distribution = 'exponential', transform = TRUE), #expect transformed parameters
                                         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
                                         convergence = 0L,
                                         message = "analytic solution for standard MLE ('MLE0')",
@@ -820,7 +842,7 @@ delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NU
       bind = bind,
       ties = ties,
       objFun = objFun,
-      par = extractPars(optObj$par, distribution = distribution, transform = TRUE), # keep in sync with update()!
+      par = extractPars(optObj$par, distribution = distribution, transform = TRUE), # /!\ keep in sync with update()!
       val = optObj$value,
       optimizer = purrr::compact(c(list(parOpt = optObj$par), optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")

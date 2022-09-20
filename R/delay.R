@@ -328,7 +328,7 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
            par_list <- list(exponential = c("delay1", "rate1", "delay2", "rate2")[seq_len(2L*(1L + twoPhase))],
                             weibull = c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")[seq_len(3L*(1L + twoPhase))])
 
-           if (transformed){
+           if (transformed) {
              par_list <- purrr::map(par_list, ~ paste0(.x, "_tr"))
              if (! is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
            }
