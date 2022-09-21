@@ -398,7 +398,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 print.incubate_test <- function(x, ...){
   params <- paste(x$param, collapse = ' & ')
   P_boot_str <- if (is.numeric(x$P$bootstrap)) format.pval(x$P$bootstrap) else '-'
-  cat(glue("Test for difference in parameter{'s'[length(x$param) > 1]} {params} between two groups.",
+  cat(glue("Test for difference in {if (length(x$param) > 1) 'parameters' else 'parameter'} {params} between two groups.",
            "Alternative hypothesis: {params} {c('is', 'are')[[1L + (length(x$param) > 1)]]} different between the two groups.",
            "Parametric Bootstrap P-value: {P_boot_str}", .sep = "\n"), '\n')
 }
