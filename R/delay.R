@@ -304,6 +304,7 @@ mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay = delay1, sh
 #' Get delay distribution function
 #' @param distribution character(1). delay distribution.
 #' @param type character(1). type of function, cdf: cumulative distribution function, density or random function
+#' @param twoPhase logical(1). For `type='param'`, do we model two phases?
 #' @param twoGroup logical(1). For type='param', do we have two groups?
 #' @param bind character. For type='param', names of parameters that are bind between the two groups.
 #' @param transformed logical(1). For type='param', do we need parameter names transformed (as used inside the optimization function?)

@@ -8,7 +8,8 @@ test_diff(
   x,
   y = stop("Provide data for group y!"),
   distribution = c("exponential", "weibull"),
-  param = "delay",
+  twoPhase = FALSE,
+  param = "delay1",
   R = 400,
   ties = c("density", "equidist", "random", "error"),
   type = c("all", "bootstrap", "gof", "moran", "pearson", "lr", "lr_pp"),
@@ -22,7 +23,9 @@ test_diff(
 
 \item{distribution}{character(1). Name of the parametric delay distribution to use.}
 
-\item{param}{character. Names of parameters to test difference for. Default value is \code{'delay'}.}
+\item{twoPhase}{logical(1). Do we model two phases per group? Default is \code{FALSE}, i.e. a single delay phase per group.}
+
+\item{param}{character. Names of parameters to test difference for. Default value is \code{'delay1'}.}
 
 \item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 

@@ -18,6 +18,8 @@ getDist(
 
 \item{type}{character(1). type of function, cdf: cumulative distribution function, density or random function}
 
+\item{twoPhase}{logical(1). For \code{type='param'}, do we model two phases?}
+
 \item{twoGroup}{logical(1). For type='param', do we have two groups?}
 
 \item{bind}{character. For type='param', names of parameters that are bind between the two groups.}

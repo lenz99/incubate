@@ -783,12 +783,17 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @export
 delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
-                        bind=NULL, ties=c('density', 'equidist', 'random', 'error'),
+                        bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
                         method = c('MPSE', 'MLE0'),
-                        optim_args=NULL, verbose = 0) {
+                        optim_args = NULL, verbose = 0) {
 
 
   # setup -------------------------------------------------------------------
+
+  if (is.logical(verbose)) verbose <- as.numeric(verbose)
+  if ( is.null(verbose) || ! is.numeric(verbose) || ! is.finite(verbose) ) verbose <- 0L
+  verbose <- verbose[[1L]]
+
 
   # unpack x if it is a list of two vectors
   if (is.list(x)){
@@ -801,17 +806,28 @@ delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NU
   stopifnot( !is.null(x) && is.numeric(x) && length(x) )
 
   distribution <- match.arg(distribution)
+
   method <- toupper(method)
   if (length(method) == 1L && method == 'MSE') {
-    message("The method name 'MPSE' is prefered over the old name 'MSE'!")
+    message("The method name 'MPSE' is prefered over the previously used name 'MSE'!")
     method <- 'MPSE'
   }
   method <- match.arg(method)
   ties <- match.arg(ties)
 
-  if (is.logical(verbose)) verbose <- as.numeric(verbose)
-  if ( is.null(verbose) || ! is.numeric(verbose) || ! is.finite(verbose) ) verbose <- 0
-  verbose <- verbose[[1L]]
+  if (is.character(bind)){
+    if (any(grepl(pattern = "_tr", bind, fixed = TRUE))){
+      stop("Parameter names to bind= refer to the distribution parameters and not to the transformed parameters of the objective function.", call. = FALSE)
+    }
+
+    # translate convenience names (for single phase) to canonical names
+    unNmbrdIdx <- !grepl(pattern = "[12]", bind, fixed = FALSE)
+    if (any(unNmbrdIdx)){
+      bind[unNmbrdIdx] <- paste0(bind[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
+      if (verbose > 0L) cat("The unnumbered parameter names in bind= are taken to refer to initial phase and are translated to canonical parameter names.\n")
+    }
+
+  }#fi bind=
 
 
   # objective function ------------------------------------------------------

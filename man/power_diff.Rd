@@ -6,7 +6,8 @@
 \usage{
 power_diff(
   distribution = c("exponential", "weibull"),
-  param = "delay",
+  twoPhase = FALSE,
+  param = "delay1",
   test = c("bootstrap", "pearson", "moran", "lr", "lr_pp"),
   eff = stop("Provide parameters for both group that reflect the effect!"),
   n = NULL,
@@ -21,7 +22,9 @@ power_diff(
 \arguments{
 \item{distribution}{character. Which assumed distribution is used for the power calculation.}
 
-\item{param}{character. Parameter name(s) for which to simulate the power.}
+\item{twoPhase}{logical(1). Do we model two phases per group? Default is \code{FALSE}, i.e. a single delay phase per group.}
+
+\item{param}{character. Parameter name(s) which are to be tested for difference and for which to simulate the power. Default value is \code{'delay1'}.}
 
 \item{test}{character. Which test to use for this power estimation?}
 

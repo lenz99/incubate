@@ -14,6 +14,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
   stopifnot( inherits(delayFit, what = 'incubate_fit') )
   method <- match.arg(method)
+  stopifnot(!delayFit$twoPhase) #XXXX currently, only single phase is implemented here for parametric tests (think what is needed here!)
 
   if (delayFit$method != 'MPSE'){
     stop('Goodness-of-fit test only supported for models that are fit with maximum product of spacings estimation (MPSE)!')
@@ -175,29 +176,50 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 #' @param x data from reference/control group.
 #' @param y data from the treatment group.
 #' @param distribution character(1). Name of the parametric delay distribution to use.
-#' @param param character. Names of parameters to test difference for. Default value is `'delay'`.
+#' @param twoPhase logical(1). Do we model two phases per group? Default is `FALSE`, i.e. a single delay phase per group.
+#' @param param character. Names of parameters to test difference for. Default value is `'delay1'`.
 #' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param type character. Which type of tests to perform?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
-test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), param = "delay", R = 400,
+test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), twoPhase = FALSE, param = "delay1", R = 400,
                       ties = c('density', 'equidist', 'random', 'error'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'lr', 'lr_pp'),
                       verbose = 0) {
   STRICT <- TRUE #accept models only if they converged flawlessly, i.e., convergence=0
   TOL_CRIT <- 1e-7
   distribution <- match.arg(arg = distribution)
+  stopifnot( !twoPhase ) #XXXX currently, only single phase is implmented! (think what needs to be done here below..)
   ties <- match.arg(arg = ties)
   type <- tolower(type)
   type <- match.arg(arg = type)
-  par_names <- getDist(distribution = distribution, type = "param", transformed = FALSE)
-  stopifnot( is.numeric(x), length(x) > length(par_names), is.numeric(y), length(y) > length(par_names) )
+  onames <- getDist(distribution = distribution, type = "param", twoPhase = FALSE, twoGroup = FALSE, transformed = FALSE)
+  stopifnot( is.numeric(x), length(x) > length(onames), is.numeric(y), length(y) > length(onames) )
   stopifnot( is.numeric(R), length(R) == 1L, R >= 1L )
-  stopifnot( is.character(param), length(param) >= 1L, nzchar(param) )
+  stopifnot( is.character(param) )
   if (is.logical(verbose)) verbose <- as.numeric(verbose)
   if ( is.null(verbose) || ! is.numeric(verbose) || ! is.finite(verbose) ) verbose <- 0
   verbose <- verbose[[1L]]
+
+  # parameters to test differences
+  if (any(grepl(pattern = "_tr", param, fixed = TRUE))){
+    stop("Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.", call. = FALSE)
+  }
+
+  # translate convenience names (for single phase) to canonical names
+  unNmbrdIdx <- !grepl(pattern = "[12]", param, fixed = FALSE)
+  if (any(unNmbrdIdx)){
+    param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
+    if (verbose > 0L) cat("The unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n")
+  }
+
+  # only valid names in canonical order
+  param <- intersect(onames, param)
+
+  if (!length(param)){
+    stop("Provide valid parameter names from the distribution to test for differences in two groups.", call. = FALSE)
+  }
 
   # bitmask for test types
   testMask <- purrr::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'lr', 'lr_pp'))
@@ -442,8 +464,9 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' In case the estimated sample size and the achieved power is too high it might pay off to rerun the function with an adapted admissible range.
 #'
 #' @param distribution character. Which assumed distribution is used for the power calculation.
+#' @param twoPhase logical(1). Do we model two phases per group? Default is `FALSE`, i.e. a single delay phase per group.
 #' @param eff list. The two list elements contain the model parameters (as understood by the delay-distribution functions provided by this package) for the two groups.
-#' @param param character. Parameter name(s) for which to simulate the power.
+#' @param param character. Parameter name(s) which are to be tested for difference and for which to simulate the power. Default value is `'delay1'`.
 #' @param test character. Which test to use for this power estimation?
 #' @param n integer. Number of observations per group for the power simulation or `NULL` when n is to be estimated for a given power.
 #' @param power numeric. `NULL` when power is to be estimated for a given sample size or a desired power is specified (and `n` is estimated).
@@ -454,18 +477,38 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @param nRange integer. Admissible range for sample size when power is pre-specified and sample size is requested.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
-power_diff <- function(distribution = c("exponential", "weibull"), param = "delay",
+power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FALSE, param = "delay1",
                        test = c('bootstrap', 'pearson', 'moran', 'lr', 'lr_pp'),
                        eff = stop("Provide parameters for both group that reflect the effect!"),
                        n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
                        nRange = c(5, 50)){
 
-  tol <- .001
+  tol_pow <- .001
   distribution <- match.arg(distribution)
+  stopifnot( !twoPhase ) #XXXX currently, only single phase is implemented! (think what needs to be done here below..)
   test <- match.arg(arg = tolower(test))
   ranFun <- getDist(distribution, type = "r")
-  par_names <- getDist(distribution, type = "param", transformed = FALSE)
-  param <- match.arg(param, choices = par_names)
+  onames <- getDist(distribution, type = "param", twoPhase = FALSE, twoGroup = FALSE, transformed = FALSE)
+
+  # parameters to test differences and for which power is requested
+  if (any(grepl(pattern = "_tr", param, fixed = TRUE))){
+    stop("Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.", call. = FALSE)
+  }
+
+  # translate convenience names (for single phase) to canonical names
+  unNmbrdIdx <- !grepl(pattern = "[12]", param, fixed = FALSE)
+  if (any(unNmbrdIdx)){
+    param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
+    if (verbose > 0L) cat("Unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n")
+  }
+
+  # only valid names in canonical order
+  param <- intersect(onames, param)
+
+  if (!length(param)){
+    stop("Provide valid parameter names from the distribution to test for differences in two groups.", call. = FALSE)
+  }
+  param <- match.arg(param, choices = onames)
 
   stopifnot( is.null(n) || (is.numeric(n) && length(n) == 1L && is.finite(n) ))
   stopifnot( is.null(power) || (is.numeric(power) && length(power) == 1L && power > 0L && power < 1L ))
@@ -484,9 +527,9 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
   pary <- eff[[2L]]
 
   stopifnot( is.numeric(parx), is.numeric(pary) )
-  stopifnot( length(parx) == length(par_names), length(pary) == length(par_names))
-  parx <- purrr::set_names(parx, par_names)
-  pary <- purrr::set_names(pary, par_names)
+  stopifnot( length(parx) == length(onames), length(pary) == length(onames))
+  parx <- purrr::set_names(parx, onames)
+  pary <- purrr::set_names(pary, onames)
 
 
   simulatePower <- function(nx, ny, B = nPowerSim, R){
@@ -535,7 +578,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
     # easy case: estimate power once!
     nx <- ceiling(n)
     ny <- ceiling(r * n)
-    if ( nx < length(par_names) || ny < length(par_names) ){
+    if ( nx < length(onames) || ny < length(onames) ){
       warning("Too few observations to fit parameters.")
       return(invisible(NULL))
     }
@@ -568,7 +611,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
       nxc <- nx_cand1[[i1]]
       pow_cand1[[i1]] <- simulatePower(nx = nxc, ny = nxc * r, B = B1, R = R1)
 
-      if (pow_cand1[[i1]] >= power - tol) break
+      if (pow_cand1[[i1]] >= power - tol_pow) break
     } #rof
 
     # store preliminary power estimates
@@ -594,7 +637,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
     }
 
     # check last iteration
-    if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 && pow_cand1[[NBR_CAND1]] < power - tol){
+    if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 && pow_cand1[[NBR_CAND1]] < power - tol_pow){
       warning(glue('Failed to reach requested power with maximally allowed n: {nx_cand1[[NBR_CAND1]]} ',
                    'yields a power of {as_percent(pow_cand1[[NBR_CAND1]])}.'))
       REFINE <- FALSE
@@ -634,8 +677,8 @@ power_diff <- function(distribution = c("exponential", "weibull"), param = "dela
         B = nPowerSim,
         R = R)
 
-      stopifnot( any(powerGrid2$power >= power - tol) )
-      nx <- powerGrid2$nx[which.max(powerGrid2$power >= power - tol)]
+      stopifnot( any(powerGrid2$power >= power - tol_pow) )
+      nx <- powerGrid2$nx[which.max(powerGrid2$power >= power - tol_pow)]
       ny <- ceiling(nx * r)
       power <- powerGrid2$power[which(powerGrid2$nx == nx)]
 
