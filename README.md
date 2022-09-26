@@ -33,8 +33,8 @@ corresponding to two groups with different model parameters.
 library("incubate")
 
 # simulate data from exponential distribution with delay
-x <- rexp_delayed(n = 13, delay = 1.0, rate = 0.8)
-y <- rexp_delayed(n = 11, delay = 1.5, rate = 1.2)
+x <- rexp_delayed(n = 13, delay1 = 1.0, rate1 = 0.8)
+y <- rexp_delayed(n = 11, delay1 = 1.5, rate1 = 1.2)
 ```
 
 We use the model function `delay_model` to fit a exponential model with
@@ -54,13 +54,13 @@ comparisons in a two group setting.
 
 ``` r
 # confidence interval for delay-parameters
-confint(fm, parm = c('delay.x', 'delay.y'))
-#>            2.5%  97.5%
-#> delay.x 0.80601 1.0943
-#> delay.y 1.35051 1.7531
+confint(fm, parm = c('delay1.x', 'delay1.y'))
+#>             2.5%  97.5%
+#> delay1.x 0.80603 1.0943
+#> delay1.y 1.35056 1.7531
 
 # test on difference in delay
-# for real applications use R>=1000 bootrap draws
+# for real applications use R>=1000 bootstrap draws
 delay_test <- test_diff(x, y, R = 100)
 plot(delay_test)
 ```
