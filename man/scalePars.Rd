@@ -2,12 +2,16 @@
 % Please edit documentation in R/delay_estimation.R
 \name{scalePars}
 \alias{scalePars}
-\title{Get scaling information for optimization routine.}
+\title{Calculate parameter scaling for optimization routine.}
 \usage{
-scalePars(parV, lowerB = -Inf, upperB = +Inf)
+scalePars(parV, lowerB = 1e-05, upperB = 1e+05)
 }
 \arguments{
 \item{parV}{named numeric parameter vector}
+
+\item{lowerB}{numeric. lower bound for parameter scales}
+
+\item{upperB}{numeric. upper bound for parameter scales}
 }
 \value{
 vector of parameter scaling

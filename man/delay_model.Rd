@@ -5,7 +5,7 @@
 \title{Fit a delayed Exponential or Weibull model to one or two given sample(s).}
 \usage{
 delay_model(
-  x = stop("Specify observations!", call. = FALSE),
+  x = stop("Specify observations for at least one group x=!", call. = FALSE),
   y = NULL,
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,

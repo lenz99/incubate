@@ -14,7 +14,6 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
   stopifnot( inherits(delayFit, what = 'incubate_fit') )
   method <- match.arg(method)
-  stopifnot(!delayFit$twoPhase) #XXXX currently, only single phase is implemented here for parametric tests (think what is needed here!)
 
   if (delayFit$method != 'MPSE'){
     stop('Goodness-of-fit test only supported for models that are fit with maximum product of spacings estimation (MPSE)!')
@@ -23,8 +22,8 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
   twoGroup <- isTRUE(delayFit$twoGroup)
   data_name <- if (twoGroup) paste(names(delayFit$data), collapse = ' and ') else 'x'
   nObs <- if (twoGroup) lengths(delayFit$data) else length(delayFit$data)
-  params <- coef(delayFit)
-  k <- length(params)
+  params_tr <- coef.incubate_fit(delayFit, transformed = TRUE)
+  k <- length(params_tr)
 
 
   # required variables
@@ -56,12 +55,11 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
            statist <- if (twoGroup){ ##  && length(delayFit$bind) < length(oNames) # not needed!?
              # sum of two independent chi-sq. is chi-sq
-             c(`X^2` = sum(testStat_mo(mseCrit = delayFit$objFun(pars = params, aggregated = FALSE), #criterion per group
+             c(`X^2` = sum(testStat_mo(mseCrit = delayFit$objFun(pars = params_tr, aggregated = FALSE), #criterion per group
                                        n = nObs, k = k/2)) )
            } else {
              # single group
-             c(`X^2` = testStat_mo(mseCrit = delayFit$val,
-                                   n = nObs, k = k) )
+             c(`X^2` = testStat_mo(mseCrit = delayFit$val, n = nObs, k = k) )
            }
 
            p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
@@ -74,26 +72,27 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
            # under H0, expect frequency counts according to uniform distribution
            #+nbr of classes as recommended by David S. Moore (Tests of Chi-squared Type, 1986)
 
-           testStat_pe <- function(datr, nCl){
+           testStat_pe <- function(datr, nCl) {
              tab_transf <- tabulate(findInterval(datr,
                                    vec = seq.int(from=0L, to=1L, length.out = nCl+1L),
                                    rightmost.closed = TRUE, all.inside = TRUE), nbins = nCl)
-             c(`X^2` = sum((tab_transf - mean(tab_transf))**2L) / mean(tab_transf))
+             sum((tab_transf - mean(tab_transf))**2L) / mean(tab_transf)
            }
 
-           if (twoGroup) {
+
+           nCl <- NA_real_ #dummy value to start with
+
+           statist <- if (twoGroup) {
              nCl <- pmax.int(k/2 + 2L, ceiling(2L * nObs**.4))
              # sum of two chi-square test statistics
-             statist <- c(`X^2` = sum(purrr::map2_dbl(.x = transform(delayFit), .y = nCl, .f = testStat_pe)))
-             p_val <- stats::pchisq(q = statist, df = sum(nCl) - k - 2L, lower.tail = FALSE)
+             c(`X^2` = sum(purrr::map2_dbl(.x = transform(delayFit), .y = nCl, .f = testStat_pe)))
            } else {
              nCl <- max(k + 2L, ceiling(2L * nObs**.4))
-             statist <- testStat_pe(datr = transform(delayFit), nCl = nCl)
+             c(`X^2` = testStat_pe(datr = transform(delayFit), nCl = nCl))
              # inference based on Chi-square distribution.
              # use adjusted degrees of freedom (loose one df for each parameter estimated)
-             p_val <- stats::pchisq(q = statist, df = nCl - k - 1L, lower.tail = FALSE)
            }
-
+           p_val <- stats::pchisq(q = statist, df = sum(nCl) - k - (1L+twoGroup), lower.tail = FALSE)
          },
 
          AD =, ad =, anderson = {
@@ -126,9 +125,11 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
            } else {
              stopifnot( delayFit$distribution == 'weibull' )
+
              # P-value for Weibull based on Lockhart, 1994 (Table 1)
              # interpolation model on logits using critical value and inverse of shape parameter
-             .ad_pval[['weibull']](A2, params[grepl('shape', names(params), fixed = TRUE)])
+             params_ntr <- coef.incubate_fit(delayFit, transformed = FALSE)
+             .ad_pval[['weibull']](A2, params_ntr[grepl('shape', names(params_ntr), fixed = TRUE)])
            }
 
            if (twoGroup){
@@ -190,7 +191,6 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   STRICT <- TRUE #accept models only if they converged flawlessly, i.e., convergence=0
   TOL_CRIT <- 1e-7
   distribution <- match.arg(arg = distribution)
-  stopifnot( !twoPhase ) #XXXX currently, only single phase is implmented! (think what needs to be done here below..)
   ties <- match.arg(arg = ties)
   type <- tolower(type)
   type <- match.arg(arg = type)
@@ -214,7 +214,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     if (verbose > 0L) cat("The unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n")
   }
 
-  # only valid names in canonical order
+  # retain only valid names in canonical order
   param <- intersect(onames, param)
 
   if (!length(param)){
@@ -242,8 +242,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   # High values of the test statistic speak in favour of H1:
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y) {
-    fit0 <- delay_model(x = x, y = y, distribution = distribution, method = 'MPSE', ties = ties, bind = param)
-    fit1 <- delay_model(x = x, y = y, distribution = distribution, method = 'MPSE', ties = ties)
+    fit0 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase, method = 'MPSE', ties = ties, bind = param)
+    fit1 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase, method = 'MPSE', ties = ties)
 
     if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
 
@@ -251,22 +251,18 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     #+we are in trouble, possibly due to non-convergence, e.g. convergence code 52
     #+we refit the general fit1 again using parameter-values from fit0
     if ( fit0[['val']] + TOL_CRIT < fit1[['val']] &&
-         !is.null(fit1oa <- purrr::pluck(fit1, 'optimizer', 'optim_args')) ){
+         !is.null(fit1oa <- purrr::pluck(fit1, 'optimizer', 'optim_args')) ) {
       if (verbose > 0) warning('Restricted model with better fit than unrestricted model.', call. = FALSE)
       # re-run fit1 with start values based on fitted parameters of reduced model fit0
       stopifnot( is.list(fit1oa), 'par' %in% names(fit1oa) )
 
-      pn1 <- names(fit1[['par']])
-      # Would match() or pmatch() help avoid the for-loop?
-      for (na0 in names(fit0[['par']])) fit1oa[['par']][startsWith(pn1, prefix = na0)] <- coef(fit0)[[na0]]
+      coef0 <- coef.incubate_fit(fit0, transformed = TRUE)
+      pn1 <- names(fit1[["optimizer"]][["parOpt"]])
+      # take over optimization coefficients for start values of fit1
+      # QQQ Would match() or pmatch() help avoid the for-loop?
+      for (na0 in names(fit0[["optimizer"]][["parOpt"]])) fit1oa[["par"]][startsWith(pn1, prefix = na0)] <- coef0[[na0]]
 
-      # we allow only for non-negative parameters
-      newparsc <- fit1oa[['par']]
-      # apply lower limits for parameters
-      newparsc[which(newparsc < 1e-7)] <- 1e-7
-      newparsc[which(newparsc > 1e8)] <- 1e8
-      fit1oa[['control']][['parscale']] <- newparsc
-
+      fit1oa[['control']][['parscale']] <- scalePars(parV = fit1oa[["par"]])
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
       if (is.null(fit1) || fit0[['val']] + TOL_CRIT < fit1[['val']]) {
@@ -325,8 +321,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
     ranFun <- getDist(distribution, type = "r")
     # arguments to the random function generation
-    ranFunArgsX <- c(list(n=length(x)), coef(fit0, group = "x"))
-    ranFunArgsY <- c(list(n=length(y)), coef(fit0, group = "y"))
+    ranFunArgsX <- c(list(n=length(x)), coef(fit0, group = "x", transformed = FALSE))
+    ranFunArgsY <- c(list(n=length(y)), coef(fit0, group = "y", transformed = FALSE))
 
     retL <- 1L+(verbose>0L)
     t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(retL),
@@ -350,7 +346,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
         'Proportion of conv =  0: {as_percent(length(which(fit0_conv == 0))/ length(fit0_conv))}',
         'Proportion of conv = 52: {as_percent(length(which(fit0_conv == 52))/length(fit0_conv))}',
         .sep = '\n'), '\n')
-      t0_dist <- t0_dist[1L,] #retain only ts_boot[['val']]
+      t0_dist <- t0_dist[1L, , drop=TRUE] #retain only ts_boot[['val']]
     }
     t0_dist <- t0_dist[is.finite(t0_dist)]
 
@@ -479,16 +475,16 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FALSE, param = "delay1",
                        test = c('bootstrap', 'pearson', 'moran', 'lr', 'lr_pp'),
-                       eff = stop("Provide parameters for both group that reflect the effect!"),
+                       eff = stop("Provide parameters for both groups that reflect the effect!"),
                        n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
                        nRange = c(5, 50)){
 
   tol_pow <- .001
   distribution <- match.arg(distribution)
-  stopifnot( !twoPhase ) #XXXX currently, only single phase is implemented! (think what needs to be done here below..)
-  test <- match.arg(arg = tolower(test))
+  if (! missing(test)) test <- tolower(test)
+  test <- match.arg(arg = test)
   ranFun <- getDist(distribution, type = "r")
-  onames <- getDist(distribution, type = "param", twoPhase = FALSE, twoGroup = FALSE, transformed = FALSE)
+  onames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = FALSE)
 
   # parameters to test differences and for which power is requested
   if (any(grepl(pattern = "_tr", param, fixed = TRUE))){
@@ -546,8 +542,8 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
                                             P_val <- NA_real_
                                             try(expr = {
                                               P_val <- purrr::pluck(test_diff(x = datx, y = daty,
-                                                                              distribution = distribution, param = param,
-                                                                              type = test, R = R),
+                                                                              distribution = distribution, twoPhase = twoPhase,
+                                                                              param = param, type = test, R = R),
                                                                     "P", test, .default = NA_real_)
                                             }, silent = TRUE)
                                             P_val
@@ -602,7 +598,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
     pow_cand1 <- rep_len(-1, length.out = NBR_CAND1)
 
     # if single n remains, return the power for it (no search for n necessary)
-    if (NBR_CAND1 == 1L) return(power_diff(distribution, param, test, eff,
+    if (NBR_CAND1 == 1L) return(power_diff(distribution, twoPhase = twoPhase, param, test, eff,
                                            n = nx_cand1[[1L]], power = NULL,
                                            r = r, sig.level = sig.level,nPowerSim = nPowerSim, R = R))
 
@@ -625,14 +621,14 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
     )
 
     if (NROW(powerGrid) <= 1L) {
-      stop('Failed to find power estimates within specified range!')
+      stop('Failed to find power estimates within specified range!', call. = FALSE)
     }
 
     REFINE <- TRUE #NROW(powerGrid) >= 2L
 
     # check first iteration
     if (i1 == 1L){
-      warning('Smallest allowed n already exceeds requested power!')
+      warning('Smallest allowed n already exceeds requested power!', call. = FALSE)
       REFINE <- FALSE
     }
 
@@ -693,6 +689,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
   purrr::compact(
     list(name = "Difference in delayed model for time-to-event data in two groups",
          distribution = distribution,
+         twoPhase = twoPhase,
          param = param,
          test = test,
          eff = eff,

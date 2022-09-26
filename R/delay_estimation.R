@@ -3,13 +3,13 @@
 
 #' Extract certain parameters from a given named parameter vector.
 #'
-#' This routine handles parameter vectors for one or two groups, it knows about bound parameters and
+#' This routine handles parameter vectors for one or two groups, it knows about bound parameters (cf. bind=) and
 #' it can also transform the given parameters from the standard form (as used in the delayed distribution functions)
-#' to the internal parametrization as used by the optimization function, and vice versa.
+#' to the internal transformed parametrization as used by the optimization function, and vice versa.
 #'
 #' When parameters for a single group are requested the parameters are always returned in the canonical order of the distribution.
 #' Otherwise, the order of parameters is unchanged.
-#' It parses the parameter names to find out if it is twoPhase, twoGroup and which direction to transform (if `transform=TRUE`).
+#' It parses the parameter names to find out if it is twoPhase, twoGroup and if `transform=TRUE` which direction to transform.
 #'
 #' This is an internal helper function
 #' used in [delay_model()], in the factory method [objFunFactory()] and in [coef.incubate_fit()].
@@ -27,7 +27,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
 
   # isTransformed when all parameter names contain '_tr'
   trNames <- grepl(pattern = "_tr", pNames, fixed = TRUE)
-  stopifnot( sum(trNames) %in% c(0L, length(parV)) )
+  stopifnot( sum(trNames) %in% c(0L, length(parV)) ) #all or nothing
   isTransformed <- all(trNames)
   twoPhase <- any(grepl(pattern = "delay2", pNames, fixed = TRUE))
   # parameter names of single group where we start from!
@@ -54,7 +54,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                                                     0, 0, 0, 1), nrow = 4L, byrow = TRUE,
                                                   dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
                              weibull = {
-                               m <- diag(nrow = 6L)
+                               m <- diag(nrow = 6L) #XXXX parameter transformation not factual
                                rownames(m) <- paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr")
                                m})[[distribution]]
       PARAM_TRANSF_MINV <- list(exponential = matrix(c(1, 0, 0, 0,
@@ -69,9 +69,9 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                                 })[[distribution]]
 
 
-      PARAM_TRANSF_F <- list(exponential = c(identity, exp, exp, exp),
+      PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
                              weibull = c(identity, identity, identity, identity, identity, identity))[[distribution]]
-      PARAM_TRANSF_FINV <- list(exponential = c(identity, log, log, log),
+      PARAM_TRANSF_FINV <- list(exponential = c(identity, exp, exp, exp),
                                 weibull = c(identity, identity, identity, identity, identity, identity))[[distribution]]
 
       stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F) )
@@ -81,11 +81,11 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
         if (isTransformed) {
           as.numeric(PARAM_TRANSF_MINV[seq_along(parV1), seq_along(parV1)] %*%
                        as.numeric(.mapply(FUN = function(f, x) f(x),
-                                          dots = list(PARAM_TRANSF_F[seq_along(parV1)], parV1),
+                                          dots = list(PARAM_TRANSF_FINV[seq_along(parV1)], parV1),
                                           MoreArgs = NULL)))
         } else {
           as.numeric(.mapply(FUN = function(f, x) f(x),
-                             dots = list(PARAM_TRANSF_FINV[seq_along(parV1)],
+                             dots = list(PARAM_TRANSF_F[seq_along(parV1)],
                                          as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1)),
                              MoreArgs = NULL))},
 
@@ -142,12 +142,14 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
 }
 
 
-#' Get scaling information for optimization routine.
+#' Calculate parameter scaling for optimization routine.
 #'
 #' The scale per parameter corresponds to the step width within the optimization path.
 #' @param parV named numeric parameter vector
+#' @param lowerB numeric. lower bound for parameter scales
+#' @param upperB numeric. upper bound for parameter scales
 #' @return vector of parameter scaling
-scalePars <- function(parV, lowerB = -Inf, upperB = +Inf){
+scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
   if (is.null(lowerB)) lowerB <- -Inf
   if (is.null(upperB)) upperB <- +Inf
 
@@ -158,8 +160,8 @@ scalePars <- function(parV, lowerB = -Inf, upperB = +Inf){
   # scale vector: default value is 1
   scVect <- rep.int(1, times = length(parV))
 
-  idx.nonLog <- which(startsWith(names(parV), "delay1"))
-  scVect[idx.nonLog] <- (parV[idx.nonLog]+.03)**.3 # ca. 3th root
+  idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
+  scVect[idx.nonLog] <- (parV[idx.nonLog] + .01)**.3 # ca. 3th root
 
   # enforce upper and lower bounds
   pmax.int(lowerB, pmin.int(upperB, scVect))
@@ -334,7 +336,6 @@ objFunFactory <- function(x, y = NULL,
 
   # get optimization start values and upper limits based on observations from a single group
   # for exponential distribution, the function respects the twoPhase-flag
-  # for Weibull, it currently does not use the parameter transformation!! (XXX)
   # @return list with transformed par for single group and upper limits for delay parameters, in canonical order (bind has no effect here!)
   getParSetting.gr <- function(obs){
     # contract: obs is sorted!
@@ -355,7 +356,7 @@ objFunFactory <- function(x, y = NULL,
                       extractPars(parV = parV0, distribution = "exponential", transform = TRUE)
                     },
                     weibull = {
-                      stopifnot( ! twoPhase) #XXXX 2-phase not supported yet for Weibull!
+                      stopifnot(! twoPhase) #XXXX 2-phase not supported yet for Weibull!
                       # start values from 'Weibull plot'
                       #+using the empirical distribution function
                       ## in MASS::fitdistr they simplify:
@@ -400,7 +401,7 @@ objFunFactory <- function(x, y = NULL,
   PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),
-                     shape = c(lower = sqrt(.Machine$double.eps), upper = +Inf), ##XXXX for the time being, as we are untransformed in Weibull ## -Inf
+                     shape = c(lower = sqrt(.Machine$double.eps), upper = +Inf), ##XXXX for the time being, as we are currently untransformed in Weibull ## on log would be: -Inf
                      scale = c(lower = sqrt(.Machine$double.eps), upper = +Inf)) ##XXXX scale = -Inf
 
 
@@ -590,7 +591,7 @@ objFunFactory <- function(x, y = NULL,
     lower = lowerB,
     upper = upperB,
     # Most parameters are on log-scale.
-    control = list(parscale = scalePars(parV, lowerB = lowerB, upperB = upperB))
+    control = list(parscale = scalePars(parV, lowerB = 1e-3, upperB = 1e3))
   )
 
 
@@ -644,7 +645,7 @@ objFunFactory <- function(x, y = NULL,
   # param `pars` the parameter vector.
   # param `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
   objFun <- function(pars, aggregated = TRUE) {
-    stopifnot( length(optpar_names) == length(pars) )
+    stopifnot( length(pars) == length(optpar_names) )
     pars <- purrr::set_names(pars, optpar_names) # extractPars in getCumDiffs needs names!
 
     switch(method,
@@ -736,8 +737,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
         optim_args[['par']] <- optObj$par  # purrr::assign_in(where = "par", value = optObj$par)
 
         if ( isTRUE("parscale" %in% names(optim_args[["control"]])) ){
-          optim_args[['control']][['parscale']] <- scalePars(optim_args[['par']],
-                                                             lowerB = optim_args[['lower']], upperB = optim_args[['upper']])
+          optim_args[['control']][['parscale']] <- scalePars(optim_args[['par']])
         }
 
         # optim: 2nd attempt
@@ -781,7 +781,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x = stop('Specify observations!', call. = FALSE), y = NULL,
+delay_model <- function(x = stop('Specify observations for at least one group x=!', call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
                         bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
                         method = c('MPSE', 'MLE0'),
@@ -1016,29 +1016,36 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
   stopifnot(is.numeric(R), length(R) == 1L, R > 1L)
   R <- ceiling(R)
   useBoot <- isTRUE(useBoot)
-  stopifnot( is.numeric(smd_factor), length(smd_factor) == 1L, smd_factor >= 0L )
-  smooth_delay <- isTRUE(smd_factor > 0L)
   ranFun <- getDist(object$distribution, type = "r")
   dFun <- getDist(object$distribution, type = "d")
   twoGroup <- isTRUE(object$twoGroup)
   nObs <- if (twoGroup) lengths(object$data) else length(object$data)
-  ncoef <- length(coef.incubate_fit(object))
+  # full untransformed parameter vector
+  coefVect <- coef.incubate_fit(object, group = NULL, transformed = FALSE)
+  del1_ind <- grep('delay1', names(coefVect)) # indices of coefficients that involve delay1, e.g. 'delay1' or 'delay1.y'
+  ncoef <- length(coefVect)
 
-  if (smooth_delay && bs_data != 'parametric') {
-    smooth_delay <- FALSE
+  stopifnot( ncoef > 0L )
+
+  stopifnot( is.numeric(smd_factor), length(smd_factor) == 1L, smd_factor >= 0L )
+  smoothDelay <- isTRUE(smd_factor > 0L)
+
+  if (smoothDelay && bs_data != 'parametric') {
+    smoothDelay <- FALSE
     smd_factor <- 0L
     # how could smooth_delay work also for ordinary bootstrap?!
     warning('Smoothing of delay is only implemented for parametric bootstrap!', call. = FALSE)
   }
 
 
-  # smooth delay: sample delay values according to objective function (where delay is varied and other parameters are kept fixed) in the vicinity of the estimated delay
-  # This reflects the certainty we have in the delay estimation. Low variability in data will lead to a quickly deteriorating objective function.
-  # return vector of length R with delay candidate values
+  # smooth first delay: sample delay values according to objective function (where delay is varied and other parameters are kept fixed) in the vicinity of the estimated first delay
+  # This reflects the certainty we have in the delay estimation.
+  # Low variability in event time data (or high sample size) will lead to a quickly deteriorating objective function.
+  # return vector of length R with candidate values for first delay
   getSMDCandidates <- function(group = 'x'){
     obs <- if (twoGroup) object$data[[group]] else object$data
     obs1 <- obs[[1L]]
-    del_coef <- coef(object, group = group)[['delay1']]
+    del_coef <- coef.incubate_fit(object, transformed = FALSE, group = group)[['delay1']]
 
     # avoid smoothing if 1st observation or estimated delay is too close to zer0
     if ( min(obs1, del_coef) < sqrt(.Machine$double.eps) ) return(rep_len(del_coef, length.out = R))
@@ -1046,11 +1053,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     stopifnot( is.function(object$objFun) )
 
     groupIdx <- 1L + (twoGroup && group == 'y')
-    coefVect <- coef(object) # objective function expects parameters for all involved groups
-    #XXXX think here if it works for transformed coefs: 'delay_tr'
-    del_ind <- grep('delay1', names(coefVect)) # indices of coefficients that involve delay1, e.g. 'delay1' or 'delay1.x' or 'delay1.y'
     # in case of a delay per group ('delay.x' and 'delay.y') use the right one
-    if (length(del_ind) > 1L) del_ind <- del_ind[[groupIdx]]
+    if (length(del1_ind) > 1L) del1_ind <- del1_ind[[groupIdx]]
 
 
     # look at differences of first observations
@@ -1069,14 +1073,21 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     #+candidate region: symmetric around coef_del as midpoint, up to smallest observed value
     #+candidate region becomes finer sampled the broader the interval is
     #+point estimate for delay is part of sample (if lower bound is not cut to be 0, via max in from= argument)
-    delayCandDF <- tibble(delay1 = seq.int(from = del_interv[['low']], to = del_interv[['high']],
-                                           # uneven number of grid points (hence, MPSE-estimate for delay will be one of the grid points)
-                                           # grid step width at most 0.005
-                                           length.out = max(997L, 2L * min(ceiling(R/2), 100L*ceiling(diff(del_interv)))+1L)),
-                          # fixing the parameter estimates other than delay
-                          objVal = purrr::map_dbl(.x = .data[["delay1"]],
-                                                  .f = ~ object$objFun(pars = replace(coefVect, del_ind, .x),
-                                                                       aggregated = FALSE)[[groupIdx]]))
+    delayCandDF <- tibble(
+      delay1 = seq.int(from = del_interv[['low']], to = del_interv[['high']],
+                       # uneven number of grid points (hence, MPSE-estimate for delay will be one of the grid points)
+                       # grid step width at most 0.005
+                       length.out = max(997L, 2L * min(ceiling(R/2), 100L*ceiling(diff(del_interv)))+1L)),
+      # fixing all parameter estimates other than delay1
+      objVal = purrr::map_dbl(.x = .data[["delay1"]],
+                              # objective function expects transformed parameters for all involved groups
+                              # delay1 is normally transformed via ident (for both exponential and Weibull),
+                              #+hence we could spare us the round trip to canonical parameters and to replace there and to transform back for optimization
+                              #+but this round-trip approach is more safe (in case we ever introduce a non-ident transformation for delay1)
+                              .f = ~ object$objFun(pars = extractPars(parV = replace(coefVect, del1_ind, .x),
+                                                                      distribution = object$distribution, group = NULL, transform = TRUE),
+                                                   aggregated = FALSE)[[groupIdx]])
+    )
 
     # we like to drop last entry (delay = 1st observation) as objective function tends to explode
     # but we have to keep last entry if it corresponds to the delay estimate (e.g., as is the case for MLE0-fitting)
@@ -1085,30 +1096,31 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     delayCandDF$objValInv <- (object$val - delayCandDF$objVal) / (object$val+.01)
     # shift upwards into non-negative area
     delayCandDF$objValInv <- delayCandDF$objValInv - min(delayCandDF$objValInv, na.rm = TRUE)
-    # scale to be between 0 and 1
-    delayCandDF$objValInv <- (delayCandDF$objValInv / (max(delayCandDF$objValInv, na.rm = TRUE) + .01))**(1L/(smd_factor+.01))
+    # scale to be between 0 and 1.
+    # small smd_factor => high exponent => peaked distribution
+    delayCandDF$objValInv <- (delayCandDF$objValInv / (max(delayCandDF$objValInv, na.rm = TRUE) + .001))**(1L/(smd_factor+.01))
     delayCandDF$cumSum0 <- cumsum(delayCandDF$objValInv)
     # scale cumSum0 to 1.
     delayCandDF$cumSum <- delayCandDF$cumSum0 / max(delayCandDF$cumSum0)
-    # lag-1: have it start with 0 and end with a single 1 (the last objValInv is most often 0 as)
+    # lag-1: have it start with 0 and end with a single 1 (the last cumSum is most often 0 as largest delay value has typically objValInv = 0)
     delayCandDF$cumSum <- c(0L, delayCandDF$cumSum[-NROW(delayCandDF)])
 
     # rightmost.closed = TRUE for the unlikely/impossible?! case that we draw a 1 by runif
     delayCandDF$delay1[findInterval(x = stats::runif(R), vec = delayCandDF$cumSum, rightmost.closed = TRUE)]
   }
 
-  delayCandX <- if (smooth_delay) getSMDCandidates(group = 'x')
-  delayCandY <- if (smooth_delay && twoGroup) getSMDCandidates(group = 'y')
+  delayCandX <- if (smoothDelay) getSMDCandidates(group = 'x')
+  delayCandY <- if (smoothDelay && twoGroup) getSMDCandidates(group = 'y')
 
   if (useBoot) {
     stopifnot(!twoGroup) # for the time being only single group calls are supported!
     boot::boot(data = object$data,
                statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distribution, twoPhase = object$twoPhase,
                                                            ties = object$ties,
-                                                           method = object$method, bind = object$bind)),
+                                                           method = object$method, bind = object$bind), transformed = FALSE),
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
-                 if (smooth_delay){
+                 if (smoothDelay){
                    coe[['delay1']] <- delayCandX[sample.int(n = R, size = 1L)]
                  }
                  rlang::exec(ranFun, !!! as.list(c(n=nObs[[1L]], coe)))
@@ -1126,18 +1138,18 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
                           coef(delay_model(x=x, y=y, distribution = object$distribution, twoPhase = object$twoPhase,
                                            ties = object$ties,
-                                           method = object$method, bind = object$bind))
+                                           method = object$method, bind = object$bind), transformed = FALSE)
                         },
                         parametric = {
                           # generate data from the fitted model
                           # for performance reasons, we 'inline' the simulate code, cf. test_diff
 
                           # arguments to the random function generation
-                          ranFunArgsX <- as.list(c(n=nObs[[1L]], coef.incubate_fit(object, group = "x")))
-                          ranFunArgsY <- if (twoGroup) as.list(c(n=nObs[[2L]], coef.incubate_fit(object, group = "y")))
+                          ranFunArgsX <- as.list(c(n=nObs[[1L]], coef.incubate_fit(object, transformed = FALSE, group = "x")))
+                          ranFunArgsY <- if (twoGroup) as.list(c(n=nObs[[2L]], coef.incubate_fit(object, transformed = FALSE, group = "y")))
 
                           function(ind) {
-                            if (smooth_delay){
+                            if (smoothDelay){
                               #+smooth delay according to how sure are we about the delay-estimate:
                               #+the more sure the smaller is the smoothing
                               ranFunArgsX[['delay1']] <- delayCandX[ind]
@@ -1152,7 +1164,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                                                                ties = object$ties,
                                                                method = object$method, bind = object$bind))
                             retVec <- rep.int(NA_real_, times = ncoef)
-                            if (! is.null(dm) && inherits(dm, "incubate_fit")) retVec <- coef.incubate_fit(dm)
+                            if (! is.null(dm) && inherits(dm, "incubate_fit")) retVec <- coef.incubate_fit(dm, transformed = FALSE)
 
                             retVec
                           }
