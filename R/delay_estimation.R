@@ -161,7 +161,7 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
   scVect <- rep.int(1, times = length(parV))
 
   idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
-  scVect[idx.nonLog] <- (parV[idx.nonLog] + .01)**.3 # ca. 3th root
+  scVect[idx.nonLog] <- parV[idx.nonLog]^.2 #5th root pushes towards 1
 
   # enforce upper and lower bounds
   pmax.int(lowerB, pmin.int(upperB, scVect))
