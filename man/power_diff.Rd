@@ -9,7 +9,7 @@ power_diff(
   twoPhase = FALSE,
   param = "delay1",
   test = c("bootstrap", "pearson", "moran", "lr", "lr_pp"),
-  eff = stop("Provide parameters for both group that reflect the effect!"),
+  eff = stop("Provide parameters for both groups that reflect the effect!"),
   n = NULL,
   r = 1,
   sig.level = 0.05,

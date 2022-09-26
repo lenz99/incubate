@@ -13,6 +13,7 @@ test_diff(
   R = 400,
   ties = c("density", "equidist", "random", "error"),
   type = c("all", "bootstrap", "gof", "moran", "pearson", "lr", "lr_pp"),
+  chiSqApprox = FALSE,
   verbose = 0
 )
 }
@@ -32,6 +33,8 @@ test_diff(
 \item{ties}{character. How to handle ties in data vector of a group?}
 
 \item{type}{character. Which type of tests to perform?}
+
+\item{chiSqApprox}{logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?}
 
 \item{verbose}{numeric. How many details are requested? Higher value means more details. 0=off, no details.}
 }

@@ -182,12 +182,13 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 #' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param type character. Which type of tests to perform?
+#' @param chiSqApprox logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), twoPhase = FALSE, param = "delay1", R = 400,
                       ties = c('density', 'equidist', 'random', 'error'), type = c('all', 'bootstrap', 'gof', 'moran', 'pearson', 'lr', 'lr_pp'),
-                      verbose = 0) {
+                      chiSqApprox = FALSE, verbose = 0) {
   STRICT <- TRUE #accept models only if they converged flawlessly, i.e., convergence=0
   TOL_CRIT <- 1e-7
   distribution <- match.arg(arg = distribution)
@@ -350,13 +351,15 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     }
     t0_dist <- t0_dist[is.finite(t0_dist)]
 
-    try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
-                                                    start = list(df = length(param)),
-                                                    method = "Brent", lower = .001, upper = 401))},
-        silent = TRUE)
+    if (chiSqApprox && length(t0_dist) > 101L){
+      try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
+                                                      start = list(df = length(param)),
+                                                      method = "Brent", lower = .001, upper = 401))},
+          silent = TRUE)
+    }
 
     P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
-  }
+  } # bootstrap
 
   ## P-value from Log-rank tests
   dat_2gr <- tibble::tibble(evtime = c(x,y),
