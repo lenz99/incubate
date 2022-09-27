@@ -100,11 +100,13 @@ Functions pertaining to the delayed exponential distribution:
 The length of the result is determined by \code{n} for \code{rexp_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions, R's recycling rules apply.
 }
 \description{
-Density, distribution function, quantile function, random generation and restricted mean survival time function for the delayed exponential distribution with \code{rate}-parameter.
+Density, distribution function, quantile function, random generation and restricted mean survival time function for the delayed exponential distribution.
+There is an initial delay phase (parameter \code{delay1}) where no events occur.
+Optionally, a second phase is possible where the hazard rate might change (parameters \code{delay2} and \code{rate2}).
 }
 \details{
 Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the \code{stats}-package.
-The numerical arguments other than \code{n} are recycled to the length of the result. delay1/2 and rate1/2 are recycled together.
+Unlike the distribution functions from \code{stats} the arguments are \strong{not} recycled. The delay and rate related parameters must have length 1 as it otherwise becomes ambiguous which delay and rate parameter to apply, depending on the observations' phase.
 Only the first elements of the logical arguments are used.
 }
 \keyword{distribution}
