@@ -17,7 +17,10 @@ dweib_delayed(
   delay = delay1,
   shape = shape1,
   scale = scale1,
-  ...
+  delay2 = NULL,
+  shape2 = NULL,
+  scale2 = 1,
+  log = FALSE
 )
 
 pweib_delayed(
@@ -78,9 +81,9 @@ mweib_delayed(
 
 \item{scale}{numeric. Alias for first scale.}
 
-\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Weibull]{stats::dweibull()}}}
-
 \item{q}{A numeric vector of quantile values.}
+
+\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Weibull]{stats::dweibull()}}}
 
 \item{p}{A numeric vector of probabilities.}
 

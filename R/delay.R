@@ -280,12 +280,56 @@ NULL
 
 #' @rdname DelayedWeibull
 #' @export
-dweib_delayed <- function(x, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1, ...) {
+dweib_delayed <- function(x, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1,
+                          delay2 = NULL, shape2 = NULL, scale2 = 1, log = FALSE) {
+  stopifnot( length(log) >= 1L, is.logical(log) )
+  log <- log[[1L]] # only first value of log is used
+
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
   if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
 
-  stats::dweibull(x = x - delay1, shape = shape1, scale = scale1, ...)
+  stopifnot( is.numeric(delay1), is.numeric(shape1), is.numeric(scale1), all(is.finite(delay1)), all(is.finite(shape1)), all(is.finite(scale1)) )
+
+
+  # check for easy case: only a single phase
+  if ( is.null(delay2) ) {
+    if (!is.null(shape2) || ! missing(scale2)) warning("Arguments shape2= and/or scale2= are ignored, as argument delay2= is not set.", call. = FALSE)
+    return(stats::dweibull(x = x - delay1, shape = shape1, scale = scale1, log = log))
+  }
+
+
+  # two phases
+  # take only first value of parameter arguments!
+  if ( length(delay1) > 1L || length(shape1) > 1L || length(scale1) > 1L || length(delay2) > 1L || length(shape2) > 1L || length(scale2) > 1L ){
+    warning("When in two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
+  }
+
+  delay1 <- delay1[[1L]]
+  shape1 <- shape1[[1L]]
+  scale1 <- scale1[[1L]]
+  # we need both delay2 AND shape2 AND scale2
+  delay2 <- delay2[[1L]]
+  shape2 <- shape2[[1L]]
+  scale2 <- scale2[[1L]]
+  stopifnot( is.numeric(delay2), is.numeric(shape2), is.numeric(scale2), is.finite(delay2), is.finite(shape2), is.finite(scale2) )
+
+  # check delay constraint
+  if (delay1 >= delay2) {
+    stop("First delay phase must antedate the second delay phase!", call. = FALSE)
+  }
+
+  # first phase densities
+  dvals <- stats::dweibull(x = x - delay1, shape = shape1, scale = scale1, log = log)
+  # second phase
+  # update density for observations that lie in the 2nd phase
+  phase2Ind <- which(x >= delay2)
+  if (length(phase2Ind)) {
+    dvals[phase2Ind] <- stats::dweibull(x = x - delay2, shape = shape2, scale = scale2, log = log)[phase2Ind]
+    dvals[phase2Ind] <- if (log) dvals[phase2Ind] - ((delay2 - delay1)/scale1)^shape1 else dvals[phase2Ind] * exp(-((delay2 - delay1)/scale1)^shape1)
+  }
+
+  dvals
 }
 
 #' @rdname DelayedWeibull

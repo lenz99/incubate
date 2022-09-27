@@ -56,6 +56,12 @@ test_that('density of delayed distributions', {
                                    dplyr::if_else(tPoints < .x, true = -Inf, false = dexp(x = tPoints, rate = .y, log = TRUE) + .x * .y),
                                    tolerance = .01))
 
+
+  # examples for 1-phase and 2-phase Weibull density with scale-parameters
+  expect_equal(dweib_delayed(x = 2.5, delay1 = 1, shape1 = .7, scale1 = 2),
+               expected = .7 / 2 * ((2.5-1)/2)^(.7-1) * exp(-((2.5-1)/2)**.7))
+  expect_equal(dweib_delayed(x = 5.5, delay1 = 1, shape1 = .7, scale1 = 2, delay2 = 4, shape2 = 1.4, scale2 = 1.7),
+               expected = exp(- ((4 - 1)/2)^.7) * 1.4/1.7 * ((5.5 - 4)/1.7)^(1.4-1) * exp(-((5.5 - 4)/1.7)^1.4))
 })
 
 
