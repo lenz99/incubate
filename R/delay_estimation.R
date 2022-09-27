@@ -48,31 +48,38 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
     transformPars1 <- function(parV1){
 
       # parameter transformation matrices
-      PARAM_TRANSF_M <- list(exponential = matrix(c(1, 0, 0, 0,
-                                                    0, 1, 0, 0,
+      PARAM_TRANSF_M <- list(exponential = matrix(c( 1, 0, 0, 0,
+                                                     0, 1, 0, 0,
                                                     -1, 0, 1, 0,
-                                                    0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                                     0, 0, 0, 1), nrow = 4L, byrow = TRUE,
                                                   dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
-                             weibull = {
-                               m <- diag(nrow = 6L) #XXXX parameter transformation not factual
-                               rownames(m) <- paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr")
-                               m})[[distribution]]
+                             weibull = matrix(c( 1, 0, 0, 0, 0, 0,
+                                                 0, 1, 0, 0, 0, 0,
+                                                 0, 0, 1, 0, 0, 0,
+                                                -1, 0, 0, 1, 0, 0,
+                                                 0, 0, 0, 0, 1, 0,
+                                                 0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
+                                              dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr")))
+                             )[[distribution]]
       PARAM_TRANSF_MINV <- list(exponential = matrix(c(1, 0, 0, 0,
                                                        0, 1, 0, 0,
                                                        1, 0, 1, 0,
                                                        0, 0, 0, 1), nrow = 4L, byrow = TRUE,
                                                      dimnames = list(c("delay1", "rate1", "delay2", "rate2"))),
-                                weibull = {
-                                  m <- diag(nrow = 6L)
-                                  rownames(m) <- c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")
-                                  m
-                                })[[distribution]]
+                                weibull = matrix(c(1, 0, 0, 0, 0, 0,
+                                                   0, 1, 0, 0, 0, 0,
+                                                   0, 0, 1, 0, 0, 0,
+                                                   1, 0, 0, 1, 0, 0,
+                                                   0, 0, 0, 0, 1, 0,
+                                                   0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
+                                                 dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")))
+                                )[[distribution]]
 
 
       PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
-                             weibull = c(identity, identity, identity, identity, identity, identity))[[distribution]]
+                             weibull = c(identity, log, log, log, log, log))[[distribution]]
       PARAM_TRANSF_FINV <- list(exponential = c(identity, exp, exp, exp),
-                                weibull = c(identity, identity, identity, identity, identity, identity))[[distribution]]
+                                weibull = c(identity, exp, exp, exp, exp, exp))[[distribution]]
 
       stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F) )
 
@@ -303,7 +310,7 @@ objFunFactory <- function(x, y = NULL,
 
   # do we have two groups after pre-processing?
   twoGroup <- isTRUE(!is.null(y) && is.numeric(y) && length(y))
-  stopifnot( ! twoPhase || (distribution == 'exponential') ) #XXX twoPhase for Weibull not implemented yet!
+  stopifnot( ! twoPhase || (distribution == 'exponential') ) #XXXX twoPhase for Weibull not implemented yet!
 
 
   # checks ------------------------------------------------------------------
@@ -367,7 +374,7 @@ objFunFactory <- function(x, y = NULL,
                       # scale <- exp(m + 0.572/shape)
                       # take out extreme values for robustness (against possible outliers)
                       #+ when at least 40 observations
-                      obs_f <- obs[max(1L, floor(length(obs)*.02)):ceiling(length(obs)*.975)] #assume sorted data
+                      obs_f <- obs[1L:ceiling(length(obs)*.985)] #assume sorted data
                       start_y <- log(-log(1-(seq_along(obs_f)-.3)/(length(obs_f)+.4)))
                       # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
                       start_shape <- stats::cor(log(obs_f), start_y) * stats::sd(start_y) / stats::sd(log(obs_f))
@@ -401,8 +408,8 @@ objFunFactory <- function(x, y = NULL,
   PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),
-                     shape = c(lower = sqrt(.Machine$double.eps), upper = +Inf), ##XXXX for the time being, as we are currently untransformed in Weibull ## on log would be: -Inf
-                     scale = c(lower = sqrt(.Machine$double.eps), upper = +Inf)) ##XXXX scale = -Inf
+                     shape = c(lower = -Inf, upper = +Inf), ## w/o log would be: lower = sqrt(.Machine$double.eps),
+                     scale = c(lower = -Inf, upper = +Inf)) ## w/o log would be: lower = sqrt(.Machine$double.eps)
 
 
   # alas, purrr::iwalk did not work for me here

@@ -213,11 +213,10 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay = delay1, rate = r
 #' Delayed Weibull Distribution
 #'
 #' @description
-#' Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters
-#' as in the Weibull distribution functions in R's stats-package, namely:
-#' * `delay`
+#' Density, distribution function, quantile function and random generation for the delayed Weibull distribution.
+#' Besides the additional parameter `delay`, the other two Weibull-parameters are in principle retained as in R's stats-package:
 #' * `shape`
-#' * `scale` (inverse of rate)
+#' * `scale` (as inverse of rate)
 #'
 #' @details
 #' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the stats-package.

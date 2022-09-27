@@ -101,12 +101,11 @@ Functions pertaining to the delayed Weibull distribution:
 The length of the result is determined by \code{n} for \code{rweib_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions, R's recycling rules apply.
 }
 \description{
-Density, distribution function, quantile function and random generation for the delayed Weibull distribution with parameters
-as in the Weibull distribution functions in R's stats-package, namely:
+Density, distribution function, quantile function and random generation for the delayed Weibull distribution.
+Besides the additional parameter \code{delay}, the other two Weibull-parameters are in principle retained as in R's stats-package:
 \itemize{
-\item \code{delay}
 \item \code{shape}
-\item \code{scale} (inverse of rate)
+\item \code{scale} (as inverse of rate)
 }
 }
 \details{

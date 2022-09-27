@@ -28,8 +28,8 @@ test_that("Fit delayed Exponentials", {
   expect_identical(purrr::chuck(fd_exp, 'optimizer', 'convergence'), expected = 0L)
   expect_type(purrr::chuck(fd_exp, 'optimizer', 'optim_args'), type = 'list')
 
-  expect_equal(coef_exp[[1L]], expected = 9, tolerance = .04)
-  expect_equal(coef_exp[[2L]], expected = 0.5, tolerance = .37)
+  expect_equal(coef_exp[["delay1"]], expected = 9, tolerance = .04)
+  expect_equal(coef_exp[["rate1"]], expected = 0.5, tolerance = .37)
 
   # update does not change structure
   fd_exp_oa <- purrr::pluck(fd_exp, 'optimizer', 'optim_args')
@@ -135,7 +135,7 @@ test_that("Fit delayed Weibull with MPSE", {
 
   expect_identical(purrr::chuck(fd_poll, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_poll), expected = 3L)
-  expect_lt(objFun_poll(coef_poll), expected = 3.75)
+  expect_lt(objFun_poll(incubate:::extractPars(parV = coef_poll, distribution = "weibull", transform = TRUE)), expected = 3.75)
   expect_equal(coef_poll, expected = c(delay1=1085, shape1=0.95, scale1=6562), tolerance = .001)
 
   # fit in two groups
@@ -151,8 +151,8 @@ test_that("Fit delayed Weibull with MPSE", {
   # fit model for two groups with binding
   set.seed(20210430)
   fd_wb2b <- delay_model(x = rweib_delayed(n=37, delay1 = 7, shape1 = .8, scale1 = 3),
-                                   y = rweib_delayed(n=51, delay1 = 5, shape1 = 1.2, scale1 = 1.5),
-                                   distribution = "weib", bind = "delay1")
+                         y = rweib_delayed(n=51, delay1 = 5, shape1 = 1.2, scale1 = 1.5),
+                         distribution = "weib", bind = "delay1")
 
   coef_wb2b <- coef(fd_wb2b)
 
