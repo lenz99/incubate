@@ -9,7 +9,8 @@
 #'
 #' @details
 #' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
-#' The numerical arguments other than `n` are recycled to the length of the result. Only the first elements of the logical arguments are used.
+#' The numerical arguments other than `n` are recycled to the length of the result. delay1/2 and rate1/2 are recycled together.
+#' Only the first elements of the logical arguments are used.
 #'
 #' @param x A numeric vector of values for which to get the density.
 #' @param q A numeric vector of quantile values.
@@ -38,36 +39,47 @@ NULL
 #' @rdname DelayedExponential
 #' @export
 dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL, log = FALSE) {
+  stopifnot( length(log) >= 1L, is.logical(log) )
+  log <- log[[1L]] # only first value of log is used
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
+  # manually recycle delay and rate parameters to ensure they have common length, respectively
+  ndelay <- max(length(delay1), length(delay2), na.rm = TRUE)
+  nrate <- max(length(rate1), length(rate2), na.rm = TRUE)
+
+  delay1 <- rep_len(delay1, length.out = ndelay)
+  rate1  <- rep_len(rate1, length.out = nrate)
+
+  # first phase
   dvals <- stats::dexp(x = x - delay1, rate = rate1, log = log)
-  # check for easy case: only a single delay
+
+  # check for easy case: only a single phase
   if ( is.null(delay2) ) {
     if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
     return(dvals)
   }
 
+  # two phases
   # we need both delay2 AND rate2
   stopifnot( is.numeric(delay2), is.numeric(rate2) )
-
-  # manually recycle delay and rate parameters to ensure they have common length, respectively
-  ndelay <- max(length(delay1), length(delay2), na.rm = TRUE)
-  nrate <- max(length(rate1), length(rate2), na.rm = TRUE)
-
-  delay1 <- rep_len(delay1, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
-  rate1  <- rep_len(rate1, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
+  delay2 <- rep_len(delay2, length.out = ndelay)
+  rate2 <- rep_len(rate2, length.out = nrate)
 
   # check delay constraint
   if (any(delay1 >= delay2)) {
-    stop("First delay phase must always antedate the second delay phase!")
+    stop("First delay phase must always antedate the second delay phase!", call. = FALSE)
   }
 
-  # check if we have observations in 2nd phase
+  # second phase
+  # update density for observations that lie in the 2nd phase
   phase2Ind <- which(x >= delay2)
-  if (length(phase2Ind)) dvals[phase2Ind] <- stats::dexp(x = x - delay2, rate = rate2, log = log)[phase2Ind] * exp(-rate1 * (delay2 - delay1))
+  if (length(phase2Ind)) {
+    dvals[phase2Ind] <- stats::dexp(x = x - delay2, rate = rate2, log = log)[phase2Ind]
+    dvals[phase2Ind] <- if (log) dvals[phase2Ind] - rate1 * (delay2 - delay1) else dvals[phase2Ind] * exp(-rate1 * (delay2 - delay1))
+  }
 
   #if (log) dvals - log(K) else dvals/K
   dvals
@@ -82,24 +94,29 @@ pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
 
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
+  # manually recycle delay and rate parameters to ensure they have common length, respectively
+  ndelay <- max(length(delay1), length(delay2), na.rm = TRUE)
+  nrate <- max(length(rate1), length(rate2), na.rm = TRUE)
+
+  delay1 <- rep_len(delay1, length.out = ndelay)
+  rate1 <- rep_len(rate1, length.out = nrate)
+
+
+  # first phase
   pvals <- stats::pexp(q = q - delay1, rate = rate1, ...)
 
   # check for easy case: only a single delay
   if ( is.null(delay2) ) return(pvals)
 
+  # second phase
   # we need both delay2 AND rate2
   stopifnot( is.numeric(delay2), is.numeric(rate2) )
-
-  # manually recycle delay and rate parameters to ensure they have common length, respectively
-  ndelay <- max(length(delay1), length(delay2), na.rm = TRUE)
-  nrate <- max(length(rate1), length(rate2), na.rm = TRUE)
-
-  delay1 <- rep_len(delay1, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
-  rate1 <- rep_len(rate1, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
+  delay2 <- rep_len(delay2, length.out = ndelay)
+  rate2 <- rep_len(rate2, length.out = nrate)
 
   # check delay constraint
   if (any(delay1 >= delay2)) {
-    stop("First delay phase must always antedate the second delay phase!")
+    stop("First delay phase must always antedate the second delay phase!", call. = FALSE)
   }
 
   # check if we have observations in 2nd phase
@@ -117,19 +134,24 @@ qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
 
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
-  qvals <- delay1 + stats::qexp(p = p, rate = rate1, ...)
-  # check for easy case: only a single delay
-  if ( is.null(delay2) ) return(qvals)
-
-  # we need both delay2 AND rate2
-  stopifnot( is.numeric(delay2), is.numeric(rate2) )
-
   # manually recycle delay and rate parameters to ensure they have common length, respectively
   ndelay <- max(length(delay1), length(delay2), na.rm = TRUE)
   nrate <- max(length(rate1), length(rate2), na.rm = TRUE)
 
-  delay1 <- rep_len(delay1, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
-  rate1 <- rep_len(rate1, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
+  delay1 <- rep_len(delay1, length.out = ndelay)
+  rate1 <- rep_len(rate1, length.out = nrate)
+
+  # first phase
+  qvals <- delay1 + stats::qexp(p = p, rate = rate1, ...)
+
+  # check for easy case: only a single delay phase
+  if ( is.null(delay2) ) return(qvals)
+
+  # second phase
+  # we need both delay2 AND rate2
+  stopifnot( is.numeric(delay2), is.numeric(rate2) )
+  delay2 <- rep_len(delay2, length.out = ndelay)
+  rate2 <- rep_len(rate2, length.out = nrate)
 
   # check delay constraint
   if (any(delay1 >= delay2)) {
@@ -152,18 +174,23 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
 
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
-  # check for easy case: only a single delay
-  if ( is.null(delay2) ) return(delay1 + stats::rexp(n = n, rate = rate1))
-
-  # we need both delay2 AND rate2
-  stopifnot( is.numeric(delay2), is.numeric(rate2) )
-
   # manually recycle delay and rate parameters to ensure they have common length, respectively
   ndelay <- max(length(delay1), length(delay2), na.rm = TRUE)
   nrate <- max(length(rate1), length(rate2), na.rm = TRUE)
 
-  delay1 <- rep_len(delay1, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
-  rate1 <- rep_len(rate1, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
+  delay1 <- rep_len(delay1, length.out = ndelay)
+  rate1 <- rep_len(rate1, length.out = nrate)
+
+  # single phase
+  # check for easy case: only a single delay
+  if ( is.null(delay2) ) return(delay1 + stats::rexp(n = n, rate = rate1))
+
+  # two phases
+  # we need both delay2 AND rate2
+  stopifnot( is.numeric(delay2), is.numeric(rate2) )
+
+  delay2 <- rep_len(delay2, length.out = ndelay)
+  rate2 <- rep_len(rate2, length.out = nrate)
 
   # check delay constraint
   if (any(delay1 >= delay2)) {
@@ -184,29 +211,31 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay = delay1, rate = r
 
   stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
-  # calculate for single phase delayed exponential
-  res_mvals <- pmin.int(t, delay1) + pexp_delayed(q = if (is.null(delay2)) t else pmin.int(t, delay2),
-                                                 delay1 = delay1, rate1 = rate1) / rate1
-
-  # directly return when only single phase
-  if ( is.null(delay2) ) return(res_mvals)
-
-  # we need both delay2 AND rate2
-  stopifnot( is.numeric(delay2), is.numeric(rate2) )
-
   # manually recycle delay and rate parameters to ensure they have common length, respectively
   ndelay <- max(length(delay1), length(delay2), na.rm = TRUE)
   nrate <- max(length(rate1), length(rate2), na.rm = TRUE)
 
-  delay1 <- rep_len(delay1, length.out = ndelay); delay2 <- rep_len(delay2, length.out = ndelay)
-  rate1 <- rep_len(rate1, length.out = nrate); rate2 <- rep_len(rate2, length.out = nrate)
+  delay1 <- rep_len(delay1, length.out = ndelay)
+  rate1 <- rep_len(rate1, length.out = nrate)
+
+  # single phase
+  # calculate for single phase delayed exponential
+  if ( is.null(delay2) ) return(pmin.int(t, delay1) + pexp_delayed(q = t, delay1 = delay1, rate1 = rate1) / rate1)
+
+  # two phases
+  # we need both delay2 AND rate2
+  stopifnot( is.numeric(delay2), is.numeric(rate2) )
+
+  delay2 <- rep_len(delay2, length.out = ndelay)
+  rate2 <- rep_len(rate2, length.out = nrate)
 
   # check delay constraint
   if (any(delay1 >= delay2)) {
     stop("First delay phase must always antedate the second delay phase!")
   }
 
-  res_mvals + (1L-pexp_delayed(q=delay2, delay1 = delay1, rate1 = rate1)) * pexp_delayed(q=t, delay1 = delay2, rate1 = rate2) / rate2
+  pmin.int(t, delay1) + pexp_delayed(q = pmin.int(t, delay2), delay1 = delay1, rate1 = rate1) / rate1 +
+    (1L-pexp_delayed(q=delay2, delay1 = delay1, rate1 = rate1)) * pexp_delayed(q=t, delay1 = delay2, rate1 = rate2) / rate2
 }
 
 
@@ -228,12 +257,12 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay = delay1, rate = r
 #' @param t A numeric vector of times that restrict the mean survival. Default is `+Inf`, i.e., the unrestricted mean survival time.
 #' @param p A numeric vector of probabilities.
 #' @param n integer. Number of random observations requested.
-#' @param delay1 numeric. The delay, must be non-negative.
-#' @param shape1 numeric. Shape parameter, must be positive.
-#' @param scale1 numeric. Scale parameter (inverse of rate), must be positive.
-#' @param delay numeric. Alias for delay.
-#' @param shape numeric. Alias for shape.
-#' @param scale numeric. Alias for scale.
+#' @param delay1 numeric. The first delay, must be non-negative.
+#' @param shape1 numeric. First shape parameter, must be positive.
+#' @param scale1 numeric. First scale parameter (inverse of rate), must be positive.
+#' @param delay numeric. Alias for first delay.
+#' @param shape numeric. Alias for first shape.
+#' @param scale numeric. Alias for first scale.
 #' @param ... further arguments are passed on to the underlying non-delayed function, e.g., [stats::dweibull()]
 #' @return Functions pertaining to the delayed Weibull distribution:
 #' * `dweib_delayed` gives the density

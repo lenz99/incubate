@@ -66,17 +66,17 @@ mweib_delayed(
 \arguments{
 \item{x}{A numeric vector of values for which to get the density.}
 
-\item{delay1}{numeric. The delay, must be non-negative.}
+\item{delay1}{numeric. The first delay, must be non-negative.}
 
-\item{shape1}{numeric. Shape parameter, must be positive.}
+\item{shape1}{numeric. First shape parameter, must be positive.}
 
-\item{scale1}{numeric. Scale parameter (inverse of rate), must be positive.}
+\item{scale1}{numeric. First scale parameter (inverse of rate), must be positive.}
 
-\item{delay}{numeric. Alias for delay.}
+\item{delay}{numeric. Alias for first delay.}
 
-\item{shape}{numeric. Alias for shape.}
+\item{shape}{numeric. Alias for first shape.}
 
-\item{scale}{numeric. Alias for scale.}
+\item{scale}{numeric. Alias for first scale.}
 
 \item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Weibull]{stats::dweibull()}}}
 

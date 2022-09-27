@@ -104,6 +104,7 @@ Density, distribution function, quantile function, random generation and restric
 }
 \details{
 Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the \code{stats}-package.
-The numerical arguments other than \code{n} are recycled to the length of the result. Only the first elements of the logical arguments are used.
+The numerical arguments other than \code{n} are recycled to the length of the result. delay1/2 and rate1/2 are recycled together.
+Only the first elements of the logical arguments are used.
 }
 \keyword{distribution}
