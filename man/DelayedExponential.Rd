@@ -97,16 +97,21 @@ Functions pertaining to the delayed exponential distribution:
 \item \code{mexp_delayed} gives the restricted mean survival time
 }
 
-The length of the result is determined by \code{n} for \code{rexp_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions, R's recycling rules apply.
+The length of the result is determined by \code{n} for \code{rexp_delayed}, and is the maximum of the lengths of the numerical arguments for the other functions,
+R's recycling rules apply when only single initial delay phase is used.
 }
 \description{
 Density, distribution function, quantile function, random generation and restricted mean survival time function for the delayed exponential distribution.
-There is an initial delay phase (parameter \code{delay1}) where no events occur.
+There is an initial delay phase (parameter \code{delay1}) where no events occur. After that, \code{rate1} applies.
 Optionally, a second phase is possible where the hazard rate might change (parameters \code{delay2} and \code{rate2}).
 }
 \details{
 Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the \code{stats}-package.
-Unlike the distribution functions from \code{stats} the arguments are \strong{not} recycled. The delay and rate related parameters must have length 1 as it otherwise becomes ambiguous which delay and rate parameter to apply, depending on the observations' phase.
-Only the first elements of the logical arguments are used.
+If only a single initial delay phase is there, the numerical arguments other than \code{n} are recycled to the length of the result (as with the exponential distribution in \code{stats}).
+With two phases, the arguments are \strong{not} recycled. Only the first element of delays and rates are used as it otherwise becomes ambiguous which delay and rate parameter apply for observations in different phases.
+Generally, only the first elements of the logical arguments are used.
+}
+\seealso{
+stats::Exponential
 }
 \keyword{distribution}

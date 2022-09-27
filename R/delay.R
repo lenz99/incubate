@@ -6,13 +6,14 @@
 #'
 #' @description
 #' Density, distribution function, quantile function, random generation and restricted mean survival time function for the delayed exponential distribution.
-#' There is an initial delay phase (parameter `delay1`) where no events occur.
+#' There is an initial delay phase (parameter `delay1`) where no events occur. After that, `rate1` applies.
 #' Optionally, a second phase is possible where the hazard rate might change (parameters `delay2` and `rate2`).
 #'
 #' @details
 #' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
-#' Unlike the distribution functions from `stats` the arguments are **not** recycled. The delay and rate related parameters must have length 1 as it otherwise becomes ambiguous which delay and rate parameter to apply, depending on the observations' phase.
-#' Only the first elements of the logical arguments are used.
+#' If only a single initial delay phase is there, the numerical arguments other than `n` are recycled to the length of the result (as with the exponential distribution in `stats`).
+#' With two phases, the arguments are **not** recycled. Only the first element of delays and rates are used as it otherwise becomes ambiguous which delay and rate parameter apply for observations in different phases.
+#' Generally, only the first elements of the logical arguments are used.
 #'
 #' @param x A numeric vector of values for which to get the density.
 #' @param q A numeric vector of quantile values.
@@ -33,7 +34,9 @@
 #' * `rexp_delayed` generates a pseudo-random sample
 #' * `mexp_delayed` gives the restricted mean survival time
 #'
-#' The length of the result is determined by `n` for `rexp_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions, R's recycling rules apply.
+#' The length of the result is determined by `n` for `rexp_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions,
+#' R's recycling rules apply when only single initial delay phase is used.
+#' @seealso stats::Exponential
 #' @keywords distribution
 #' @name DelayedExponential
 NULL
@@ -46,20 +49,23 @@ dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
-  delay1 <- delay1[[1L]]
-  rate1 <- rate1[[1L]]
-  stopifnot( is.numeric(delay1), is.numeric(rate1), is.finite(delay1), is.finite(rate1) )
-
-  # first phase
-  dvals <- stats::dexp(x = x - delay1, rate = rate1, log = log)
+  stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   # check for easy case: only a single phase
   if ( is.null(delay2) ) {
     if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
-    return(dvals)
+    return(stats::dexp(x = x - delay1, rate = rate1, log = log))
   }
 
   # two phases
+  # take only first value of parameter arguments!
+  if ( length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L ){
+    warning("When in two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
+  }
+  # first phase
+  delay1 <- delay1[[1L]]
+  rate1 <- rate1[[1L]]
+  dvals <- stats::dexp(x = x - delay1, rate = rate1, log = log)
   # we need both delay2 AND rate2
   delay2 <- delay2[[1L]]
   rate2 <- rate2[[1L]]
@@ -78,9 +84,7 @@ dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
     dvals[phase2Ind] <- if (log) dvals[phase2Ind] - rate1 * (delay2 - delay1) else dvals[phase2Ind] * exp(-rate1 * (delay2 - delay1))
   }
 
-  #if (log) dvals - log(K) else dvals/K
   dvals
-
 }
 
 #' @rdname DelayedExponential
@@ -89,20 +93,23 @@ pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
-  delay1 <- delay1[[1L]]
-  rate1 <- rate1[[1L]]
-  stopifnot( is.numeric(delay1), is.numeric(rate1), is.finite(delay1), is.finite(rate1) )
-
-  # first phase
-  pvals <- stats::pexp(q = q - delay1, rate = rate1, ...)
+  stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   # check for easy case: only a single delay
   if ( is.null(delay2) ) {
     if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
-    return(pvals)
+    return(stats::pexp(q = q - delay1, rate = rate1, ...))
   }
 
-  # second phase
+  # two phases
+  if ( length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L ){
+    warning("When in two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
+  }
+  delay1 <- delay1[[1L]]
+  rate1 <- rate1[[1L]]
+
+  # first phase
+  pvals <- stats::pexp(q = q - delay1, rate = rate1, ...)
   # we need both delay2 AND rate2
   delay2 <- delay2[[1L]]
   rate2 <- rate2[[1L]]
@@ -126,19 +133,22 @@ qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
-  delay1 <- delay1[[1L]]
-  rate1 <- rate1[[1L]]
-  stopifnot( is.numeric(delay1), is.numeric(rate1), is.finite(delay1), is.finite(rate1) )
-
-  # first phase
-  qvals <- delay1 + stats::qexp(p = p, rate = rate1, ...)
+  stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   # check for easy case: only a single delay phase
   if ( is.null(delay2) ){
     if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
-    return(qvals)
+    return(delay1 + stats::qexp(p = p, rate = rate1, ...))
   }
 
+  # two phases
+  if ( length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L ){
+    warning("When in two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
+  }
+  delay1 <- delay1[[1L]]
+  rate1 <- rate1[[1L]]
+  # first phase
+  qvals <- delay1 + stats::qexp(p = p, rate = rate1, ...)
   # second phase
   # we need both delay2 AND rate2
   delay2 <- delay2[[1L]]
@@ -164,9 +174,7 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
-  delay1 <- delay1[[1L]]
-  rate1 <- rate1[[1L]]
-  stopifnot( is.numeric(delay1), is.numeric(rate1), is.finite(delay1), is.finite(rate1) )
+  stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   # single phase
   # check for easy case: only a single delay
@@ -176,6 +184,11 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
   }
 
   # two phases
+  if ( length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L ){
+    warning("When in two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
+  }
+  delay1 <- delay1[[1L]]
+  rate1 <- rate1[[1L]]
   # we need both delay2 AND rate2
   delay2 <- delay2[[1L]]
   rate2 <- rate2[[1L]]
@@ -188,7 +201,6 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
 
   # use inverse CDF-method
   qexp_delayed(p = stats::runif(n = n), delay1 = delay1, rate1 = rate1, delay2 = delay2, rate2 = rate2)
-
 }
 
 
@@ -198,9 +210,7 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay = delay1, rate = r
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
-  delay1 <- delay1[[1L]]
-  rate1 <- rate1[[1L]]
-  stopifnot( is.numeric(delay1), is.numeric(rate1), is.finite(delay1), is.finite(rate1) )
+  stopifnot( is.numeric(delay1), is.numeric(rate1), all(is.finite(delay1)), all(is.finite(rate1)) )
 
   # single phase
   # calculate for single phase delayed exponential
@@ -210,6 +220,11 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay = delay1, rate = r
   }
 
   # two phases
+  if ( length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L ){
+    warning("When in two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
+  }
+  delay1 <- delay1[[1L]]
+  rate1 <- rate1[[1L]]
   # we need both delay2 AND rate2
   delay2 <- delay2[[1L]]
   rate2 <- rate2[[1L]]

@@ -7,7 +7,7 @@ test_that('Structure of test objects.', {
   y <- rexp_delayed(n = 111L, delay1 = 5, rate1 = .3)
 
   ted_d <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay1',
-                     R = 19, type = 'bootstrap')
+                     R = 19, type = 'bootstrap', chiSqApprox = TRUE)
 
   expect_s3_class(ted_d, class = 'incubate_test')
   expect_identical(names(ted_d), c('t_obs', 'testDist', 'R', 'chisq_df_hat', 'param', 'P'))
