@@ -351,7 +351,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     }
     t0_dist <- t0_dist[is.finite(t0_dist)]
 
-    if (chiSqApprox && length(t0_dist) > 101L){
+    if (chiSqApprox && length(t0_dist) > 3L){
       try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
                                                       start = list(df = length(param)),
                                                       method = "Brent", lower = .001, upper = 401))},
