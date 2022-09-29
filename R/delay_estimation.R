@@ -310,7 +310,6 @@ objFunFactory <- function(x, y = NULL,
 
   # do we have two groups after pre-processing?
   twoGroup <- isTRUE(!is.null(y) && is.numeric(y) && length(y))
-  stopifnot( ! twoPhase || (distribution == 'exponential') ) #XXXX twoPhase for Weibull not implemented yet!
 
 
   # checks ------------------------------------------------------------------
@@ -363,7 +362,6 @@ objFunFactory <- function(x, y = NULL,
                       extractPars(parV = parV0, distribution = "exponential", transform = TRUE)
                     },
                     weibull = {
-                      stopifnot(! twoPhase) #XXXX 2-phase not supported yet for Weibull!
                       # start values from 'Weibull plot'
                       #+using the empirical distribution function
                       ## in MASS::fitdistr they simplify:
@@ -374,7 +372,7 @@ objFunFactory <- function(x, y = NULL,
                       # scale <- exp(m + 0.572/shape)
                       # take out extreme values for robustness (against possible outliers)
                       #+ when at least 40 observations
-                      obs_f <- obs[1L:ceiling(length(obs)*.985)] #assume sorted data
+                      obs_f <- obs[1L:ceiling(length(obs)*.985)] #contract: sorted data
                       start_y <- log(-log(1-(seq_along(obs_f)-.3)/(length(obs_f)+.4)))
                       # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
                       start_shape <- stats::cor(log(obs_f), start_y) * stats::sd(start_y) / stats::sd(log(obs_f))
@@ -384,6 +382,9 @@ objFunFactory <- function(x, y = NULL,
                       parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
                          start_shape,
                          start_scale )
+
+                      # support 2-phase with additional start parameters
+                      if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[-1L])
 
                       parV0 <- purrr::set_names(parV0, nm = oNames)
                       # transformation of parameters into optfun-parametrization
@@ -889,9 +890,8 @@ print.incubate_fit <- function(x, ...){
 #' @return named coefficient vector
 #' @export
 coef.incubate_fit <- function(object, transformed = FALSE, group = NULL, ...){
-  #stopifnot( inherits(object, "incubate_fit") )
+  stopifnot( inherits(object, "incubate_fit") )
   transformed <- isTRUE(transformed)
-  stopifnot( object[["distribution"]] == 'exponential' || ! transformed ) #XXX currently transformation only implemented for 'expon'
 
   extractPars(parV = if (transformed) purrr::chuck(object, "optimizer", "parOpt") else object[["par"]],
               distribution = object[["distribution"]], group = group, transform = FALSE)
