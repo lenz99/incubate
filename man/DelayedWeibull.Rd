@@ -31,7 +31,11 @@ pweib_delayed(
   delay = delay1,
   shape = shape1,
   scale = scale1,
-  ...
+  delay2 = NULL,
+  shape2 = NULL,
+  scale2 = 1,
+  lower.tail = TRUE,
+  log.p = FALSE
 )
 
 qweib_delayed(
@@ -42,7 +46,11 @@ qweib_delayed(
   delay = delay1,
   shape = shape1,
   scale = scale1,
-  ...
+  delay2 = NULL,
+  shape2 = NULL,
+  scale2 = 1,
+  lower.tail = TRUE,
+  log.p = FALSE
 )
 
 rweib_delayed(
@@ -52,7 +60,10 @@ rweib_delayed(
   scale1 = 1,
   delay = delay1,
   shape = shape1,
-  scale = scale1
+  scale = scale1,
+  delay2 = NULL,
+  shape2 = NULL,
+  scale2 = 1
 )
 
 mweib_delayed(
@@ -63,7 +74,9 @@ mweib_delayed(
   delay = delay1,
   shape = shape1,
   scale = scale1,
-  ...
+  delay2 = NULL,
+  shape2 = NULL,
+  scale2 = 1
 )
 }
 \arguments{
@@ -83,13 +96,13 @@ mweib_delayed(
 
 \item{q}{A numeric vector of quantile values.}
 
-\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Weibull]{stats::dweibull()}}}
-
 \item{p}{A numeric vector of probabilities.}
 
 \item{n}{integer. Number of random observations requested.}
 
 \item{t}{A numeric vector of times that restrict the mean survival. Default is \code{+Inf}, i.e., the unrestricted mean survival time.}
+
+\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Weibull]{stats::dweibull()}}}
 }
 \value{
 Functions pertaining to the delayed Weibull distribution:

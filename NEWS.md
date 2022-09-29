@@ -1,6 +1,8 @@
 
-# incubate 1.2.1.9003
-* include restricted mean survival time function for delayed exponential
+# incubate 1.2.1.9016
+* use transformed parameters internally for the optimization
+* [experimental] implement two delay phases for exponential and for Weibull
+* include restricted mean survival time function for delayed exponential and Weibull
 
 # incubate 1.2.1
 * fix package help: due to changes in roxygen

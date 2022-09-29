@@ -39,7 +39,8 @@ qexp_delayed(
   rate = rate1,
   delay2 = NULL,
   rate2 = NULL,
-  ...
+  lower.tail = TRUE,
+  log.p = FALSE
 )
 
 rexp_delayed(
