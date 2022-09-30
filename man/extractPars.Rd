@@ -24,14 +24,14 @@ extractPars(
 requested parameters as named numeric vector
 }
 \description{
-This routine handles parameter vectors for one or two groups, it knows about bound parameters (cf. bind=) and
+This routine handles parameter vectors for one or two groups, it knows about bound parameters (cf. \verb{bind=}) and
 it can also transform the given parameters from the standard form (as used in the delayed distribution functions)
 to the internal transformed parametrization as used by the optimization function, and vice versa.
 }
 \details{
 When parameters for a single group are requested the parameters are always returned in the canonical order of the distribution.
 Otherwise, the order of parameters is unchanged.
-It parses the parameter names to find out if it is twoPhase, twoGroup and if \code{transform=TRUE} which direction to transform.
+It parses the parameter names to find out if it is twoPhase, twoGroup and, when \code{transform=TRUE}, which direction to transform.
 
 This is an internal helper function
 used in \code{\link[=delay_model]{delay_model()}}, in the factory method \code{\link[=objFunFactory]{objFunFactory()}} and in \code{\link[=coef.incubate_fit]{coef.incubate_fit()}}.

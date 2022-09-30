@@ -1,6 +1,6 @@
 
 # incubate 1.2.1.9016
-* use transformed parameters internally for the optimization
+* use (partially) log-transformed parameters internally for more stable and less constrained optimization
 * [experimental] implement two delay phases for exponential and for Weibull
 * include restricted mean survival time function for delayed exponential and Weibull
 

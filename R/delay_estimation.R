@@ -50,17 +50,17 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
       # parameter transformation matrices
       PARAM_TRANSF_M <- list(exponential = matrix(c( 1, 0, 0, 0,
                                                      0, 1, 0, 0,
-                                                    -1, 0, 1, 0,
+                                                     -1, 0, 1, 0,
                                                      0, 0, 0, 1), nrow = 4L, byrow = TRUE,
                                                   dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
                              weibull = matrix(c( 1, 0, 0, 0, 0, 0,
                                                  0, 1, 0, 0, 0, 0,
                                                  0, 0, 1, 0, 0, 0,
-                                                -1, 0, 0, 1, 0, 0,
+                                                 -1, 0, 0, 1, 0, 0,
                                                  0, 0, 0, 0, 1, 0,
                                                  0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
                                               dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr")))
-                             )[[distribution]]
+      )[[distribution]]
       PARAM_TRANSF_MINV <- list(exponential = matrix(c(1, 0, 0, 0,
                                                        0, 1, 0, 0,
                                                        1, 0, 1, 0,
@@ -73,7 +73,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                                                    0, 0, 0, 0, 1, 0,
                                                    0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
                                                  dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")))
-                                )[[distribution]]
+      )[[distribution]]
 
 
       PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
@@ -380,8 +380,8 @@ objFunFactory <- function(x, y = NULL,
 
 
                       parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
-                         start_shape,
-                         start_scale )
+                                  start_shape,
+                                  start_scale )
 
                       # support 2-phase with additional start parameters
                       if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[-1L])
@@ -473,115 +473,25 @@ objFunFactory <- function(x, y = NULL,
         # return start value
         if ( is.null(bind) ){ # two groups unbound
           c(start_x, start_y)
-        } else if (distribution == 'exponential') {
-
-          switch( EXPR = paste(bind, collapse = '+'),
-                  delay1 = {
-                    c(min(start_x[[1L]], start_y[[1L]]), start_x[-1L], start_y[-1L])
-                  },
-                  rate1 = {
-                    # arithmetic mean of log-rates
-                    c((start_x[[2L]] + start_y[[2L]]) / 2L,
-                      start_x[-2L], start_y[-2L])
-                  },
-                  delay2 = {
-                    stopifnot(twoPhase)
-                    # arithmetic mean of log-scaled delay2-start values
-                    c((start_x[[3L]] + start_y[[3L]]) / 2L,
-                      start_x[-3L], start_y[-3L])
-                  },
-                  rate2 = {
-                    stopifnot(twoPhase)
-                    # arithmetic mean of log-rates
-                    c((start_x[[4L]] + start_y[[4L]]) / 2L,
-                      start_x[-4L], start_y[-4L])
-
-                  },
-                  `delay1+rate1` = {
-                    stopifnot(twoPhase) #otherwise, we would have bound all parameters which is already handled above!
-                    # min for delay1, mean for rate1 on log-scale
-                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[2L]] + start_y[[2L]]) / 2L,
-                      start_x[-c(1L, 2L)], start_y[-c(1L, 2L)])
-                  },
-                  `delay1+delay2` = {
-                    stopifnot(twoPhase)
-                    # min for delay1, mean for log-scaled delay2
-                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[3L]] + start_y[[3L]])/2L,
-                      start_x[-c(1L, 3L)], start_y[-c(1L, 3L)])
-                  },
-                  `delay1+rate2` = {
-                    stopifnot(twoPhase)
-                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[4L]] + start_y[[4L]]) / 2L,
-                      start_x[-c(1L, 4L)], start_y[-c(1L, 4L)])
-                  },
-                  `rate1+delay2` = {
-                    stopifnot(twoPhase)
-                    c((start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[3L]]+start_y[[3L]]) / 2L,
-                      start_x[-c(2L, 3L)], start_y[-c(2L, 3L)])
-                  },
-                  `rate1+rate2` = {
-                    stopifnot(twoPhase)
-                    c((start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
-                      start_x[-c(2L, 4L)], start_y[-c(2L, 4L)])
-                  },
-                  `delay2+rate2` = {
-                    stopifnot(twoPhase)
-                    c((start_x[[3L]]+start_y[[3L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
-                      start_x[-c(3L, 4L)], start_y[-c(3L, 4L)])
-                  },
-                  `delay1+rate1+delay2` = {
-                    stopifnot(twoPhase)
-                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[3L]]+start_y[[3L]]) / 2L,
-                      start_x[[4L]], start_y[[4L]])
-                  },
-                  `delay1+rate1+rate2` = {
-                    stopifnot(twoPhase)
-                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
-                      start_x[[3L]], start_y[[3L]])
-                  },
-                  `delay1+delay2+rate2` = {
-                    stopifnot(twoPhase)
-                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[3L]]+start_y[[3L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
-                      start_x[[2L]], start_y[[2L]])
-                  },
-                  `rate1+delay2+rate2` = {
-                    stopifnot(twoPhase)
-                    c((start_x[[2L]]+start_y[[2L]]) / 2L, (start_x[[3L]]+start_y[[3L]]) / 2L, (start_x[[4L]]+start_y[[4L]]) / 2L,
-                      start_x[[1L]], start_y[[1L]])
-                  },
-                  # default
-                  stop("This bind-configuration is not implemented!", call. = FALSE)
-          )
-
         } else {
-          stopifnot( distribution == 'weibull' )
 
-          switch( EXPR = paste(bind, collapse = '+'),
-                  delay1 = {
-                    c(min(start_x[[1L]], start_y[[1L]]), start_x[-1L], start_y[-1L])
-                  },
-                  shape1 = {
-                    # geometric mean of shapes
-                    c(sqrt(start_x[[2L]] * start_y[[2L]]), start_x[-2L], start_y[-2L])
-                  },
-                  scale1 = {
-                    # arithmetic mean of scales (corresponds to harmonic mean of rates)
-                    c((start_x[[3L]] + start_y[[3L]])/2L, start_x[-3L], start_y[-3L])
-                  },
-                  `delay1+shape1` = {
-                    c(min(start_x[[1L]], start_y[[1L]]), sqrt(start_x[[2L]] * start_y[[2L]]), start_x[[3]], start_y[[3]])
-                  },
-                  `delay1+scale1` = {
-                    c(min(start_x[[1L]], start_y[[1L]]), (start_x[[3L]] + start_y[[3L]])/2L, start_x[[2]], start_y[[2]])
-                  },
-                  `shape1+scale1` = {
-                    c(sqrt(start_x[[2L]] * start_y[[2L]]), (start_x[[3L]] + start_y[[3L]])/2L, start_x[[1L]], start_y[[1L]])
-                  },
-                  # default
-                  stop("This bind-configuration is not implemented!", call. = FALSE)
-          )
+          startParAggrFuns <- list(delay1_tr = min, delay2_tr = mean,
+                          rate1_tr = mean, rate2_tr = mean,
+                          shape1_tr = mean, scale1_tr = mean, shape2_tr = mean, scale2_tr = mean)
 
-        } # weibull
+          # local() leaves fewer traces
+          local(expr = {
+            startBind <- paste(bind, "tr", sep = "_") # start parameters are transformed (for optimization)
+            stopifnot( all(startBind %in% names(start_x)), all(startBind %in% names(start_x)))
+            # put bind-parameters first: aggregate start values between both groups
+            c(purrr::set_names(as.numeric(.mapply(FUN = function(f, x) f(x),
+                                                  dots = list(startParAggrFuns[startBind],
+                                                              # list: per parameter, a vector of start-values for x and y
+                                                              lapply(purrr::transpose(list(x=start_x, y = start_y))[startBind], FUN = unlist)),
+                                                  MoreArgs = NULL)), nm = startBind),
+              # extract unbound start values
+              start_x[! names(start_x) %in% startBind], start_y[! names(start_y) %in% startBind])})
+        }
       } #twoGrp, not all params bound!
     } # twoGrp
 
