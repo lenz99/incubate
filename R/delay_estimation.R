@@ -3,13 +3,13 @@
 
 #' Extract certain parameters from a given named parameter vector.
 #'
-#' This routine handles parameter vectors for one or two groups, it knows about bound parameters (cf. bind=) and
+#' This routine handles parameter vectors for one or two groups, it knows about bound parameters (cf. `bind=`) and
 #' it can also transform the given parameters from the standard form (as used in the delayed distribution functions)
 #' to the internal transformed parametrization as used by the optimization function, and vice versa.
 #'
 #' When parameters for a single group are requested the parameters are always returned in the canonical order of the distribution.
 #' Otherwise, the order of parameters is unchanged.
-#' It parses the parameter names to find out if it is twoPhase, twoGroup and if `transform=TRUE` which direction to transform.
+#' It parses the parameter names to find out if it is twoPhase, twoGroup and, when `transform=TRUE`, which direction to transform.
 #'
 #' This is an internal helper function
 #' used in [delay_model()], in the factory method [objFunFactory()] and in [coef.incubate_fit()].
@@ -86,11 +86,13 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
 
       purrr::set_names(
         if (isTransformed) {
+          # b = Ainv %*% Finv(b')
           as.numeric(PARAM_TRANSF_MINV[seq_along(parV1), seq_along(parV1)] %*%
                        as.numeric(.mapply(FUN = function(f, x) f(x),
                                           dots = list(PARAM_TRANSF_FINV[seq_along(parV1)], parV1),
                                           MoreArgs = NULL)))
         } else {
+          # b' = F(A%*% b)
           as.numeric(.mapply(FUN = function(f, x) f(x),
                              dots = list(PARAM_TRANSF_F[seq_along(parV1)],
                                          as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1)),
@@ -100,7 +102,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
     }
 
     # update parameter vector according to transformation
-    parV <- if (isTwoGroup) {
+    parV <- if (! isTwoGroup) transformPars1(parV1 = parV) else {
       # target parameter names
       pNames_trgt <- if (isTransformed) {
         sub(pattern = "_tr", replacement = "", pNames, fixed = TRUE) # remove '_tr' string
@@ -122,7 +124,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
 
       purrr::set_names(c(h[[1L]][pNames_trgt[idx.nongrp]], unlist(purrr::map(h, .f = ~ .x[! names(.x) %in% pNames_trgt[idx.nongrp]]))),
                        nm = pNames_trgt)
-    } else transformPars1(parV1 = parV)
+    }
 
     # reflect transformation in meta-data
     isTransformed <- ! isTransformed
@@ -145,7 +147,6 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
     # contract: bind is intersected (only valid names, canonical order)
     c(parV.gr, parV[pNames[idx.nongrp]])[oNames]
   }
-
 }
 
 
@@ -316,8 +317,7 @@ objFunFactory <- function(x, y = NULL,
 
   if (!twoGroup && !is.null(bind) && length(bind)) {
     bind <- NULL
-    warning("bind= has a given non-null argument but it is ignored as we have only a single group!",
-            call. = FALSE)
+    warning("bind= has a given non-null argument but it is ignored as we have only a single group!", call. = FALSE)
   }
 
   if (startsWith(method, 'MLE') && twoGroup ) { #XXX not implemented yet!
@@ -341,7 +341,7 @@ objFunFactory <- function(x, y = NULL,
 
 
   # get optimization start values and upper limits based on observations from a single group
-  # for exponential distribution, the function respects the twoPhase-flag
+  # for `twoPhase=TRUE` there will be more parameters
   # @return list with transformed par for single group and upper limits for delay parameters, in canonical order (bind has no effect here!)
   getParSetting.gr <- function(obs){
     # contract: obs is sorted!
@@ -409,8 +409,8 @@ objFunFactory <- function(x, y = NULL,
   PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),
-                     shape = c(lower = -Inf, upper = +Inf), ## w/o log would be: lower = sqrt(.Machine$double.eps),
-                     scale = c(lower = -Inf, upper = +Inf)) ## w/o log would be: lower = sqrt(.Machine$double.eps)
+                     shape = c(lower = -Inf, upper = +Inf),
+                     scale = c(lower = -Inf, upper = +Inf))
 
 
   # alas, purrr::iwalk did not work for me here
