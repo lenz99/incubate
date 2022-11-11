@@ -3,7 +3,7 @@
 \docType{data}
 \name{stankovic}
 \alias{stankovic}
-\title{Survival of mice with glioma under different treatments.}
+\title{Survival of mice with glioma under different treatments}
 \format{
 \describe{
 \item{Figure}{The figure in the publication where the data is shown}
@@ -20,7 +20,8 @@ Dudvarski Stankovic N, Bicker F, Keller S, et al. EGFL7 enhances surface express
 stankovic
 }
 \description{
-A dataset from an animal experiment described in Stankovic (2018), shown in Figure 6J and 6K.
+This data set stems from an animal experiment described in Stankovic (2018).
+In particular, the data in question is shown in Figure 6J and 6K.
 }
 \details{
 The data were read directly from the survival plots in the publication with the help of Plot Digitizer, version 2.6.9.
