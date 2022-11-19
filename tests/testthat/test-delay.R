@@ -121,7 +121,6 @@ test_that('quantile function (percentage point function) of delayed distribution
                              expected = qexp_delayed(p = 1-pVals, delay1 = del1, rate1 = .x, lower.tail = FALSE))
                 expect_equal(qexp_delayed(p = pVals, delay1 = del1, rate1 = .x, delay2 = del1+.89, rate2 = .34, lower.tail = TRUE),
                              expected = qexp_delayed(p = 1-pVals, delay1 = del1, rate1 = .x, delay2 = del1+.89, rate2 = .34, lower.tail = FALSE))
-                #XXX continue here: 2phase qexp_delayed & lower.tail= fix me
               })
 
   purrr::walk2(.x = c(.003, .1, .35, .51, 1, 4, 11), .y = sample(c(.0001, .11, .5, 1, 2.1, pi, exp(2))),
@@ -203,14 +202,14 @@ test_that('(restricted) mean survival time of delayed distributions', {
                                   rates2 = c(.11, .31, .91, 1.51, 3.21))
   settingDF <- settingDF[settingDF$delay1 < settingDF$delay2,]
 
-  tPoints <-  c(seq.int(from = 6, to = 11, length.out = 10), +Inf)
+  tPoints <-  c(seq.int(from = 6, to = 11, length.out = 7L), +Inf)
 
   # restricted mean survival can never exceed the restricted time
   #+as survival curve never goes beyond 1, so integral is less than length of time-axis
   purrr::pwalk(.l = tidyr::expand_grid(tPoints, unique(settingDF[,c("delay1", "rates1")])),
                .f = ~expect_lte(mexp_delayed(t = ..1,  delay1 = ..2, rate1 = ..3),
                                 expected = ..1))
-  purrr::pwalk(.l = tidyr::expand_grid(tPoints, settingDF),
+  purrr::pwalk(.l = tidyr::expand_grid(tPoints, settingDF %>% dplyr::slice_sample(n = 11)),
                .f = ~expect_lte(mexp_delayed(t = ..1,  delay1 = ..2, rate1 = ..3, delay2 = ..4, rate2 = ..5),
                                 expected = ..1))
 

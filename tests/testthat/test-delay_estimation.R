@@ -105,29 +105,29 @@ test_that("Fit delayed Exponentials", {
 
 test_that("Fit delayed Weibull with MPSE", {
 
-  # from Dumonceaux and Antle (1973)
-  # as cited by Cheng (1982)
-  maxFloodLvl <- c(
-    0.654, 0.613, 0.315, 0.449, 0.297,
-    0.402, 0.379, 0.423, 0.379, 0.3235,
-    0.269, 0.740, 0.418, 0.412, 0.494,
-    0.416, 0.338, 0.392, 0.484, 0.265
-  )
-  fd_maxFl <- delay_model(maxFloodLvl, distribution = "weib")
+  # # from Dumonceaux and Antle (1973)
+  # # as cited by Cheng (1982)
+  # maxFloodLvl <- c(
+  #   0.654, 0.613, 0.315, 0.449, 0.297,
+  #   0.402, 0.379, 0.423, 0.379, 0.3235,
+  #   0.269, 0.740, 0.418, 0.412, 0.494,
+  #   0.416, 0.338, 0.392, 0.484, 0.265
+  # )
+  fd_maxFl <- delay_model(susquehanna, distribution = "weib")
   coef_maxFl <- coef(fd_maxFl)
 
   expect_identical(purrr::chuck(fd_maxFl, 'optimizer', 'convergence'), expected = 0L)
   expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .005)
 
-  # beach pollution
-  # from Steen & Stickler (1976)
-  # as cited by Cheng (1982)
-  pollution <- c(
-    1364, 2154, 2236, 2518, 2527,
-    2600, 3009, 3045, 4109, 5500,
-    5800, 7200, 8400, 8400, 8900,
-    11500, 12700, 15300, 18300, 20400
-  )
+  # # beach pollution
+  # # from Steen & Stickler (1976)
+  # # as cited by Cheng (1982)
+  # pollution <- c(
+  #   1364, 2154, 2236, 2518, 2527,
+  #   2600, 3009, 3045, 4109, 5500,
+  #   5800, 7200, 8400, 8400, 8900,
+  #   11500, 12700, 15300, 18300, 20400
+  # )
 
   fd_poll <- delay_model(pollution, distribution = "wei")
   objFun_poll <- fd_poll$objFun
@@ -139,7 +139,7 @@ test_that("Fit delayed Weibull with MPSE", {
   expect_equal(coef_poll, expected = c(delay1=1085, shape1=0.95, scale1=6562), tolerance = .001)
 
   # fit in two groups
-  fd_wb2 <- incubate::delay_model(x = maxFloodLvl, y = pollution, distribution = "weib")
+  fd_wb2 <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib")
   coef_wb2 <- coef(fd_wb2)
 
   expect_identical(purrr::chuck(fd_wb2, 'optimizer', 'convergence'), expected = 0L)
