@@ -16,7 +16,7 @@
 #' @param parV numeric parameter vector (for single group or two groups)
 #' @param distribution character name. Exponential or Weibull
 #' @param group character. Extract only parameters for specified group.
-#' @param transform logical. Do we want to transform the parameter vector?
+#' @param transform logical. Transform the parameters!?
 #' @return requested parameters as named numeric vector
 extractPars <- function(parV, distribution = c('exponential', 'weibull'), group = NULL, transform = FALSE) {
 
@@ -177,7 +177,7 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 
 
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
-#' or according to standard maximum likelihood estimation ('MLE0').
+#' or according to standard maximum likelihood estimation ('MLEn').
 #'
 #' Given the observed data this factory method produces an objective function
 #' which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
@@ -190,7 +190,7 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 #'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
-#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLE0` is the standard MLE-method, calculating the likelihood function as the product of density values
+#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the standard MLE-method, calculating the likelihood function as the product of density values
 #' @param distribution character(1). delayed distribution family
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param twoPhase logical flag. Do we allow for two delay phases where event rate may change? Default is `FALSE`, i.e., a single delay phase.
@@ -199,7 +199,7 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
 objFunFactory <- function(x, y = NULL,
                           distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL,
-                          method = c('MPSE', 'MLE0'), ties = c('density', 'equidist', 'random', 'error'),
+                          method = c('MPSE', 'MLEn'), ties = c('density', 'equidist', 'random', 'error'),
                           verbose = 0L) {
 
   # setup ----
@@ -580,8 +580,8 @@ objFunFactory <- function(x, y = NULL,
                if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
              }
            },
-           MLE0 = {
-             # MLE0 is currently only implemented for single group situation
+           MLEn = {
+             # MLEn is currently only implemented for single group situation
              stopifnot( ! twoGroup )
              stopifnot( ! twoPhase ) #XXX not implemented yet!
              nObs <- length(x)
@@ -595,12 +595,12 @@ objFunFactory <- function(x, y = NULL,
   }
 
   # attach analytical solution for MLE
-  if ( method == 'MLE0' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
+  if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
     attr(objFun, which = "opt") <- list(par = extractPars(parV = c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]])),
                                                           distribution = 'exponential', transform = TRUE), #expect transformed parameters
                                         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
                                         convergence = 0L,
-                                        message = "analytic solution for standard MLE ('MLE0')",
+                                        message = "analytic solution for standard (naive) MLE ('MLEn')",
                                         counts = 1L)
   }
 
@@ -609,7 +609,7 @@ objFunFactory <- function(x, y = NULL,
 
 
 
-#' Fit optimal parameters according to the objective function (either MPSE or MLE0).
+#' Fit optimal parameters according to the objective function (either MPSE or MLEn).
 #'
 #' The objective function carries the given data in its environment and it is to be minimized.
 #' R's standard routine `stats::optim` does the numerical optimization, using numerical derivatives.
@@ -685,14 +685,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
 #' Fit a delayed Exponential or Weibull model to one or two given sample(s).
 #'
-#' Maximum product of spacings estimation is used by default to fit the parameters. Estimation via standard maximum likelihood (`method = 'MLE0`) is available, too,
+#' Maximum product of spacings estimation is used by default to fit the parameters. Estimation via standard maximum likelihood (`method = 'MLEn`) is available, too,
 #' but MLE yields biased estimates.
 #'
 #' Numerical optimization is done by `stats::optim`.
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
-#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLE0' = standard maximum likelihood estimation
+#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = standard naive maximum likelihood estimation
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param ties character. How to handle ties.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
@@ -702,7 +702,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 delay_model <- function(x = stop('Specify observations for at least one group x=!', call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
                         bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
-                        method = c('MPSE', 'MLE0'),
+                        method = c('MPSE', 'MLEn'),
                         optim_args = NULL, verbose = 0) {
 
 
@@ -725,11 +725,10 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 
   distribution <- match.arg(distribution)
 
-  method <- toupper(method)
-  if (length(method) == 1L && method == 'MSE') {
+  method <- if (length(method) == 1L && toupper(method) == 'MSE') {
     message("The method name 'MPSE' is prefered over the previously used name 'MSE'!")
-    method <- 'MPSE'
-  }
+    'MPSE'
+  } else method[1L]
   method <- match.arg(method)
   ties <- match.arg(ties)
 
@@ -786,7 +785,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 print.incubate_fit <- function(x, ...){
   coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
-                      "Fit a delayed {distribution} {c('', 'with two delay phases')[[1L+twoPhase]]} through {c('Maximum Product of Spacings Estimation (MPSE)', 'standard Maximum Likelihood Estimation (MLE0)')[[1L+(method=='MLE0')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
+                      "Fit a delayed {distribution} {c('', 'with two delay phases')[[1L+twoPhase]]} through {c('Maximum Product of Spacings Estimation (MPSE)', 'standard naive Maximum Likelihood Estimation (MLEn)')[[1L+(method=='MLEn')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
@@ -1007,7 +1006,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     )
 
     # we like to drop last entry (delay = 1st observation) as objective function tends to explode
-    # but we have to keep last entry if it corresponds to the delay estimate (e.g., as is the case for MLE0-fitting)
+    # but we have to keep last entry if it corresponds to the delay estimate (e.g., as is the case for MLEn-fitting)
     if (delayCandDF$delay1[NROW(delayCandDF)] > del_coef) delayCandDF <- delayCandDF[-NROW(delayCandDF),, drop = FALSE]
     # relative change to optimal value, will be negative as objective function is minimized
     delayCandDF$objValInv <- (object$val - delayCandDF$objVal) / (object$val+.01)

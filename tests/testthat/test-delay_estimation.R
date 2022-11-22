@@ -7,13 +7,9 @@ test_that("Fit delayed Exponentials", {
   # single group ------------------------------------------------------------
 
   # rexp_delayed(16, delay = 9, rate = 0.5)
-  xx <- c(9.37584220431745, 9.43687826953828, 9.44079428166151, 9.63324003852904,
-          9.6421,
-          9.76594032067806, 9.80526794679463, 9.90732720028609, 10.3573373407125,
-          10.371,
-          10.596041733315, 10.6229753642434, 11.1074129025543, 11.5750403608287,
-          11.849,
-          16.3800762999327)
+  xx <- c(9.3758422, 9.436878, 9.440794, 9.63324, 9.6421,
+          9.76594, 9.80527, 9.907327, 10.357, 10.371,
+          10.596, 10.623, 11.1074, 11.575, 11.849, 16.38)
 
   fd_exp <- delay_model(xx, distribution = "expon")
   coef_exp <- coef(fd_exp)
@@ -42,7 +38,7 @@ test_that("Fit delayed Exponentials", {
   expect_gte(fd_exp_updW$val + 1e-05, expected = fd_exp$val)
 
   # MLE0 fit ----------------------------------------------------------------
-  fd_exp_MLE0 <- delay_model(xx, distribution = 'expon', method = 'MLE0')
+  fd_exp_MLE0 <- delay_model(xx, distribution = 'expon', method = 'MLEn')
 
   expect_type(fd_exp_MLE0$data, type = 'double')
   expect_identical(length(fd_exp_MLE0$data), expected = 16L)
@@ -105,31 +101,13 @@ test_that("Fit delayed Exponentials", {
 
 test_that("Fit delayed Weibull with MPSE", {
 
-  # # from Dumonceaux and Antle (1973)
-  # # as cited by Cheng (1982)
-  # maxFloodLvl <- c(
-  #   0.654, 0.613, 0.315, 0.449, 0.297,
-  #   0.402, 0.379, 0.423, 0.379, 0.3235,
-  #   0.269, 0.740, 0.418, 0.412, 0.494,
-  #   0.416, 0.338, 0.392, 0.484, 0.265
-  # )
   fd_maxFl <- delay_model(susquehanna, distribution = "weib")
   coef_maxFl <- coef(fd_maxFl)
 
   expect_identical(purrr::chuck(fd_maxFl, 'optimizer', 'convergence'), expected = 0L)
   expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .005)
 
-  # # beach pollution
-  # # from Steen & Stickler (1976)
-  # # as cited by Cheng (1982)
-  # pollution <- c(
-  #   1364, 2154, 2236, 2518, 2527,
-  #   2600, 3009, 3045, 4109, 5500,
-  #   5800, 7200, 8400, 8400, 8900,
-  #   11500, 12700, 15300, 18300, 20400
-  # )
-
-  fd_poll <- delay_model(pollution, distribution = "wei")
+  fd_poll <- delay_model(pollution, distribution = "weib")
   objFun_poll <- fd_poll$objFun
   coef_poll <- coef(fd_poll)
 

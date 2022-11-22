@@ -11,7 +11,7 @@ delay_model(
   twoPhase = FALSE,
   bind = NULL,
   ties = c("density", "equidist", "random", "error"),
-  method = c("MPSE", "MLE0"),
+  method = c("MPSE", "MLEn"),
   optim_args = NULL,
   verbose = 0
 )
@@ -27,7 +27,7 @@ delay_model(
 
 \item{ties}{character. How to handle ties.}
 
-\item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLE0' = standard maximum likelihood estimation}
+\item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLEn' = standard naive maximum likelihood estimation}
 
 \item{optim_args}{list. optimization arguments to use. Use \code{NULL} to use the data-dependent default values.}
 
@@ -37,7 +37,7 @@ delay_model(
 \code{incubate_fit} the delay-model fit object. Or \code{NULL} if optimization failed (e.g. too few observations).
 }
 \description{
-Maximum product of spacings estimation is used by default to fit the parameters. Estimation via standard maximum likelihood (\verb{method = 'MLE0}) is available, too,
+Maximum product of spacings estimation is used by default to fit the parameters. Estimation via standard maximum likelihood (\verb{method = 'MLEn}) is available, too,
 but MLE yields biased estimates.
 }
 \details{

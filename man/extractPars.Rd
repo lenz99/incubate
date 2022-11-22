@@ -18,7 +18,7 @@ extractPars(
 
 \item{group}{character. Extract only parameters for specified group.}
 
-\item{transform}{logical. Do we want to transform the parameter vector?}
+\item{transform}{logical. Transform the parameters!?}
 }
 \value{
 requested parameters as named numeric vector

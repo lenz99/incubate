@@ -3,7 +3,7 @@
 \name{objFunFactory}
 \alias{objFunFactory}
 \title{Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
-or according to standard maximum likelihood estimation ('MLE0').}
+or according to standard maximum likelihood estimation ('MLEn').}
 \usage{
 objFunFactory(
   x,
@@ -11,7 +11,7 @@ objFunFactory(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
   bind = NULL,
-  method = c("MPSE", "MLE0"),
+  method = c("MPSE", "MLEn"),
   ties = c("density", "equidist", "random", "error"),
   verbose = 0L
 )
@@ -27,7 +27,7 @@ objFunFactory(
 
 \item{bind}{character. parameter names that are bind together (i.e. equated) between both groups}
 
-\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLE0} is the standard MLE-method, calculating the likelihood function as the product of density values}
+\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLEn} is the standard MLE-method, calculating the likelihood function as the product of density values}
 
 \item{ties}{character. How to handle ties within data of a group.}
 
