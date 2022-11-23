@@ -47,12 +47,21 @@ test_that("Fit delayed Exponentials", {
   expect_identical(coef(fd_exp_MLE0)[['delay1']], expected = xx[[1L]])
   # MLE's later delay is compensated for by higher estimated rate
   expect_gt(coef(fd_exp_MLE0)[['rate1']], expected = coef_exp[['rate1']])
+  expect_equal(coef(fd_exp_MLE0)[['rate1']], expected = (mean(xx) - min(xx))**-1)
 
   expect_named(fd_exp_MLE0$optimizer, expected = c("parOpt", "convergence", "message", "counts"))
   expect_identical(purrr::chuck(fd_exp_MLE0, 'optimizer', 'convergence'), expected = 0L)
   fd_exp_MLE0_opt <- attr(fd_exp_MLE0$objFun, which = 'opt', exact = TRUE)
   expect_type(fd_exp_MLE0_opt, type = 'list')
   expect_named(fd_exp_MLE0_opt, expected = c('par', 'value', 'convergence', 'message', 'counts'))
+
+  # check objective function
+  # objective function is for transformed parameters:
+  purrr::walk2(.x = runif(n=7, min=0.1, max=9),   #delay1
+               .y = runif(n=7, min=0.001, max=2), #rate1
+               .f = ~ expect_equal(- length(xx) * (log(.y) - .y * (mean(xx) - .x)),
+                                   expected = fd_exp_MLE0$objFun(pars = incubate:::extractPars(parV = c(delay1=.x, rate1=.y), distribution = "expon", transform = TRUE)))
+  )
 
 
   # 2nd group ---------------------------------------------------------------
@@ -101,12 +110,24 @@ test_that("Fit delayed Exponentials", {
 
 test_that("Fit delayed Weibull with MPSE", {
 
+  # susquehanna is an example dataset within incubate
   fd_maxFl <- delay_model(susquehanna, distribution = "weib")
   coef_maxFl <- coef(fd_maxFl)
 
   expect_identical(purrr::chuck(fd_maxFl, 'optimizer', 'convergence'), expected = 0L)
   expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .005)
 
+  # MLEn fit to susquehanna
+  fd_maxFl_MLEn <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
+  purrr::pwalk(.l = list(delay1=runif(7, max=0.25), shape1=runif(7, max=3), scale1=runif(7, max=5)),
+              .f = ~ {
+                xc <- susquehanna - ..1
+                expect_equal(-length(susquehanna) * (log(..2) - ..2 * log(..3) + (..2 - 1L) * mean(log(xc)) - mean(xc**..2)/..3**..2),
+                             expected = fd_maxFl_MLEn$objFun(incubate:::extractPars(c(delay1=..1, shape1=..2, scale1=..3), distribution = 'weibull', transform = TRUE)))
+
+                })
+
+  # pollution is an example dataset within incubate
   fd_poll <- delay_model(pollution, distribution = "weib")
   objFun_poll <- fd_poll$objFun
   coef_poll <- coef(fd_poll)
@@ -115,6 +136,8 @@ test_that("Fit delayed Weibull with MPSE", {
   expect_identical(length(coef_poll), expected = 3L)
   expect_lt(objFun_poll(incubate:::extractPars(parV = coef_poll, distribution = "weibull", transform = TRUE)), expected = 3.75)
   expect_equal(coef_poll, expected = c(delay1=1085, shape1=0.95, scale1=6562), tolerance = .001)
+
+
 
   # fit in two groups
   fd_wb2 <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib")

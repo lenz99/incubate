@@ -177,7 +177,7 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 
 
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
-#' or according to standard maximum likelihood estimation ('MLEn').
+#' or according to naive maximum likelihood estimation ('MLEn').
 #'
 #' Given the observed data this factory method produces an objective function
 #' which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
@@ -190,7 +190,7 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 #'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
-#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the standard MLE-method, calculating the likelihood function as the product of density values
+#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
 #' @param distribution character(1). delayed distribution family
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param twoPhase logical flag. Do we allow for two delay phases where event rate may change? Default is `FALSE`, i.e., a single delay phase.
@@ -199,7 +199,7 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
 objFunFactory <- function(x, y = NULL,
                           distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL,
-                          method = c('MPSE', 'MLEn'), ties = c('density', 'equidist', 'random', 'error'),
+                          method = c('MPSE', 'MLEn', 'MLEc'), ties = c('density', 'equidist', 'random', 'error'),
                           verbose = 0L) {
 
   # setup ----
@@ -260,7 +260,7 @@ objFunFactory <- function(x, y = NULL,
 
       if ( ties == 'error' ) stop('Ties within data are not allowed!', call. = FALSE)
 
-      roundOffPrecision <- estimRoundingError(obs, maxObs = 1000L)
+      roundOffPrecision <- estimRoundingError(obs, maxObs = 1001L)
       if (verbose > 0L){
         cat(glue("Round-off error has magnitude {roundOffPrecision}\n"))
       }
@@ -293,7 +293,7 @@ objFunFactory <- function(x, y = NULL,
         if ( startInd > length(tiesDiffInd) ) break
       } #repeat
 
-      if (verbose > 1L && length(obs) < 50L ){
+      if (verbose > 1L && length(obs) <= 50L ){
         cat(glue("New data: {paste(obs, collapse = ', ')}\n"))
       }
     } #fi tiesdiff
@@ -317,7 +317,7 @@ objFunFactory <- function(x, y = NULL,
 
   if (!twoGroup && !is.null(bind) && length(bind)) {
     bind <- NULL
-    warning("bind= has a given non-null argument but it is ignored as we have only a single group!", call. = FALSE)
+    warning("bind= was specified in vain as we have only a single group!", call. = FALSE)
   }
 
   if (startsWith(method, 'MLE') && twoGroup ) { #XXX not implemented yet!
@@ -482,7 +482,7 @@ objFunFactory <- function(x, y = NULL,
           # local() leaves fewer traces
           local(expr = {
             startBind <- paste(bind, "tr", sep = "_") # start parameters are transformed (for optimization)
-            stopifnot( all(startBind %in% names(start_x)), all(startBind %in% names(start_x)))
+            stopifnot( all(startBind %in% names(start_x)), all(startBind %in% names(start_y)) )
             # put bind-parameters first: aggregate start values between both groups
             c(purrr::set_names(as.numeric(.mapply(FUN = function(f, x) f(x),
                                                   dots = list(startParAggrFuns[startBind],
@@ -516,6 +516,27 @@ objFunFactory <- function(x, y = NULL,
 
 
   # objective function ----
+
+  # calculate the log-likelihood, either naive or corrected form
+  getLogLik <- function(pars, group) {
+    obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
+    # back-transform parameters to original scale (for CDF)
+    pars.gr <- extractPars(pars, distribution = distribution, group = group, transform = TRUE)
+
+    denFun <- getDist(distribution, type = "density")
+    cdfFun <- getDist(distribution, type = "cdf")
+
+    switch(method,
+           # MLEc =,
+           MLEn = {
+             sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+             },
+           MLEc = {
+             log(diff(purrr::exec(cdfFun, !!! c(list(q=obs[1:2]), pars.gr)))) + sum(purrr::exec(denFun, !!! c(list(x=obs[-1L], log=TRUE), pars.gr)))
+           },
+           #XXX check here!
+           stop("This method is not handled here!", call. = FALSE))
+  }
 
   # log spacings:
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
@@ -580,15 +601,14 @@ objFunFactory <- function(x, y = NULL,
                if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
              }
            },
-           MLEn = {
+           MLEn =,
+           MLEc = {
              # MLEn is currently only implemented for single group situation
              stopifnot( ! twoGroup )
              stopifnot( ! twoPhase ) #XXX not implemented yet!
-             nObs <- length(x)
-             xc <- x - pars[['delay1']]
-             - if (distribution == 'exponential')
-               nObs * (log(pars[['rate1']]) - pars[['rate1']] * mean(xc)) else
-                 nObs * (log(pars[['shape1']]) - pars[['shape1']] * log(pars[['scale1']]) + (pars[['shape1']]-1L) * mean(log(xc)) - mean(xc**pars[['shape1']])/pars[['scale1']]**pars[['shape1']])
+
+             -getLogLik(pars, group = "x")
+
            },
            stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
     )
@@ -600,7 +620,7 @@ objFunFactory <- function(x, y = NULL,
                                                           distribution = 'exponential', transform = TRUE), #expect transformed parameters
                                         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
                                         convergence = 0L,
-                                        message = "analytic solution for standard (naive) MLE ('MLEn')",
+                                        message = "analytic solution for naive MLE ('MLEn')",
                                         counts = 1L)
   }
 
@@ -685,14 +705,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
 #' Fit a delayed Exponential or Weibull model to one or two given sample(s).
 #'
-#' Maximum product of spacings estimation is used by default to fit the parameters. Estimation via standard maximum likelihood (`method = 'MLEn`) is available, too,
-#' but MLE yields biased estimates.
+#' Maximum product of spacings estimation is used by default to fit the parameters. Estimation via naive maximum likelihood (`method = 'MLEn`) is available, too,
+#' but MLEn yields biased estimates. MLEc is a corrected version of MLE due to Cheng.
 #'
 #' Numerical optimization is done by `stats::optim`.
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
-#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = standard naive maximum likelihood estimation
+#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEc' = corrected MLE
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param ties character. How to handle ties.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
@@ -702,7 +722,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 delay_model <- function(x = stop('Specify observations for at least one group x=!', call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
                         bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
-                        method = c('MPSE', 'MLEn'),
+                        method = c('MPSE', 'MLEn', 'MLEc'),
                         optim_args = NULL, verbose = 0) {
 
 
@@ -785,7 +805,8 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 print.incubate_fit <- function(x, ...){
   coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
-                      "Fit a delayed {distribution} {c('', 'with two delay phases')[[1L+twoPhase]]} through {c('Maximum Product of Spacings Estimation (MPSE)', 'standard naive Maximum Likelihood Estimation (MLEn)')[[1L+(method=='MLEn')]]} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
+                      "Fit a delayed {distribution} {c('', 'with two delay phases')[[1L+twoPhase]]} through {switch(method, MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
+                      MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
