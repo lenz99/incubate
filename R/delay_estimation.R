@@ -320,11 +320,6 @@ objFunFactory <- function(x, y = NULL,
     warning("bind= was specified in vain as we have only a single group!", call. = FALSE)
   }
 
-  if (startsWith(method, 'MLE') && twoGroup ) { #XXX not implemented yet!
-    warning('MLE fitting is currently only supported for single group setting!', call. = FALSE)
-    return(invisible(NULL))
-  } # MLE
-
 
   # check that there is enough data (here we also look at bind= if twoGroup)
   if (!twoGroup && length(x) < length(oNames) || twoGroup && length(x) + length(y) < 2L * length(oNames) - length(bind) && min(length(x), length(y)) < length(oNames) - length(bind)) {
@@ -603,11 +598,13 @@ objFunFactory <- function(x, y = NULL,
            },
            MLEn =,
            MLEc = {
-             # MLEn is currently only implemented for single group situation
-             stopifnot( ! twoGroup )
              stopifnot( ! twoPhase ) #XXX not implemented yet!
 
-             -getLogLik(pars, group = "x")
+             - if (! twoGroup) getLogLik(pars, group = "x") else {
+               res <- c(getLogLik(pars, group = "x"), getLogLik(pars, group = "y"))
+
+               if (aggregated) sum(res) else res
+             }
 
            },
            stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
