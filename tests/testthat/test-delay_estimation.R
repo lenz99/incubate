@@ -95,6 +95,15 @@ test_that("Fit delayed Exponentials", {
   # coefficient do not change much when adding a 2nd independent group and no binding
   expect_equal(as.numeric(coef_exp2[1:2]), expected = as.numeric(coef_exp), tolerance = .01)
 
+  # no delay in 2nd group
+  set.seed(20221124)
+  zz <- rexp_delayed(13L, delay1=0, rate1=1.1)
+  fd_exp2nd <- delay_model(x = xx, y = zz, distribution = "expon") #nd = no delay
+  coef_exp2nd <- coef(fd_exp2nd)
+
+  expect_identical(purrr::chuck(fd_exp2nd, "optimizer", "convergence"), expected = 0L)
+  expect_equal(coef_exp2nd[[3]], 0) # no delay in 3rd group
+
   # MLE fits -----
   fd_exp2_MLEn <- delay_model(x = xx, y = yy, distribution = "expon", method = "MLEn")
   expect_type(fd_exp2_MLEn$data, type = "list")
@@ -158,34 +167,34 @@ test_that("Fit delayed Exponentials", {
   coef_exp2c <- coef(fd_exp2c)
 
   # data combinded
-  fd_exp3 <- delay_model(x = c(xx, yy), distribution = "expon")
-  coef_exp3 <- coef(fd_exp3)
+  fd_exp2comb <- delay_model(x = c(xx, yy), distribution = "expon")
+  coef_exp2comb <- coef(fd_exp2comb)
 
   expect_named(coef_exp2c, expected = c("delay1", "rate1"))
-  expect_identical(length(coef_exp3), length(coef_exp2c))
+  expect_identical(length(coef_exp2comb), length(coef_exp2c))
   # similar coefficients (but the criterion is not identical, weighted mean for both groups vs overall mean)
-  expect_equal(coef_exp2c[[1L]], coef_exp3[[1L]], tolerance = .01)
-  expect_equal(coef_exp2c[[2L]], coef_exp3[[2L]], tolerance = .05)
+  expect_equal(coef_exp2c[[1L]], coef_exp2comb[[1L]], tolerance = .01)
+  expect_equal(coef_exp2c[[2L]], coef_exp2comb[[2L]], tolerance = .05)
 
   # bind delay + rate for MLE
   fd_exp2c_MLEn <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("delay1", "rate1"), method = "MLEn")
   coef_exp2c_MLEn <- coef(fd_exp2c_MLEn)
-  fd_exp3_MLEn <- delay_model(x = c(xx, yy), distribution = "expon", method = "MLEn")
-  coef_exp3_MLEn <- coef(fd_exp3_MLEn)
+  fd_exp2comb_MLEn <- delay_model(x = c(xx, yy), distribution = "expon", method = "MLEn")
+  coef_exp2comb_MLEn <- coef(fd_exp2comb_MLEn)
 
   expect_named(coef_exp2c_MLEn, expected = c("delay1","rate1"))
-  expect_identical(length(coef_exp3_MLEn), length(coef_exp2c_MLEn))
-  purrr::walk(seq_along(coef_exp2c_MLEn), ~expect_equal(coef_exp2c_MLEn[[.x]], coef_exp3_MLEn[[.x]], tolerance = .05))
+  expect_identical(length(coef_exp2comb_MLEn), length(coef_exp2c_MLEn))
+  purrr::walk(seq_along(coef_exp2c_MLEn), ~expect_equal(coef_exp2c_MLEn[[.x]], coef_exp2comb_MLEn[[.x]], tolerance = .05))
 
   # MLEc
   fd_exp2c_MLEc <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("delay1", "rate1"), method = "MLEc")
   coef_exp2c_MLEc <- coef(fd_exp2c_MLEc)
-  fd_exp3_MLEc <- delay_model(x = c(xx, yy), distribution = "expon", method = "MLEc")
-  coef_exp3_MLEc <- coef(fd_exp3_MLEc)
+  fd_exp2comb_MLEc <- delay_model(x = c(xx, yy), distribution = "expon", method = "MLEc")
+  coef_exp2comb_MLEc <- coef(fd_exp2comb_MLEc)
 
   expect_named(coef_exp2c_MLEc, expected = c("delay1","rate1"))
-  expect_identical(length(coef_exp3_MLEc), length(coef_exp2c_MLEc))
-  purrr::walk(seq_along(coef_exp2c_MLEc), ~expect_equal(coef_exp2c_MLEc[[.x]], coef_exp3_MLEc[[.x]], tolerance = .05))
+  expect_identical(length(coef_exp2comb_MLEc), length(coef_exp2c_MLEc))
+  purrr::walk(seq_along(coef_exp2c_MLEc), ~expect_equal(coef_exp2c_MLEc[[.x]], coef_exp2comb_MLEc[[.x]], tolerance = .05))
 
 })
 
