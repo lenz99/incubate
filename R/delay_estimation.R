@@ -92,7 +92,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                                           dots = list(PARAM_TRANSF_FINV[seq_along(parV1)], parV1),
                                           MoreArgs = NULL)))
         } else {
-          # b' = F(A%*% b)
+          # b' = F(A %*% b)
           as.numeric(.mapply(FUN = function(f, x) f(x),
                              dots = list(PARAM_TRANSF_F[seq_along(parV1)],
                                          as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1)),
@@ -107,11 +107,8 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
       pNames_trgt <- if (isTransformed) {
         sub(pattern = "_tr", replacement = "", pNames, fixed = TRUE) # remove '_tr' string
       } else {
-        purrr::map_chr(strsplit(pNames, split = ".", fixed = TRUE),
-                       .f = function(s)
-                         if (length(s) == 1L)
-                           paste0(s, "_tr") else
-                             paste0(s[[1L]], "_tr.", s[[2L]]))
+        purrr::map_chr(.x = strsplit(pNames, split = ".", fixed = TRUE),
+                       .f = function(s) if (length(s) == 1L) paste0(s, "_tr") else paste0(s[[1L]], "_tr.", s[[2L]]))
       }
 
       h <- purrr::map(.x = c("x", "y"),
@@ -135,7 +132,9 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
 
   # return parameter vector
   # single group extraction required?
-  if ( ! isTwoGroup || is.null(group) || length(group) != 1L || ! group %in% c('x', 'y') ) parV else {
+  if ( ! isTwoGroup || is.null(group) || length(group) != 1L || ! group %in% c('x', 'y') ) {
+    parV
+  } else {
 
     stopifnot( is.character(group), nzchar(group) )
 
@@ -367,11 +366,13 @@ objFunFactory <- function(x, y = NULL,
                       # scale <- exp(m + 0.572/shape)
                       # take out extreme values for robustness (against possible outliers)
                       #+ when at least 40 observations
-                      obs_f <- obs[1L:ceiling(length(obs)*.985)] #contract: sorted data
-                      start_y <- log(-log(1-(seq_along(obs_f)-.3)/(length(obs_f)+.4)))
+                      #obs_f <- obs[1L:ceiling(length(obs)*.985)] #contract: sorted data
+                      # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
+                      # and then ordinate is log(1/(1-F)) on log-scale
+                      start_y <- log(-log(1-stats::ppoints(obs, a=.3))) #log(-log(1-(seq_along(obs)-.3)/(length(obs)+.4)))
                       # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
-                      start_shape <- stats::cor(log(obs_f), start_y) * stats::sd(start_y) / stats::sd(log(obs_f))
-                      start_scale <- exp(mean(log(obs_f) - mean(start_y) / start_shape))
+                      start_shape <- stats::cor(log(obs), start_y) * stats::sd(start_y) / stats::sd(log(obs))
+                      start_scale <- exp(mean(log(obs) - mean(start_y) / start_shape))
 
 
                       parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
@@ -471,8 +472,8 @@ objFunFactory <- function(x, y = NULL,
         } else {
 
           startParAggrFuns <- list(delay1_tr = min, delay2_tr = mean,
-                          rate1_tr = mean, rate2_tr = mean,
-                          shape1_tr = mean, scale1_tr = mean, shape2_tr = mean, scale2_tr = mean)
+                                   rate1_tr = mean, rate2_tr = mean,
+                                   shape1_tr = mean, scale1_tr = mean, shape2_tr = mean, scale2_tr = mean)
 
           # local() leaves fewer traces
           local(expr = {
@@ -485,7 +486,8 @@ objFunFactory <- function(x, y = NULL,
                                                               lapply(purrr::transpose(list(x=start_x, y = start_y))[startBind], FUN = unlist)),
                                                   MoreArgs = NULL)), nm = startBind),
               # extract unbound start values
-              start_x[! names(start_x) %in% startBind], start_y[! names(start_y) %in% startBind])})
+              start_x[! names(start_x) %in% startBind], start_y[! names(start_y) %in% startBind])
+          })
         }
       } #twoGrp, not all params bound!
     } # twoGrp
@@ -525,7 +527,7 @@ objFunFactory <- function(x, y = NULL,
            # MLEc =,
            MLEn = {
              sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
-             },
+           },
            MLEc = {
              log(diff(purrr::exec(cdfFun, !!! c(list(q=obs[1:2]), pars.gr)))) + sum(purrr::exec(denFun, !!! c(list(x=obs[-1L], log=TRUE), pars.gr)))
            },
