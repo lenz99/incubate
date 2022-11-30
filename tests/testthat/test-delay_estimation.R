@@ -2,6 +2,58 @@
 # testing the delay estimation,
 # in particular parameter estimates, convergence etc. from the model fit object
 
+test_that('Parameter extraction and transformation', {
+  par_exp1 <- c(delay1 = 3, rate1 = .8)
+
+  expect_identical(incubate:::extractPars(parV = par_exp1), par_exp1)
+  expect_identical(incubate:::extractPars(parV = par_exp1, group = "x"), par_exp1)
+  expect_identical(incubate:::extractPars(parV = par_exp1, group = "y"), par_exp1) # group is ignored here
+  expect_identical(incubate:::extractPars(parV = par_exp1, transform = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
+
+  par_exp2 <- c(delay1.x = 2.8, rate1.x = .81, delay1.y = 5.1, rate1.y = 1.1)
+  expect_identical(incubate:::extractPars(parV = par_exp2), par_exp2)
+  expect_identical(incubate:::extractPars(parV = par_exp2, group = "z"), par_exp2) # strange groups are ignored
+  expect_identical(incubate:::extractPars(parV = par_exp2, group = "x"), setNames(par_exp2[1:2], c("delay1", "rate1")))
+  expect_identical(incubate:::extractPars(parV = par_exp2, group = "y"), setNames(par_exp2[3:4], c("delay1", "rate1")))
+
+  par_exp2b <- c(rate1 = .23, delay1.x = 2.8, delay1.y = 5.1)
+  expect_identical(incubate:::extractPars(parV = par_exp2b), par_exp2b)
+  expect_identical(incubate:::extractPars(parV = par_exp2b, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
+  expect_identical(incubate:::extractPars(parV = par_exp2b, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
+  expect_identical(incubate:::extractPars(parV = par_exp2b, transform = TRUE),
+                   c(rate1_tr = log(par_exp2b[["rate1"]]), delay1_tr.x = par_exp2b[[2]], delay1_tr.y = par_exp2b[[3]]))
+  expect_identical(incubate:::extractPars(parV = par_exp2b, group = "x", transform = TRUE),
+                   c(delay1_tr = par_exp2b[[2]], rate1_tr = log(par_exp2b[[1]])))
+  # idem-potent (round-trip)
+  expect_identical(incubate:::extractPars(incubate:::extractPars(parV = par_exp2b, transform = TRUE), transform = TRUE), par_exp2b)
+
+
+  par_weib1 <- c(delay = 5, shape = .8, scale = 1.2)
+  expect_identical(incubate:::extractPars(parV = par_weib1, distribution = "weibull"), par_weib1)
+
+  par_weib1s <- c(delay1 = 5, shape1 = .8)
+  expect_identical(incubate:::extractPars(parV = par_weib1s, distribution = "weibull"), par_weib1s)
+  expect_identical(incubate:::extractPars(parV = par_weib1s, distribution = "weibull", transform = TRUE),
+                   c(delay1_tr = par_weib1s[["delay1"]], shape1_tr = log(par_weib1s[["shape1"]])))
+
+  par_weib2 <- c(delay1.x = 1, shape1.x = 1.8, scale1.x = 34, delay1.y = 4.2, shape1.y = 3.4, scale1.y = 12)
+  par_weib2.y <- setNames(par_weib2[-c(1:3)], nm = c("delay1", "shape1", "scale1"))
+  expect_identical(incubate:::extractPars(parV = par_weib2, distribution = "weibull"), par_weib2)
+  expect_identical(incubate:::extractPars(par_weib2, distribution = "weibull", group = "y"),
+                   par_weib2.y)
+  expect_identical(incubate:::extractPars(par_weib2, distribution = "weibull", group = "y", transform = TRUE),
+                   setNames(c(par_weib2.y[1], log(par_weib2.y[-1])), nm = paste0(names(par_weib2.y), "_tr")))
+
+  par_weib2s <- par_weib2[-c(3, 6)] # drop scale
+  expect_identical(incubate:::extractPars(par_weib2s, distribution = "weibull", group = "y"),
+                   setNames(par_weib2s[c(3,4)], nm = c("delay1", "shape1")))
+
+  expect_identical(incubate:::extractPars(par_weib2s, distribution = "weib", group = "y", transform = TRUE),
+                   setNames(c(par_weib2s[3], log(par_weib2s[4])), nm = c("delay1_tr", "shape1_tr")))
+
+})
+
+
 test_that("Fit delayed Exponentials", {
 
   # single group ------------------------------------------------------------
@@ -200,7 +252,7 @@ test_that("Fit delayed Exponentials", {
 
 
 
-test_that("Fit delayed Weibull with MPSE", {
+test_that("Fit delayed Weibull", {
 
   # susquehanna is an example dataset within incubate
   fd_maxFl <- delay_model(susquehanna, distribution = "weib")
@@ -211,6 +263,11 @@ test_that("Fit delayed Weibull with MPSE", {
 
   # MLEn fit to susquehanna
   fd_maxFl_MLEn <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
+  coef_maxFl_MLEn <- coef(fd_maxFl_MLEn)
+  expect_identical(purrr::chuck(fd_maxFl_MLEn, "optimizer", "convergence"), expected = 0L)
+  expect_gte(coef_maxFl_MLEn[[1]], coef_maxFl[[1]])
+
+  # check the objective function
   purrr::pwalk(.l = list(delay1=runif(7, max=0.25), shape1=runif(7, max=3), scale1=runif(7, max=5)),
               .f = ~ {
                 xc <- susquehanna - ..1
@@ -218,6 +275,24 @@ test_that("Fit delayed Weibull with MPSE", {
                              expected = fd_maxFl_MLEn$objFun(incubate:::extractPars(c(delay1=..1, shape1=..2, scale1=..3), distribution = 'weibull', transform = TRUE)))
 
                 })
+
+  # MLEn profiling by hand:
+  llFun <- function(theta){
+    stopifnot( is.numeric(theta), length(theta) == 2L )
+    a <- theta[[1L]]
+    k <- theta[[2L]]
+    (1/k + mean(log(susquehanna-a)) - sum(log(susquehanna - a) * (susquehanna - a)**k)/sum((susquehanna-a)**k))^2 +
+      # first factor inverse of harmonic mean of (susquehanna - a)
+      (mean(1/(susquehanna-a)) * sum((susquehanna-a)**k)/sum((susquehanna-a)**(k-1)) - k/(k-1))^2
+  }
+
+  opt_maxFl_MLEnp1 <- optim(par = c(a=0.25, k=1.5), fn = llFun, method = "L-BFGS-B",
+                      lower = c(0, 1 + 1.49e-8), upper = c(min(susquehanna)-1.49e-8, +Inf))
+  coef_maxFl_MLEnp1 <- purrr::set_names(c(opt_maxFl_MLEnp1$par, mean((susquehanna-opt_maxFl_MLEnp1$par["a"])^opt_maxFl_MLEnp1$par["k"])^(1/opt_maxFl_MLEnp1$par["k"])),
+                                  nm = c("delay1", "shape1", "scale1"))
+  # estimates are roughly equal
+  expect_equal(coef_maxFl_MLEnp1, coef_maxFl_MLEn, tolerance = .25)
+
 
   # pollution is an example dataset within incubate
   fd_poll <- delay_model(pollution, distribution = "weib")
