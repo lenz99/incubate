@@ -3,7 +3,8 @@
 
 #' Extract certain parameters from a given named parameter vector.
 #'
-#' This routine handles parameter vectors for one or two groups, it knows about bound parameters (cf. `bind=`) and
+#' This routine handles parameter vectors for one or two groups. To this end, it parses the parameter names.
+#' Bound parameters (cf. `bind=`) are deduced from the naming: they lack the .x or .y suffix.
 #' it can also transform the given parameters from the standard form (as used in the delayed distribution functions)
 #' to the internal transformed parametrization as used by the optimization function, and vice versa.
 #'
@@ -15,7 +16,7 @@
 #' used in [delay_model()], in the factory method [objFunFactory()] and in [coef.incubate_fit()].
 #' @param parV numeric parameter vector (for single group or two groups)
 #' @param distribution character name. Exponential or Weibull
-#' @param group character. Extract only parameters for specified group.
+#' @param group character. Extract only parameters for specified group. Recognizes 'x' and 'y'. Other values are ignored.
 #' @param transform logical. Transform the parameters!?
 #' @return requested parameters as named numeric vector
 extractPars <- function(parV, distribution = c('exponential', 'weibull'), group = NULL, transform = FALSE) {
@@ -23,6 +24,8 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
   stopifnot( is.numeric(parV), all(nzchar(names(parV))) )
   distribution <- match.arg(distribution)
 
+  # contract: parV is canonically ordered (see below as well)
+  # extractPars will not check if it needs first to reorder the parameters given by checking the names.
   pNames <- names(parV)
 
   # isTransformed when all parameter names contain '_tr'
@@ -33,10 +36,12 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
   # parameter names of single group where we start from!
   oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
 
+  # index of parameters that are not specific for one of the groups
   idx.nongrp <- which(!grepl(pattern = paste0("[.][xy]$"), pNames))
   #Is there any .x or .y parameter name?
-  #+when two group but all parameters bound then isTwoGroup = FALSE
+  #+when two group but all parameters bound then isTwoGroup is FALSE
   isTwoGroup <- length(idx.nongrp) < length(parV)
+
 
   # transform parameters if requested
   # if no transformation required, simply extract the relevant parameters
@@ -84,25 +89,30 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
       stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F) )
 
 
-      purrr::set_names(
-        if (isTransformed) {
-          # b = Ainv %*% Finv(b')
+      if (isTransformed) {
+        # b = Ainv %*% Finv(b')
+        purrr::set_names(
           as.numeric(PARAM_TRANSF_MINV[seq_along(parV1), seq_along(parV1)] %*%
                        as.numeric(.mapply(FUN = function(f, x) f(x),
                                           dots = list(PARAM_TRANSF_FINV[seq_along(parV1)], parV1),
-                                          MoreArgs = NULL)))
-        } else {
-          # b' = F(A %*% b)
+                                          MoreArgs = NULL))),
+          nm = rownames(PARAM_TRANSF_MINV)[seq_along(parV1)])
+      } else {
+        # b' = F(A %*% b)
+        purrr::set_names(
           as.numeric(.mapply(FUN = function(f, x) f(x),
                              dots = list(PARAM_TRANSF_F[seq_along(parV1)],
                                          as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1)),
-                             MoreArgs = NULL))},
+                             MoreArgs = NULL)),
+          nm = rownames(PARAM_TRANSF_M)[seq_along(parV1)])
+      }
 
-        nm = rownames(if (isTransformed) PARAM_TRANSF_MINV else PARAM_TRANSF_M)[seq_along(parV1)])
-    }
+    } # fn transformPars1
 
     # update parameter vector according to transformation
-    parV <- if (! isTwoGroup) transformPars1(parV1 = parV) else {
+    parV <- if (! isTwoGroup) {
+      transformPars1(parV1 = parV)
+    } else {
       # target parameter names
       pNames_trgt <- if (isTransformed) {
         sub(pattern = "_tr", replacement = "", pNames, fixed = TRUE) # remove '_tr' string
@@ -421,9 +431,9 @@ objFunFactory <- function(x, y = NULL,
 
 
   par0_x <- getParSetting.gr(x)
-  # set parameter vector for group 1 and finish upper bound: match delay1 and delay2
   parV <-
     if (! twoGroup) {
+      # set parameter vector for group 1 and finish upper bound: match delay1 and delay2
       upperB[['delay1_tr']]  <- par0_x[['delay1_upper']]
       if (twoPhase) upperB[['delay2_tr']] <- par0_x[['delay2_upper']]
 
@@ -651,7 +661,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
   } else {
     optObj <- NULL #start from scratch
     # numeric optimization
-    if (verbose > 0L) message("Start with numeric optimziation of objective function.")
+    if (verbose > 0L) message("Start with numeric optimiziation of objective function.")
 
     if (is.null(optim_args)) optim_args <- rlang::env_get(objFunEnv, nm = "optim_args")
     stopifnot( is.list(optim_args), 'par' %in% names(optim_args) )
@@ -695,7 +705,9 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       optim_args$fn <- NULL
       optObj <- append(optObj, values = list(optim_args = optim_args))
     }
+
   } #esle numeric optimization
+
 
   optObj
 }

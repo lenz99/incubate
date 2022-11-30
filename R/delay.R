@@ -554,37 +554,67 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
   type <- match.arg(type)
 
 
-  switch(type,
-         # cumulative distribution function
-         prob = ,
-         cdf     = c(pexp_delayed, pweib_delayed),
-         # density function
-         density = c(dexp_delayed, dweib_delayed),
-         # random draw function
-         random  = c(rexp_delayed, rweib_delayed),
-         param   = {
+  switch(distribution,
+         exponential = {
+           switch(type,
+                  # cumulative distribution function
+                  prob = ,
+                  cdf     = pexp_delayed,
+                  # density function
+                  density = dexp_delayed,
+                  # random draw function
+                  random  = rexp_delayed,
+                  param   = {
 
-           par_list <- list(exponential = c("delay1", "rate1", "delay2", "rate2")[seq_len(2L*(1L + twoPhase))],
-                            weibull = c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")[seq_len(3L*(1L + twoPhase))])
+                    pars <- c("delay1", "rate1", "delay2", "rate2")[seq_len(2L*(1L + twoPhase))]
 
-           if (transformed) {
-             par_list <- purrr::map(par_list, ~ paste0(.x, "_tr"))
-             if (! is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
-           }
+                    if (transformed) {
+                      pars <- paste0(pars, "_tr")
+                      if (! is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
+                    }
 
-           if (twoGroup) {
-             # bind only parameters from chosen distribution
-             myPars <- par_list[[1L + (distribution == 'weibull')]]
-             bind <- intersect(myPars, bind) #intersect: enforces original order from myPars
-             par_gr <- purrr::map(par_list, ~ setdiff(.x, bind))
-             # bind parameters first
-             purrr::map(par_gr, ~ c(bind,
-                                    paste(rep.int(.x, times = 2L), rep(c("x", "y"), each = length(.x)),
-                                          sep = ".")))
-           } else par_list
+                    if (twoGroup) {
+                      bind <- intersect(pars, bind) #intersect: enforces original order from pars
+                      pars_gr <- setdiff(pars, bind)
+                      # bind parameters first
+                      c(bind, paste(rep.int(pars_gr, times = 2L), rep(c("x", "y"), each = length(pars_gr)), sep = "."))
+                    } else pars
 
+                  },
+                  stop("Unknown attribute of exponential distribution.", call. = FALSE)
+           )
          },
-         stop(glue("Unknown attribute of distribution {distribution}."), call. = FALSE)
-  )[[1L + (distribution == 'weibull')]]
+         weibull = {
+           switch(type,
+                  # cumulative distribution function
+                  prob = ,
+                  cdf     = pweib_delayed,
+                  # density function
+                  density = dweib_delayed,
+                  # random draw function
+                  random  = rweib_delayed,
+                  param   = {
+
+                    pars <- c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")[seq_len(3L*(1L + twoPhase))]
+
+                    if (transformed) {
+                      pars <- paste0(pars, "_tr")
+                      if (! is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
+                    }
+
+                    if (twoGroup) {
+                      bind <- intersect(pars, bind) #intersect: enforces original order from pars
+                      pars_gr <- setdiff(pars, bind)
+                      # bind parameters first
+                      c(bind, paste(rep.int(pars_gr, times = 2L), rep(c("x", "y"), each = length(pars_gr)), sep = "."))
+                    } else pars
+
+                  },
+                  stop("Unknown attribute of Weibull distribution.", call. = FALSE)
+           )
+         },
+         stop(glue("Unknown distribution {distribution}."), call. = FALSE)
+  )
+
 }
 
