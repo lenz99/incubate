@@ -69,7 +69,7 @@ test_that("Fit delayed Exponentials", {
   expect_type(fd_exp$data, type = 'double')
   expect_identical(length(fd_exp$data), expected = 16L)
   expect_named(coef(fd_exp), expected = c('delay1', 'rate1'))
-  expect_named(fd_exp$optimizer, expected = c('parOpt', 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp$optimizer, expected = c('parOpt', 'profiled', 'convergence', 'message', 'counts', 'optim_args'))
   # optim converges properly for this data vector!
   # * convergence=51 is warning from L-BFGS-B
   # * convergence=52 is error from L-BFGS-B
@@ -97,7 +97,7 @@ test_that("Fit delayed Exponentials", {
   expect_identical(length(coef(fd_exp_MLEn)), expected = 2L)
 
   # MLEn uses analytical solution when in single group mode
-  expect_named(fd_exp_MLEn$optimizer, expected = c("parOpt", "convergence", "message", "counts"))
+  expect_named(fd_exp_MLEn$optimizer, expected = c("parOpt", 'profiled', "convergence", "message", "counts"))
   expect_identical(purrr::chuck(fd_exp_MLEn, 'optimizer', 'convergence'), expected = 0L)
   fd_exp_MLEn_opt <- attr(fd_exp_MLEn$objFun, which = 'opt', exact = TRUE)
   expect_type(fd_exp_MLEn_opt, type = 'list')
@@ -115,7 +115,7 @@ test_that("Fit delayed Exponentials", {
   expect_identical(length(fd_exp_MLEc$data), expected = 16L)
   expect_identical(length(coef(fd_exp_MLEc)), expected = 2L)
 
-  expect_named(fd_exp_MLEc$optimizer, expected = c("parOpt", "convergence", "message", "counts", "optim_args"))
+  expect_named(fd_exp_MLEc$optimizer, expected = c("parOpt", "profiled", "convergence", "message", "counts", "optim_args"))
   expect_identical(purrr::chuck(fd_exp_MLEc, 'optimizer', 'convergence'), expected = 0L)
   # no exact solution for MLEc
   expect_null(attr(fd_exp_MLEc$objFun, which = 'opt', exact = TRUE))
@@ -141,7 +141,7 @@ test_that("Fit delayed Exponentials", {
   expect_type(fd_exp2$data, type = 'list')
   # data gets sorted
   expect_identical(fd_exp2$data$y, sort(yy))
-  expect_named(fd_exp2$optimizer, expected = c("parOpt", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2$optimizer, expected = c("parOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2, 'optimizer', 'convergence'), expected = 0L)
   expect_type(purrr::chuck(fd_exp2, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
@@ -160,7 +160,7 @@ test_that("Fit delayed Exponentials", {
   fd_exp2_MLEn <- delay_model(x = xx, y = yy, distribution = "expon", method = "MLEn")
   expect_type(fd_exp2_MLEn$data, type = "list")
   expect_identical(fd_exp2_MLEn$data$y, sort(yy))
-  expect_named(fd_exp2_MLEn$optimizer, expected = c("parOpt", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2_MLEn$optimizer, expected = c("parOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2_MLEn, 'optimizer', 'convergence'), expected = 0L) # converged
   expect_type(purrr::chuck(fd_exp2_MLEn, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
@@ -171,7 +171,7 @@ test_that("Fit delayed Exponentials", {
   fd_exp2_MLEc <- delay_model(x = xx, y = yy, distribution = "expon", method = "MLEc")
   expect_type(fd_exp2_MLEc$data, type = "list")
   expect_identical(fd_exp2_MLEc$data$y, sort(yy))
-  expect_named(fd_exp2_MLEc$optimizer, expected = c("parOpt", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2_MLEc$optimizer, expected = c("parOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2_MLEc, 'optimizer', 'convergence'), expected = 0L) # converged
   expect_type(purrr::chuck(fd_exp2_MLEc, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
@@ -182,7 +182,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp2b <- coef(fd_exp2b)
 
   expect_named(coef_exp2b, expected = c("delay1", "rate1.x", "rate1.y"))
-  expect_named(fd_exp2b$optimizer, expected = c("parOpt", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2b$optimizer, expected = c("parOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2b, 'optimizer', 'convergence'), expected = 0L)
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
   expect_equal(coef_exp2b[[1L]],
@@ -194,7 +194,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp2b_MLEn <- coef(fd_exp2b_MLEn)
 
   expect_named(coef_exp2b_MLEn, expected = c("delay1", "rate1.x", "rate1.y"))
-  expect_named(fd_exp2b_MLEn$optimizer, expected = c("parOpt", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2b_MLEn$optimizer, expected = c("parOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2b_MLEn, 'optimizer', 'convergence'), expected = 0L)
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
   expect_equal(coef_exp2b_MLEn[[1L]],
@@ -206,7 +206,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp2b_MLEc <- coef(fd_exp2b_MLEc)
 
   expect_named(coef_exp2b_MLEc, expected = c("delay1", "rate1.x", "rate1.y"))
-  expect_named(fd_exp2b_MLEc$optimizer, expected = c("parOpt", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2b_MLEc$optimizer, expected = c("parOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2b_MLEc, 'optimizer', 'convergence'), expected = 0L)
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
   expect_equal(coef_exp2b_MLEc[[1L]],
@@ -276,6 +276,8 @@ test_that("Fit delayed Weibull", {
 
                 })
 
+  fd_maxFl_MLEnp <- delay_model(susquehanna, distribution = "weibu", method = "MLEn", profile = TRUE)
+
   # MLEn profiling by hand:
   llFun <- function(theta){
     stopifnot( is.numeric(theta), length(theta) == 2L )
@@ -286,12 +288,33 @@ test_that("Fit delayed Weibull", {
       (mean(1/(susquehanna-a)) * sum((susquehanna-a)**k)/sum((susquehanna-a)**(k-1)) - k/(k-1))^2
   }
 
-  opt_maxFl_MLEnp1 <- optim(par = c(a=0.25, k=1.5), fn = llFun, method = "L-BFGS-B",
+  # the objective function of model coincides with the manual objective function!
+  expect_identical(fd_maxFl_MLEnp$objFun(fd_maxFl_MLEnp$optimizer$parOpt), llFun(coef(fd_maxFl_MLEnp)[1:2]))
+
+  # manual optimization
+  opt_maxFl_MLEnp_man <- optim(par = c(a=0.255, k=1.8), #c(a=0.165, k=exp(1.3847)), #c(a=0.25, k=1.5),
+                               fn = llFun, method = "L-BFGS-B",
                       lower = c(0, 1 + 1.49e-8), upper = c(min(susquehanna)-1.49e-8, +Inf))
-  coef_maxFl_MLEnp1 <- purrr::set_names(c(opt_maxFl_MLEnp1$par, mean((susquehanna-opt_maxFl_MLEnp1$par["a"])^opt_maxFl_MLEnp1$par["k"])^(1/opt_maxFl_MLEnp1$par["k"])),
+  coef_maxFl_MLEnp_man <- purrr::set_names(c(opt_maxFl_MLEnp_man$par, mean((susquehanna-opt_maxFl_MLEnp_man$par["a"])^opt_maxFl_MLEnp_man$par["k"])^(1/opt_maxFl_MLEnp_man$par["k"])),
                                   nm = c("delay1", "shape1", "scale1"))
+
+  #llFun(coef_maxFl_MLEnp_man[1:2])
+  #llFun(coef(fd_maxFl_MLEnp)[1:2])
+
+  # # visualize the optimization function landscape
+  # objFunLS_maxFl_MLEnp <- tidyr::expand_grid(a = seq.int(0, .26, length.out = 17),
+  #                                            k = seq.int(1.3, 3, length.out = 17)) %>%
+  #   #head %>%
+  #   rowwise() %>%
+  #   dplyr::mutate(ll = llFun(theta = c(a,k))) %>%
+  #   ungroup()
+  #
+  # ggplot(objFunLS_maxFl_MLEnp, aes(x = a, y = k, z = log(ll+.1), colour = after_stat(level))) +
+  #   geom_contour() +
+  #   scale_colour_distiller(palette = "YlGn", direction = -1)
+
   # estimates are roughly equal
-  expect_equal(coef_maxFl_MLEnp1, coef_maxFl_MLEn, tolerance = .25)
+  expect_equal(coef_maxFl_MLEnp_man, coef_maxFl_MLEn, tolerance = .25)
 
 
   # pollution is an example dataset within incubate

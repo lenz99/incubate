@@ -7,7 +7,7 @@
 scalePars(parV, lowerB = 1e-05, upperB = 1e+05)
 }
 \arguments{
-\item{parV}{named numeric parameter vector}
+\item{parV}{named numeric parameter vector for optimization}
 
 \item{lowerB}{numeric. lower bound for parameter scales}
 

@@ -53,7 +53,8 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
     transformPars1 <- function(parV1){
 
       # parameter transformation matrices
-      PARAM_TRANSF_M <- list(exponential = matrix(c( 1, 0, 0, 0,
+      PARAM_TRANSF_M <- switch(distribution,
+                               exponential = matrix(c( 1, 0, 0, 0,
                                                      0, 1, 0, 0,
                                                      -1, 0, 1, 0,
                                                      0, 0, 0, 1), nrow = 4L, byrow = TRUE,
@@ -64,9 +65,11 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                                                  -1, 0, 0, 1, 0, 0,
                                                  0, 0, 0, 0, 1, 0,
                                                  0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                              dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr")))
-      )[[distribution]]
-      PARAM_TRANSF_MINV <- list(exponential = matrix(c(1, 0, 0, 0,
+                                              dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
+                             stop("Unknown distribution!", call. = FALSE)
+      )
+      PARAM_TRANSF_MINV <- switch(distribution,
+                                  exponential = matrix(c(1, 0, 0, 0,
                                                        0, 1, 0, 0,
                                                        1, 0, 1, 0,
                                                        0, 0, 0, 1), nrow = 4L, byrow = TRUE,
@@ -77,14 +80,17 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                                                    1, 0, 0, 1, 0, 0,
                                                    0, 0, 0, 0, 1, 0,
                                                    0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                                 dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")))
-      )[[distribution]]
+                                                 dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"))),
+                                stop("Unknown distribution", call. = FALSE)
+      )
 
 
       PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
-                             weibull = c(identity, log, log, log, log, log))[[distribution]]
+                             weibull = c(identity, log, #log1p, #identity, #=shape1
+                                         log, log, log, log))[[distribution]]
       PARAM_TRANSF_FINV <- list(exponential = c(identity, exp, exp, exp),
-                                weibull = c(identity, exp, exp, exp, exp, exp))[[distribution]]
+                                weibull = c(identity, exp, #expm1, #identity, #=shape1
+                                            exp, exp, exp, exp))[[distribution]]
 
       stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F) )
 
@@ -127,7 +133,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                         # drop group naming: last two letters
                         pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
                         # apply transform on 1-group parameter vector in canonical order!
-                        transformPars1(parV1 = c(parV[idx.nongrp], purrr::set_names(parV[idx.grp], nm = pNms_grp))[oNames]) })
+                        transformPars1(parV1 = c(parV[idx.nongrp], purrr::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))]) })
 
       purrr::set_names(c(h[[1L]][pNames_trgt[idx.nongrp]], unlist(purrr::map(h, .f = ~ .x[! names(.x) %in% pNames_trgt[idx.nongrp]]))),
                        nm = pNames_trgt)
@@ -140,21 +146,23 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
   }# transform
 
 
+
   # return parameter vector
-  # single group extraction required?
   if ( ! isTwoGroup || is.null(group) || length(group) != 1L || ! group %in% c('x', 'y') ) {
     parV
   } else {
-
+    # single group extraction
     stopifnot( is.character(group), nzchar(group) )
 
     # extract all group parameters and restore original name (e.g. remove ".x")
-    parV.gr <- purrr::set_names(parV[grepl(pattern = paste0(".", group), x = pNames, fixed = TRUE)],
-                                nm = setdiff(oNames, pNames[idx.nongrp]))
+    # contract: parV is canonically ordered
+    parV.gr <- parV[grepl(pattern = paste0(".", group), x = pNames, fixed = TRUE)]
+    names(parV.gr) <- substr(names(parV.gr), start = 1, stop = nchar(names(parV.gr))-2L)
+    #parV.gr <- purrr::set_names(parV.gr, nm = setdiff(oNames, pNames[idx.nongrp]))
 
     # restore original order
     # contract: bind is intersected (only valid names, canonical order)
-    c(parV.gr, parV[pNames[idx.nongrp]])[oNames]
+    c(parV.gr, parV[pNames[idx.nongrp]])[intersect(oNames, c(pNames, names(parV.gr)))]
   }
 }
 
@@ -162,7 +170,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
 #' Calculate parameter scaling for optimization routine.
 #'
 #' The scale per parameter corresponds to the step width within the optimization path.
-#' @param parV named numeric parameter vector
+#' @param parV named numeric parameter vector for optimization
 #' @param lowerB numeric. lower bound for parameter scales
 #' @param upperB numeric. upper bound for parameter scales
 #' @return vector of parameter scaling
@@ -177,11 +185,13 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
   # scale vector: default value is 1
   scVect <- rep.int(1, times = length(parV))
 
+  # non-log parameters get scaling depending on their initial value
   idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
   scVect[idx.nonLog] <- parV[idx.nonLog]^.2 #5th root pushes towards 1
 
   # enforce upper and lower bounds
   pmax.int(lowerB, pmin.int(upperB, scVect))
+
 }
 
 
@@ -202,12 +212,13 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 #' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
 #' @param distribution character(1). delayed distribution family
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
+#' @param profile logical. Should scale parameter be profiled out prior to optimization?
 #' @param twoPhase logical flag. Do we allow for two delay phases where event rate may change? Default is `FALSE`, i.e., a single delay phase.
 #' @param ties character. How to handle ties within data of a group.
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
 objFunFactory <- function(x, y = NULL,
-                          distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL,
+                          distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL, profile = FALSE,
                           method = c('MPSE', 'MLEn', 'MLEc'), ties = c('density', 'equidist', 'random', 'error'),
                           verbose = 0L) {
 
@@ -219,6 +230,8 @@ objFunFactory <- function(x, y = NULL,
   ties <- match.arg(ties)
 
   twoPhase <- isTRUE(twoPhase)
+  profile <- isTRUE(profile)
+
 
   #standard ('original') names of distribution
   oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = FALSE)
@@ -336,16 +349,22 @@ objFunFactory <- function(x, y = NULL,
     return(invisible(NULL))
   }
 
+  #profiling is only possible if Weibull and scale is not bound and single phase
+  profile <- profile && distribution == 'weibull' && (! "scale" %in% bind || length(bind) == length(oNames)) &&
+    ! twoPhase && method %in% c('MLEn', 'MLEc')
+
+
 
   # optimization arguments -----
 
   # parameters as used inside the optimization function
   optpar_names <- getDist(distribution = distribution, type = "param", transformed = TRUE,
-                          twoPhase = twoPhase, twoGroup = twoGroup, bind = bind)
+                          twoPhase = twoPhase, twoGroup = twoGroup, bind = bind, profile = profile)
 
 
   # get optimization start values and upper limits based on observations from a single group
   # for `twoPhase=TRUE` there will be more parameters
+  # with profiling no scale parameter is returned (as it is not optimized)
   # @return list with transformed par for single group and upper limits for delay parameters, in canonical order (bind has no effect here!)
   getParSetting.gr <- function(obs){
     # contract: obs is sorted!
@@ -374,18 +393,18 @@ objFunFactory <- function(x, y = NULL,
                       # v <- var(lx)
                       # shape <- 1.2/sqrt(v)
                       # scale <- exp(m + 0.572/shape)
-                      # take out extreme values for robustness (against possible outliers)
-                      #+ when at least 40 observations
-                      #obs_f <- obs[1L:ceiling(length(obs)*.985)] #contract: sorted data
                       # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
                       # and then ordinate is log(1/(1-F)) on log-scale
-                      start_y <- log(-log(1-stats::ppoints(obs, a=.3))) #log(-log(1-(seq_along(obs)-.3)/(length(obs)+.4)))
-                      # cf. lm.fit(x = cbind(1, log(obs)), y = start_y))$coefficients
+                      start_y <- log(-log(1-stats::ppoints(obs, a=.3)))
+                      # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
+                      # weighted version with more weight in the middle:
+                      # w <- seq_along(obs); w <- w * (max(w)+1-w) #or use plogis-weights to downweight the early obs
+                      # lm.wfit(x = cbind(1, log(obs)), y = start_y, w = plogis(-2:(length(obs)-3)))$coefficients
                       start_shape <- stats::cor(log(obs), start_y) * stats::sd(start_y) / stats::sd(log(obs))
-                      start_scale <- exp(mean(log(obs) - mean(start_y) / start_shape))
+                      start_scale <- exp(mean(log(obs)) - mean(start_y) / start_shape) # scale from intercept
 
 
-                      parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
+                      parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/(length(obs)+3)),
                                   start_shape,
                                   start_scale )
 
@@ -394,7 +413,12 @@ objFunFactory <- function(x, y = NULL,
 
                       parV0 <- purrr::set_names(parV0, nm = oNames)
                       # transformation of parameters into optfun-parametrization
-                      extractPars(parV = parV0, distribution = "weibull", transform = TRUE)
+                      parV0 <- extractPars(parV = parV0, distribution = "weibull", transform = TRUE)
+
+                      # drop scale if profiling
+                      if (profile) parV0 <- parV0[names(parV0) != 'scale1_tr']
+                      parV0
+
                     },
                     # default:
                     stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
@@ -412,10 +436,13 @@ objFunFactory <- function(x, y = NULL,
   lowerB <- upperB <- purrr::set_names(rep_len(NA_real_, length(optpar_names)),
                                        nm = optpar_names)
 
+  # ??? should this go up to extractPars-function where the transformations are defined?
   PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),
-                     shape = c(lower = -Inf, upper = +Inf),
+                     # shape lower bound for MLEnp actually for shape1
+                     shape = c(lower = if (profile && method == 'MLEn') 1.49e-8 else -Inf,
+                               upper = +Inf),
                      scale = c(lower = -Inf, upper = +Inf))
 
 
@@ -515,7 +542,7 @@ objFunFactory <- function(x, y = NULL,
     method = "L-BFGS-B",
     lower = lowerB,
     upper = upperB,
-    # Most parameters are on log-scale.
+    # most parameters are on log-scale.
     control = list(parscale = scalePars(parV, lowerB = 1e-3, upperB = 1e3))
   )
 
@@ -528,6 +555,7 @@ objFunFactory <- function(x, y = NULL,
   getLogLik <- function(pars, group) {
     obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
     # back-transform parameters to original scale (for CDF)
+    # when profiled, then pars lacks scale.
     pars.gr <- extractPars(pars, distribution = distribution, group = group, transform = TRUE)
 
     denFun <- getDist(distribution, type = "density")
@@ -536,7 +564,22 @@ objFunFactory <- function(x, y = NULL,
     switch(method,
            # MLEc =,
            MLEn = {
-             sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+             if (profile && distribution == 'weibull'){
+               obs_c <- obs - pars.gr[["delay1"]]
+               k <- pars.gr[["shape1"]]
+
+               penalize_shape <- FALSE
+               #DDD debug
+               #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n")
+
+               # objective function to maximize
+               - identity((1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
+                 # 1st factor is inverse of harmonic mean
+                 (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 + penalize_shape*log(k+1))
+
+             } else {
+               sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+             }
            },
            MLEc = {
              log(diff(purrr::exec(cdfFun, !!! c(list(q=obs[1:2]), pars.gr)))) + sum(purrr::exec(denFun, !!! c(list(x=obs[-1L], log=TRUE), pars.gr)))
@@ -724,6 +767,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param y numeric. observations from 2nd group
 #' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
 #' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEc' = corrected MLE
+#' @param profile logical. Profile out scale from log-likelihood if possibe.
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param ties character. How to handle ties.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
@@ -733,7 +777,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 delay_model <- function(x = stop('Specify observations for at least one group x=!', call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
                         bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
-                        method = c('MPSE', 'MLEn', 'MLEc'),
+                        method = c('MPSE', 'MLEn', 'MLEc'), profile = FALSE,
                         optim_args = NULL, verbose = 0) {
 
 
@@ -780,7 +824,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 
   # objective function ------------------------------------------------------
 
-  objFun <- objFunFactory(x = x, y = y, method = method, distribution = distribution,
+  objFun <- objFunFactory(x = x, y = y, method = method, profile = profile, distribution = distribution,
                           twoPhase = twoPhase, bind = bind, ties = ties, verbose = verbose)
   objFunEnv <- rlang::fn_env(objFun)
 
@@ -794,6 +838,12 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
   x <- rlang::env_get(env = objFunEnv, nm = "x")
   y <- rlang::env_get(env = objFunEnv, nm = "y", default = NULL)
 
+  par_orig <- extractPars(optObj$par, distribution = distribution, transform = TRUE) # /!\ keep in sync with update()!
+  if (profile){
+    stopifnot( distribution == 'weibull', ! twoGroup, !twoPhase ) #XXX generalize
+    # get parameter estimates that were profiled out!
+    par_orig <- c(par_orig, scale1 = mean((x-par_orig[["delay1"]])^par_orig[["shape1"]])^(1/par_orig[["shape1"]]))
+  }
 
 
   structure(
@@ -806,9 +856,9 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
       bind = bind,
       ties = ties,
       objFun = objFun,
-      par = extractPars(optObj$par, distribution = distribution, transform = TRUE), # /!\ keep in sync with update()!
+      par = par_orig,
       val = optObj$value,
-      optimizer = purrr::compact(c(list(parOpt = optObj$par), optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
+      optimizer = purrr::compact(c(list(parOpt = optObj$par, profiled = profile), optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")
 }
 
@@ -816,7 +866,8 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 print.incubate_fit <- function(x, ...){
   coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
-                      "Fit a delayed {distribution} {c('', 'with two delay phases')[[1L+twoPhase]]} through {switch(method, MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
+                      "Fit a delayed {distribution} {c('', 'with two delay phases')[[1L+twoPhase]]} through {c('', 'profiled')[[1L+optimizer$profiled]]} {switch(method,
+                      MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
                       MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
@@ -853,19 +904,27 @@ summary.incubate_fit <- function(object, ...){
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
-  stopifnot( all(c("objFun", "twoPhase", "twoGroup", "data", "par", "val", "optimizer") %in% names(object)) )
+  stopifnot( all(c("objFun", "twoPhase", "twoGroup", "data", "distribution", "par", "val", "optimizer") %in% names(object)) )
 
   ## fit model with given optim_args
   optObj <- delay_fit(object[["objFun"]], optim_args = optim_args, verbose = verbose)
 
   if (is.null(optObj)) return(invisible(NULL))
 
+
+  par_orig <- extractPars(optObj$par, distribution = object[["distribution"]], transform = TRUE) # /!\ keep in sync with delay_model()!
+  if (isTRUE(object$optimizer$profiled)){
+    stopifnot( distribution == 'weibull', ! object$twoGroup, ! object$twoPhase )
+    # get parameter estimates that were profiled out!
+    par_orig <- c(par_orig, scale1 = mean((object[["data"]] - par_orig[["delay1"]])^par_orig[["shape1"]])^(1/par_orig[["shape1"]]))
+  }
+
   # update all relevant fields in the list
-  object[c("par", "val", "optimizer")] <- list(par = extractPars(optObj$par, distribution = object[["distribution"]], transform = TRUE),
+  object[c("par", "val", "optimizer")] <- list(par = par_orig,
                                                val = optObj$value,
                                                # drop NULLs from list (e.g. if optim_args is not present)
                                                optimizer = purrr::compact(c(
-                                                 list(parOpt = optObj$par),
+                                                 list(parOpt = optObj$par, profiled = object$optimizer$profiled),
                                                  optObj[c("convergence", "message", "counts", "optim_args")])))
 
   object

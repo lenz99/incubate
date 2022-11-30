@@ -16,7 +16,7 @@ extractPars(
 
 \item{distribution}{character name. Exponential or Weibull}
 
-\item{group}{character. Extract only parameters for specified group.}
+\item{group}{character. Extract only parameters for specified group. Recognizes 'x' and 'y'. Other values are ignored.}
 
 \item{transform}{logical. Transform the parameters!?}
 }
@@ -24,7 +24,8 @@ extractPars(
 requested parameters as named numeric vector
 }
 \description{
-This routine handles parameter vectors for one or two groups, it knows about bound parameters (cf. \verb{bind=}) and
+This routine handles parameter vectors for one or two groups. To this end, it parses the parameter names.
+Bound parameters (cf. \verb{bind=}) are deduced from the naming: they lack the .x or .y suffix.
 it can also transform the given parameters from the standard form (as used in the delayed distribution functions)
 to the internal transformed parametrization as used by the optimization function, and vice versa.
 }

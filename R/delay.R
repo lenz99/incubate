@@ -545,11 +545,12 @@ mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay = delay1, sh
 #' @param twoPhase logical(1). For `type='param'`, do we model two phases?
 #' @param twoGroup logical(1). For type='param', do we have two groups?
 #' @param bind character. For type='param', names of parameters that are bind between the two groups.
+#' @param profile logical(1). For type='param', do we request profiling?
 #' @param transformed logical(1). For type='param', do we need parameter names transformed (as used inside the optimization function?)
 #' @return selected distribution function or parameter names
 #' @include delay_estimation.R
 getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", "prob", "density", "random", "param"),
-                    twoPhase = FALSE, twoGroup = FALSE, bind = NULL, transformed = FALSE) {
+                    twoPhase = FALSE, twoGroup = FALSE, bind = NULL, profile = FALSE, transformed = FALSE) {
   distribution <- match.arg(distribution)
   type <- match.arg(type)
 
@@ -567,6 +568,8 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
                   param   = {
 
                     pars <- c("delay1", "rate1", "delay2", "rate2")[seq_len(2L*(1L + twoPhase))]
+
+                    if (profile) warning("Profiling has no effect for estimating the exponential distribution.", call. = FALSE)
 
                     if (transformed) {
                       pars <- paste0(pars, "_tr")
@@ -596,6 +599,11 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
                   param   = {
 
                     pars <- c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")[seq_len(3L*(1L + twoPhase))]
+
+                    # drop parameters that are profiled out
+                    if (profile && (! "scale1" %in% bind || length(bind) == length(pars))){
+                      pars <- setdiff(pars, "scale1") #XXX think about profiling and twoPhase!
+                    }
 
                     if (transformed) {
                       pars <- paste0(pars, "_tr")

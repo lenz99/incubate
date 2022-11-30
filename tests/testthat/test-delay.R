@@ -196,9 +196,9 @@ test_that('(restricted) mean survival time of delayed distributions', {
 
 
   settingDF <- tidyr::expand_grid(# some random delay value
-                                  delay1 = runif(n = 7, min = 0, max = 7),
-                                  rates1 = c(.1, .5, 1, 2, 5),
-                                  delay2 = delay1 + runif(n = 7, min = 0.5, max = 5),
+                                  delay1 = runif(n = 3, min = 0, max = 7),
+                                  rates1 = c(.1, .6, 1, 2, 5),
+                                  delay2 = delay1 + runif(n = length(delay1), min = 0.5, max = 5),
                                   rates2 = c(.11, .31, .91, 1.51, 3.21))
   settingDF <- settingDF[settingDF$delay1 < settingDF$delay2,]
 

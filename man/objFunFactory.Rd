@@ -11,6 +11,7 @@ objFunFactory(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
   bind = NULL,
+  profile = FALSE,
   method = c("MPSE", "MLEn", "MLEc"),
   ties = c("density", "equidist", "random", "error"),
   verbose = 0L
@@ -26,6 +27,8 @@ objFunFactory(
 \item{twoPhase}{logical flag. Do we allow for two delay phases where event rate may change? Default is \code{FALSE}, i.e., a single delay phase.}
 
 \item{bind}{character. parameter names that are bind together (i.e. equated) between both groups}
+
+\item{profile}{logical. Should scale parameter be profiled out prior to optimization?}
 
 \item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLEn} is the naive MLE-method, calculating the likelihood function as the product of density values. \code{MLEc} is the modified MLE.}
 
