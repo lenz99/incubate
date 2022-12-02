@@ -11,7 +11,7 @@ delay_model(
   twoPhase = FALSE,
   bind = NULL,
   ties = c("density", "equidist", "random", "error"),
-  method = c("MPSE", "MLEn", "MLEc"),
+  method = c("MPSE", "MLEn", "MLEw", "MLEc"),
   profile = FALSE,
   optim_args = NULL,
   verbose = 0
@@ -24,11 +24,13 @@ delay_model(
 
 \item{distribution}{character. Which delayed distribution is assumed? Exponential or Weibull.}
 
+\item{twoPhase}{logical. Allow for two phases?}
+
 \item{bind}{character. parameter names that are bind together in 2-group situation.}
 
 \item{ties}{character. How to handle ties.}
 
-\item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLEn' = naive maximum likelihood estimation \emph{or} 'MLEc' = corrected MLE}
+\item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLEn' = naive maximum likelihood estimation \emph{or} 'MLEw' = weighted MLE' \emph{or} MLEc' = corrected MLE}
 
 \item{profile}{logical. Profile out scale from log-likelihood if possibe.}
 

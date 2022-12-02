@@ -328,6 +328,19 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef_poll, expected = c(delay1=1085, shape1=0.95, scale1=6562), tolerance = .001)
 
 
+  # Cousineau's numerical example, taken from Weibull with delay = 300, shape k = 2 and scale = 100
+  x <- c(310, 342, 353, 365, 383, 393, 403, 412, 451, 456)
+  fd_wbc_mlen <- delay_model(x = x, distribution = "weib", method = "MLEn")
+  expect_equal(coef(fd_wbc_mlen), expected = c(delay1 = 274.8, shape1 = 2.80, scale1 = 126.0), tolerance = .01)
+  fd_wbc_mlenp <- delay_model(x = x, distribution = "weib", method = "MLEn", profile = TRUE)
+  expect_equal(coef(fd_wbc_mlenp), expected = c(delay1=280.9, shape1=2.62, scale1=119.0), tolerance = .05)
+  # our implementation finds a smaller objective value (which is to be minimized)
+  expect_lte(fd_wbc_mlenp$val, fd_wbc_mlenp$objFun(c(delay1=280.9, shape1=log(2.62))))
+  fd_wbc_mlewp <- delay_model(x = x, distribution = "weib", method = "MLEw", profile = TRUE)
+  expect_true(fd_wbc_mlewp$optimizer$profiled)
+  expect_equal(coef(fd_wbc_mlewp), c(delay1=283.7, shape1=2.29, scale1=116.0), tolerance = .02)
+  # our implementation finds a smaller objective value. XXX compare the log-likelihood values!
+  expect_lte(fd_wbc_mlewp$val, fd_wbc_mlewp$objFun(c(delay1=283.7, shape1=log(2.29))))
 
   # fit in two groups
   fd_wb2 <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib")

@@ -11,8 +11,8 @@ objFunFactory(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
   bind = NULL,
+  method = c("MPSE", "MLEn", "MLEc", "MLEw"),
   profile = FALSE,
-  method = c("MPSE", "MLEn", "MLEc"),
   ties = c("density", "equidist", "random", "error"),
   verbose = 0L
 )
@@ -28,9 +28,9 @@ objFunFactory(
 
 \item{bind}{character. parameter names that are bind together (i.e. equated) between both groups}
 
-\item{profile}{logical. Should scale parameter be profiled out prior to optimization?}
-
 \item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLEn} is the naive MLE-method, calculating the likelihood function as the product of density values. \code{MLEc} is the modified MLE.}
+
+\item{profile}{logical. Should scale parameter be profiled out prior to optimization?}
 
 \item{ties}{character. How to handle ties within data of a group.}
 

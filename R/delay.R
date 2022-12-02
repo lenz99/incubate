@@ -602,7 +602,7 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
 
                     # drop parameters that are profiled out
                     if (profile && (! "scale1" %in% bind || length(bind) == length(pars))){
-                      pars <- setdiff(pars, "scale1") #XXX think about profiling and twoPhase!
+                      pars <- setdiff(pars, "scale1") #XXX think about profiling and twoPhase! (and twoGroup?!)
                     }
 
                     if (transformed) {

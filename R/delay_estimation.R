@@ -209,17 +209,17 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 #'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
-#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
 #' @param distribution character(1). delayed distribution family
-#' @param bind character. parameter names that are bind together (i.e. equated) between both groups
-#' @param profile logical. Should scale parameter be profiled out prior to optimization?
 #' @param twoPhase logical flag. Do we allow for two delay phases where event rate may change? Default is `FALSE`, i.e., a single delay phase.
+#' @param bind character. parameter names that are bind together (i.e. equated) between both groups
+#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
+#' @param profile logical. Should scale parameter be profiled out prior to optimization?
 #' @param ties character. How to handle ties within data of a group.
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
 objFunFactory <- function(x, y = NULL,
-                          distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL, profile = FALSE,
-                          method = c('MPSE', 'MLEn', 'MLEc'), ties = c('density', 'equidist', 'random', 'error'),
+                          distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL,
+                          method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'), profile = FALSE, ties = c('density', 'equidist', 'random', 'error'),
                           verbose = 0L) {
 
   # setup ----
@@ -351,8 +351,10 @@ objFunFactory <- function(x, y = NULL,
 
   #profiling is only possible if Weibull and scale is not bound and single phase
   profile <- profile && distribution == 'weibull' && (! "scale" %in% bind || length(bind) == length(oNames)) &&
-    ! twoPhase && method %in% c('MLEn', 'MLEc')
+    ! twoPhase && method %in% c("MLEn", "MLEc", "MLEw") || method == 'MLEw'
 
+  # MLEw works only with profiling #XXX limitation: no two group => should be generalized
+  stopifnot( method != 'MLEw' || ! twoPhase && ! twoGroup && profile )
 
 
   # optimization arguments -----
@@ -394,7 +396,7 @@ objFunFactory <- function(x, y = NULL,
                       # shape <- 1.2/sqrt(v)
                       # scale <- exp(m + 0.572/shape)
                       # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
-                      # and then ordinate is log(1/(1-F)) on log-scale
+                      # and then ordinate is log(1/(1-F)) = -log(1-F) on log-scale
                       start_y <- log(-log(1-stats::ppoints(obs, a=.3)))
                       # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
                       # weighted version with more weight in the middle:
@@ -551,15 +553,21 @@ objFunFactory <- function(x, y = NULL,
 
   # objective function ----
 
-  # calculate the log-likelihood, either naive or corrected form
+  # weight W1 for MLEw, becomes an attribute for the objective function (for later reference to get scale parameter)
+  W1 <- c(x=(1-1/(9*length(x)))^3, y = if (! is.null(y)) (1-1/(9*length(y)))^3 else NA_real_)
+
+  # calculate the log-likelihood, either naive, weighted or in corrected form
   getLogLik <- function(pars, group) {
     obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
     # back-transform parameters to original scale (for CDF)
-    # when profiled, then pars lacks scale.
+    # when profiled, then pars lacks scale (but extractPars does not fall over this)
     pars.gr <- extractPars(pars, distribution = distribution, group = group, transform = TRUE)
 
     denFun <- getDist(distribution, type = "density")
     cdfFun <- getDist(distribution, type = "cdf")
+
+    # for Weibull, do we want to penalize high shape values?
+    penalize_shape <- FALSE
 
     switch(method,
            # MLEc =,
@@ -568,9 +576,7 @@ objFunFactory <- function(x, y = NULL,
                obs_c <- obs - pars.gr[["delay1"]]
                k <- pars.gr[["shape1"]]
 
-               penalize_shape <- FALSE
-               #DDD debug
-               #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n")
+               #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
 
                # objective function to maximize
                - identity((1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
@@ -580,6 +586,29 @@ objFunFactory <- function(x, y = NULL,
              } else {
                sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
              }
+           },
+           MLEw = {
+             stopifnot(distribution == 'weibull') #XXX exponential?!
+
+             n <- length(obs)
+             obs_c <- obs - pars.gr[["delay1"]]
+             k <- pars.gr[["shape1"]]
+
+             z <- -log(1-ppoints(n=n, a=.3)) ## = estimate for -log(1-Fi)
+
+             W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1312 * (1 - 1/n))
+             W3 <- W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+
+             if (verbose > 1L){
+               cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
+                        "Candidate parameters: delay {pars.gr[['delay1']]} and shape {k}."), "\n")
+             }
+
+             # objective function to maximize
+             - identity((W2/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
+                          # 1st factor is inverse of harmonic mean
+                          (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - W3)**2 + penalize_shape*log(k+1))
+
            },
            MLEc = {
              log(diff(purrr::exec(cdfFun, !!! c(list(q=obs[1:2]), pars.gr)))) + sum(purrr::exec(denFun, !!! c(list(x=obs[-1L], log=TRUE), pars.gr)))
@@ -651,7 +680,8 @@ objFunFactory <- function(x, y = NULL,
                if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
              }
            },
-           MLEn =,
+           MLEn = ,
+           MLEw = ,
            MLEc = {
              stopifnot( ! twoPhase ) #XXX not implemented yet!
 
@@ -676,12 +706,15 @@ objFunFactory <- function(x, y = NULL,
                                         counts = 1L)
   }
 
+  # attach weight W1 for x and y
+  attr(objFun, which = "W1") <- W1
+
   objFun
 }
 
 
 
-#' Fit optimal parameters according to the objective function (either MPSE or MLEn).
+#' Fit optimal parameters according to the objective function (either MPSE or MLE-based).
 #'
 #' The objective function carries the given data in its environment and it is to be minimized.
 #' R's standard routine `stats::optim` does the numerical optimization, using numerical derivatives.
@@ -766,10 +799,11 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
-#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEc' = corrected MLE
-#' @param profile logical. Profile out scale from log-likelihood if possibe.
+#' @param twoPhase logical. Allow for two phases?
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param ties character. How to handle ties.
+#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEw' = weighted MLE' *or* MLEc' = corrected MLE
+#' @param profile logical. Profile out scale from log-likelihood if possibe.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
@@ -777,7 +811,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 delay_model <- function(x = stop('Specify observations for at least one group x=!', call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
                         bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
-                        method = c('MPSE', 'MLEn', 'MLEc'), profile = FALSE,
+                        method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profile = FALSE,
                         optim_args = NULL, verbose = 0) {
 
 
@@ -840,9 +874,10 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 
   par_orig <- extractPars(optObj$par, distribution = distribution, transform = TRUE) # /!\ keep in sync with update()!
   if (profile){
-    stopifnot( distribution == 'weibull', ! twoGroup, !twoPhase ) #XXX generalize
+    stopifnot( distribution == 'weibull', ! twoGroup, !twoPhase ) #XXX generalize, twoGroup should be not too hard!
+    w1 <- if (method == 'MLEw') attr(objFun, which = "W1", exact = TRUE)[["x"]] else 1
     # get parameter estimates that were profiled out!
-    par_orig <- c(par_orig, scale1 = mean((x-par_orig[["delay1"]])^par_orig[["shape1"]])^(1/par_orig[["shape1"]]))
+    par_orig <- c(par_orig, scale1 = (w1*mean((x-par_orig[["delay1"]])^par_orig[["shape1"]]))^(1/par_orig[["shape1"]]))
   }
 
 
@@ -868,6 +903,7 @@ print.incubate_fit <- function(x, ...){
   cat(glue::glue_data(x, .sep = "\n",
                       "Fit a delayed {distribution} {c('', 'with two delay phases')[[1L+twoPhase]]} through {c('', 'profiled')[[1L+optimizer$profiled]]} {switch(method,
                       MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
+                      MLEw = 'weighted Maximum Likelihood Estimation (MLEw)',
                       MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
