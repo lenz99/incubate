@@ -864,6 +864,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 
   # optimise objective function
   optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
+  #XXX for MLEprofile: check that we have indeed an local maximum for the log-likelihood (as we have only found candidate values)
 
   if (is.null(optObj)) return(invisible(NULL))
 
@@ -877,9 +878,13 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
     stopifnot( distribution == 'weibull', ! twoGroup, !twoPhase ) #XXX generalize, twoGroup should be not too hard!
     w1 <- if (method == 'MLEw') attr(objFun, which = "W1", exact = TRUE)[["x"]] else 1
     # get parameter estimates that were profiled out!
+    #XXX think of twoGroup: what about scale1.x and scale1.y
     par_orig <- c(par_orig, scale1 = (w1*mean((x-par_orig[["delay1"]])^par_orig[["shape1"]]))^(1/par_orig[["shape1"]]))
   }
 
+  denFun <- getDist(distribution = distribution, type = "density")
+  llik_x <- sum(purrr::exec(denFun, !!! c(list(x=x, log=TRUE), extractPars(par_orig, distribution = distribution, group = "x"))))
+  llik_y <- if (twoGroup) sum(purrr::exec(denFun, !!! c(list(x=y, log=TRUE), extractPars(par_orig, distribution = distribution, group = "y")))) else 0
 
   structure(
     list(
@@ -892,8 +897,8 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
       ties = ties,
       objFun = objFun,
       par = par_orig,
-      val = optObj$value,
-      optimizer = purrr::compact(c(list(parOpt = optObj$par, profiled = profile), optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
+      llik = llik_x + llik_y,
+      optimizer = purrr::compact(c(list(parOpt = optObj$par, valOpt = optObj$value, profiled = profile), optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")
 }
 
@@ -940,7 +945,8 @@ summary.incubate_fit <- function(object, ...){
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
-  stopifnot( all(c("objFun", "twoPhase", "twoGroup", "data", "distribution", "par", "val", "optimizer") %in% names(object)) )
+  stopifnot( all(c("data", "distribution", "objFun", "twoPhase", "twoGroup", "par", "llik", "optimizer") %in% names(object)) )
+
 
   ## fit model with given optim_args
   optObj <- delay_fit(object[["objFun"]], optim_args = optim_args, verbose = verbose)
@@ -948,20 +954,28 @@ update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
   if (is.null(optObj)) return(invisible(NULL))
 
 
+  x <- if (object[["twoGroup"]]) object[["data"]]["x"] else object[["data"]]
+  y <- if (object[["twoGroup"]]) object[["data"]]["y"] else NULL
+
   par_orig <- extractPars(optObj$par, distribution = object[["distribution"]], transform = TRUE) # /!\ keep in sync with delay_model()!
   if (isTRUE(object$optimizer$profiled)){
     stopifnot( distribution == 'weibull', ! object$twoGroup, ! object$twoPhase )
     # get parameter estimates that were profiled out!
-    par_orig <- c(par_orig, scale1 = mean((object[["data"]] - par_orig[["delay1"]])^par_orig[["shape1"]])^(1/par_orig[["shape1"]]))
+    #XXX think of twogroup: currently I only care about scale1 (no .x and .y)!!
+    par_orig <- c(par_orig, scale1 = mean((x - par_orig[["delay1"]])^par_orig[["shape1"]])^(1/par_orig[["shape1"]]))
   }
 
+  denFun <- getDist(distribution = object$distribution, type = "density")
+  llik_x <- sum(purrr::exec(denFun, !!! c(list(x=x, log=TRUE), extractPars(par_orig, distribution = object$distribution, group = "x"))))
+  llik_y <- if (object$twoGroup) sum(purrr::exec(denFun, !!! c(list(x=y, log=TRUE), extractPars(par_orig, distribution = object$distribution, group = "y")))) else 0
+
   # update all relevant fields in the list
-  object[c("par", "val", "optimizer")] <- list(par = par_orig,
-                                               val = optObj$value,
-                                               # drop NULLs from list (e.g. if optim_args is not present)
-                                               optimizer = purrr::compact(c(
-                                                 list(parOpt = optObj$par, profiled = object$optimizer$profiled),
-                                                 optObj[c("convergence", "message", "counts", "optim_args")])))
+  object[c("par", "llik", "optimizer")] <- list(par = par_orig,
+                                                llik = llik_x + llik_y,
+                                                # drop NULLs from list (e.g. if optim_args is not present)
+                                                optimizer = purrr::compact(c(
+                                                  list(parOpt = optObj$par, valOpt = optObj$value, profiled = object$optimizer$profiled),
+                                                  optObj[c("convergence", "message", "counts", "optim_args")])))
 
   object
 }
@@ -1136,7 +1150,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     # but we have to keep last entry if it corresponds to the delay estimate (e.g., as is the case for MLEn-fitting)
     if (delayCandDF$delay1[NROW(delayCandDF)] > del_coef) delayCandDF <- delayCandDF[-NROW(delayCandDF),, drop = FALSE]
     # relative change to optimal value, will be negative as objective function is minimized
-    delayCandDF$objValInv <- (object$val - delayCandDF$objVal) / (object$val+.01)
+    # XXX does this work also for MLE-based methods with profiling? Then valOpt is the profiled likelihood! Store MPSE-criterion as well?
+    delayCandDF$objValInv <- (object$optimizer$valOpt - delayCandDF$objVal) / (object$optimizer$valOpt+.01)
     # shift upwards into non-negative area
     delayCandDF$objValInv <- delayCandDF$objValInv - min(delayCandDF$objValInv, na.rm = TRUE)
     # scale to be between 0 and 1.

@@ -13,12 +13,11 @@
 test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
   stopifnot( inherits(delayFit, what = 'incubate_fit') )
-  method <- match.arg(method)
-
   if (delayFit$method != 'MPSE'){
-    stop('Goodness-of-fit test only supported for models that are fit with maximum product of spacings estimation (MPSE)!')
+    stop('Goodness-of-fit test only supported for models that are fit with maximum product of spacings estimation (MPSE)!', call. = FALSE)
   }
 
+  method <- match.arg(method)
   twoGroup <- isTRUE(delayFit$twoGroup)
   data_name <- if (twoGroup) paste(names(delayFit$data), collapse = ' and ') else 'x'
   nObs <- if (twoGroup) lengths(delayFit$data) else length(delayFit$data)
@@ -59,7 +58,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
                                        n = nObs, k = k/2)) )
            } else {
              # single group
-             c(`X^2` = testStat_mo(mseCrit = delayFit$val, n = nObs, k = k) )
+             c(`X^2` = testStat_mo(mseCrit = delayFit$optimizer$valOpt, n = nObs, k = k) )
            }
 
            p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
@@ -251,7 +250,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     # if the more restricted model (fit0) yields better fit (=lower criterion) than the more general model (fit1)
     #+we are in trouble, possibly due to non-convergence, e.g. convergence code 52
     #+we refit the general fit1 again using parameter-values from fit0
-    if ( fit0[['val']] + TOL_CRIT < fit1[['val']] &&
+    if ( fit0[["optimizer"]][['valOpt']] + TOL_CRIT < fit1[["optimizer"]][['valOpt']] &&
          !is.null(fit1oa <- purrr::pluck(fit1, 'optimizer', 'optim_args')) ) {
       if (verbose > 0) warning('Restricted model with better fit than unrestricted model.', call. = FALSE)
       # re-run fit1 with start values based on fitted parameters of reduced model fit0
@@ -266,7 +265,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       fit1oa[['control']][['parscale']] <- scalePars(parV = fit1oa[["par"]])
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
-      if (is.null(fit1) || fit0[['val']] + TOL_CRIT < fit1[['val']]) {
+      if (is.null(fit1) || fit0[["optimizer"]][['valOpt']] + TOL_CRIT < fit1[["optimizer"]][['valOpt']]) {
         warning('Restricted model with better fit than unrestricted model even after refit of the unrestricted model!', call. = FALSE)
         return(invisible(NULL))
       }
@@ -280,7 +279,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
     #   2. fit1 has low value (=good fit)
-    list(val = 2L * max(0L, fit0[["val"]] - fit1[["val"]]),
+    list(val = 2L * max(0L, fit0[["optimizer"]][['valOpt']] - fit1[["optimizer"]][['valOpt']]),
          fit0 = fit0, fit1 = fit1)
   } #fn testStat
 
