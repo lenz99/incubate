@@ -566,7 +566,7 @@ objFunFactory <- function(x, y = NULL,
     denFun <- getDist(distribution, type = "density")
     cdfFun <- getDist(distribution, type = "cdf")
 
-    # for Weibull, do we want to penalize high shape values?
+    # for Weibull, do we want to penalize high shape values in MLE?
     penalize_shape <- FALSE
 
     switch(method,
@@ -594,9 +594,9 @@ objFunFactory <- function(x, y = NULL,
              obs_c <- obs - pars.gr[["delay1"]]
              k <- pars.gr[["shape1"]]
 
-             z <- -log(1-ppoints(n=n, a=.3)) ## = estimate for -log(1-Fi)
+             z <- -log(1-stats::ppoints(n=n, a=.3)) ## = estimate for -log(1-Fi)
 
-             W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1312 * (1 - 1/n))
+             W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n))
              W3 <- W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
 
              if (verbose > 1L){
