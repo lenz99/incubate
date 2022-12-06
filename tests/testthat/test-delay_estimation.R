@@ -58,7 +58,7 @@ test_that("Fit delayed Exponentials", {
 
   # single group ------------------------------------------------------------
 
-  # rexp_delayed(16, delay = 9, rate = 0.5)
+  # from a call to rexp_delayed(16, delay = 9, rate = 0.5)
   xx <- c(9.3758422, 9.436878, 9.440794, 9.63324, 9.6421,
           9.76594, 9.80527, 9.907327, 10.357, 10.371,
           10.596, 10.623, 11.1074, 11.575, 11.849, 16.38)
@@ -73,6 +73,7 @@ test_that("Fit delayed Exponentials", {
   # optim converges properly for this data vector!
   # * convergence=51 is warning from L-BFGS-B
   # * convergence=52 is error from L-BFGS-B
+  expect_identical(purrr::chuck(fd_exp, "optimizer", "valOpt"), fd_exp[["criterion"]]) # same for MSPE
   expect_identical(purrr::chuck(fd_exp, 'optimizer', 'convergence'), expected = 0L)
   expect_type(purrr::chuck(fd_exp, 'optimizer', 'optim_args'), type = 'list')
 
@@ -87,7 +88,7 @@ test_that("Fit delayed Exponentials", {
   expect_gt(min(fd_exp_updW$optimizer$counts), expected = min(fd_exp$optimizer$counts))
   # objective function does not reach a much better (=lower) value when starting with worse start value
   # (add a little safety margin as buffer)
-  expect_gte(fd_exp_updW$optimizer$valOpt + 1e-05, expected = fd_exp$optimizer$valOpt)
+  expect_gte(fd_exp_updW$criterion + 1e-05, expected = fd_exp$criterion)
 
   # MLE fits -----------------------------------------------------------
   fd_exp_MLEn <- delay_model(xx, distribution = 'expon', method = 'MLEn')
@@ -339,14 +340,14 @@ test_that("Fit delayed Weibull", {
   # our implementation finds a smaller objective value (which is to be minimized)
   expect_lte(fd_wbc_mlenp$optimizer$valOpt, fd_wbc_mlenp$objFun(c(delay1=280.9, shape1=log(2.62))))
   # but log-likelihood is in fact quite similar (actually, Cousineau's solution is slightly better)
-  expect_equal(fd_wbc_mlenp$llik, sum(densFun_wb(x, delay1 = 280.9, shape1=2.62, scale1=119.0, log = TRUE)), tolerance = .01)
+  expect_equal(fd_wbc_mlenp$criterion, -sum(densFun_wb(x, delay1 = 280.9, shape1=2.62, scale1=119.0, log = TRUE)), tolerance = .01)
   fd_wbc_mlewp <- delay_model(x = x, distribution = "weib", method = "MLEw", profile = TRUE)
   expect_true(fd_wbc_mlewp$optimizer$profiled)
   expect_equal(coef(fd_wbc_mlewp), c(delay1=283.7, shape1=2.29, scale1=116.0), tolerance = .04)
   # our implementation finds a smaller objective value.
   expect_lte(fd_wbc_mlewp$optimizer$valOpt, fd_wbc_mlewp$objFun(c(delay1=283.7, shape1=log(2.29))))
   # but log-likelihood is in fact quite similar (actually, Cousineau's solution is slightly better)
-  expect_equal(fd_wbc_mlewp$llik, sum(densFun_wb(x, delay1=283.7, shape1=2.29, scale1=116.0, log = TRUE)), tolerance = .01)
+  expect_equal(fd_wbc_mlewp$criterion, -sum(densFun_wb(x, delay1=283.7, shape1=2.29, scale1=116.0, log = TRUE)), tolerance = .01)
 
   # fit in two groups
   fd_wb2 <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib")

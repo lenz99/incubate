@@ -55,33 +55,33 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
       # parameter transformation matrices
       PARAM_TRANSF_M <- switch(distribution,
                                exponential = matrix(c( 1, 0, 0, 0,
-                                                     0, 1, 0, 0,
-                                                     -1, 0, 1, 0,
-                                                     0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                                  dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
-                             weibull = matrix(c( 1, 0, 0, 0, 0, 0,
-                                                 0, 1, 0, 0, 0, 0,
-                                                 0, 0, 1, 0, 0, 0,
-                                                 -1, 0, 0, 1, 0, 0,
-                                                 0, 0, 0, 0, 1, 0,
-                                                 0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                              dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
-                             stop("Unknown distribution!", call. = FALSE)
+                                                       0, 1, 0, 0,
+                                                       -1, 0, 1, 0,
+                                                       0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                                    dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
+                               weibull = matrix(c( 1, 0, 0, 0, 0, 0,
+                                                   0, 1, 0, 0, 0, 0,
+                                                   0, 0, 1, 0, 0, 0,
+                                                   -1, 0, 0, 1, 0, 0,
+                                                   0, 0, 0, 0, 1, 0,
+                                                   0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
+                                                dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
+                               stop("Unknown distribution!", call. = FALSE)
       )
       PARAM_TRANSF_MINV <- switch(distribution,
                                   exponential = matrix(c(1, 0, 0, 0,
-                                                       0, 1, 0, 0,
-                                                       1, 0, 1, 0,
-                                                       0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                                     dimnames = list(c("delay1", "rate1", "delay2", "rate2"))),
-                                weibull = matrix(c(1, 0, 0, 0, 0, 0,
-                                                   0, 1, 0, 0, 0, 0,
-                                                   0, 0, 1, 0, 0, 0,
-                                                   1, 0, 0, 1, 0, 0,
-                                                   0, 0, 0, 0, 1, 0,
-                                                   0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                                 dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"))),
-                                stop("Unknown distribution", call. = FALSE)
+                                                         0, 1, 0, 0,
+                                                         1, 0, 1, 0,
+                                                         0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                                       dimnames = list(c("delay1", "rate1", "delay2", "rate2"))),
+                                  weibull = matrix(c(1, 0, 0, 0, 0, 0,
+                                                     0, 1, 0, 0, 0, 0,
+                                                     0, 0, 1, 0, 0, 0,
+                                                     1, 0, 0, 1, 0, 0,
+                                                     0, 0, 0, 0, 1, 0,
+                                                     0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
+                                                   dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"))),
+                                  stop("Unknown distribution", call. = FALSE)
       )
 
 
@@ -557,76 +557,91 @@ objFunFactory <- function(x, y = NULL,
   W1 <- c(x=(1-1/(9*length(x)))^3, y = if (! is.null(y)) (1-1/(9*length(y)))^3 else NA_real_)
 
   # calculate the log-likelihood, either naive, weighted or in corrected form
-  getLogLik <- function(pars, group) {
+  getLogLik <- function(pars, group, criterion = FALSE) {
+
     obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
     # back-transform parameters to original scale (for CDF)
     # when profiled, then pars lacks scale (but extractPars does not fall over this)
-    pars.gr <- extractPars(pars, distribution = distribution, group = group, transform = TRUE)
+    # when criterion is requested, the parameters are on original scale and we do not need to transform
+    pars.gr <- extractPars(pars, distribution = distribution, group = group, transform = !criterion)
 
     denFun <- getDist(distribution, type = "density")
     cdfFun <- getDist(distribution, type = "cdf")
 
     # for Weibull, do we want to penalize high shape values in MLE?
     penalize_shape <- FALSE
+    # when we penalize for shape we expect to see shape1 as parameter!
+    stopifnot( ! penalize_shape || "shape1" %in% names(pars.gr) )
 
-    switch(method,
-           # MLEc =,
-           MLEn = {
-             if (profile && distribution == 'weibull'){
+    if (criterion){
+      sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+    } else {
+
+      k <- if (distribution == 'weibull') pars.gr[["shape1"]] else 0
+
+      switch(method,
+             # MLEc =,
+             MLEn = {
+               if (profile && distribution == 'weibull'){
+                 obs_c <- obs - pars.gr[["delay1"]]
+                 #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
+
+                 # objective function to maximize
+                 - identity((1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 +
+                              # 1st factor is inverse of harmonic mean
+                              (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 + penalize_shape*log(k+1))
+
+               } else {
+                 sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+               }
+             },
+             MLEw = {
+               stopifnot(distribution == 'weibull') #XXX exponential?!
+
+               n <- length(obs)
                obs_c <- obs - pars.gr[["delay1"]]
-               k <- pars.gr[["shape1"]]
 
-               #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
+               z <- -log(1-stats::ppoints(n=n, a=.3)) ## = estimate for -log(1-Fi)
+
+               # last term: approximation for -log(GM_n Z)
+               W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n))
+               W3 <- W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+
+               if (verbose > 1L){
+                 cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
+                          "Candidate values: delay {pars.gr[['delay1']]} and shape {k}."), "\n")
+               }
 
                # objective function to maximize
-               - identity((1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
-                 # 1st factor is inverse of harmonic mean
-                 (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 + penalize_shape*log(k+1))
+               - identity((W2/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
+                            # 1st factor is inverse of harmonic mean
+                            (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - W3)**2 + penalize_shape*log(k+1))
 
-             } else {
-               sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
-             }
-           },
-           MLEw = {
-             stopifnot(distribution == 'weibull') #XXX exponential?!
-
-             n <- length(obs)
-             obs_c <- obs - pars.gr[["delay1"]]
-             k <- pars.gr[["shape1"]]
-
-             z <- -log(1-stats::ppoints(n=n, a=.3)) ## = estimate for -log(1-Fi)
-
-             W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n))
-             W3 <- W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
-
-             if (verbose > 1L){
-               cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
-                        "Candidate parameters: delay {pars.gr[['delay1']]} and shape {k}."), "\n")
-             }
-
-             # objective function to maximize
-             - identity((W2/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
-                          # 1st factor is inverse of harmonic mean
-                          (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - W3)**2 + penalize_shape*log(k+1))
-
-           },
-           MLEc = {
-             log(diff(purrr::exec(cdfFun, !!! c(list(q=obs[1:2]), pars.gr)))) + sum(purrr::exec(denFun, !!! c(list(x=obs[-1L], log=TRUE), pars.gr)))
-           },
-           #XXX check here!
-           stop("This method is not handled here!", call. = FALSE))
+             },
+             MLEc = {
+               stopifnot( length(obs) >= 2L )
+               log(diff(purrr::exec(cdfFun, !!! c(list(q=obs[1:2]), pars.gr)))) +
+                 sum(purrr::exec(denFun, !!! c(list(x=obs[-1L], log=TRUE), pars.gr))) -
+                 penalize_shape * log(k+1)
+             },
+             #XXX check here!
+             stop("This method is not handled here!", call. = FALSE))
+    }
   }
 
   # log spacings:
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
+  # param pars vector of transformed parameters
   # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
-  getCumDiffs <- function(pars, group) {
+  getCumDiffs <- function(pars, group, criterion = FALSE) {
     # get() would (by default) start looking in the execution environment of getCumDiffs and would find the object in its parent
     # or: env = rlang::env_parent() # parent of caller env is (normally!?) the function-env
     # or: env = rlang::fn_env(getCumDiffs) # referring directly to the function environment (but requires function obj)
     obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
+
     # back-transform parameters to original scale (for CDF)
-    pars.gr <- extractPars(pars, distribution = distribution, group = group, transform = TRUE)
+    # when criterion is requested, the parameters are on original scale and we do not need to transform
+    pars.gr <- extractPars(pars, distribution = distribution, group = group, transform = !criterion)
 
     if (verbose > 1L){
       cat(glue("Parameter vector for group {group} after back-transformation: ",
@@ -660,22 +675,25 @@ objFunFactory <- function(x, y = NULL,
 
   # Objective function like negative mean log-spacings for MPSE or negative log-likelihood for MSE0
   # Estimate parameters by minimizing this function.
-  # param `pars` the parameter vector.
-  # param `aggregated` a logical flag. For two group case, `FALSE` returns individual mean log cum-diffs per group
-  objFun <- function(pars, aggregated = TRUE) {
-    stopifnot( length(pars) == length(optpar_names) )
-    pars <- purrr::set_names(pars, optpar_names) # extractPars in getCumDiffs needs names!
+  # param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
+  # param `criterion` a logical flag. If requested, give the original criterion to minimize. Then, the parameters are on original scale
+  # param `aggregated` a logical flag. For two group case, `aggregated=FALSE` returns individual mean log cum-diffs per group
+  objFun <- function(pars, criterion = FALSE, aggregated = TRUE) {
+    if (!criterion){
+      stopifnot( length(pars) == length(optpar_names) )
+      pars <- purrr::set_names(pars, optpar_names) # extractPars in getCumDiffs needs names!
+    }
 
     switch(method,
            MPSE = {
              - if (! twoGroup) {
-               mean(getCumDiffs(pars, group = "x"))
+               mean(getCumDiffs(pars, group = "x", criterion = criterion))
              } else {
                #twoGroup:
                #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
                #because the parameters should be optimized within group.
                #merged data lead to frequent non-convergence or visually bad fits
-               res <- c(mean(getCumDiffs(pars, group = "x")), mean(getCumDiffs(pars, group = "y")))
+               res <- c(mean(getCumDiffs(pars, group = "x", criterion = criterion)), mean(getCumDiffs(pars, group = "y", criterion = criterion)))
 
                if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
              }
@@ -685,8 +703,8 @@ objFunFactory <- function(x, y = NULL,
            MLEc = {
              stopifnot( ! twoPhase ) #XXX not implemented yet!
 
-             - if (! twoGroup) getLogLik(pars, group = "x") else {
-               res <- c(getLogLik(pars, group = "x"), getLogLik(pars, group = "y"))
+             - if (! twoGroup) getLogLik(pars, group = "x", criterion = criterion) else {
+               res <- c(getLogLik(pars, group = "x", criterion = criterion), getLogLik(pars, group = "y", criterion = criterion))
 
                if (aggregated) sum(res) else res
              }
@@ -706,11 +724,12 @@ objFunFactory <- function(x, y = NULL,
                                         counts = 1L)
   }
 
-  # attach weight W1 for x and y
+  # attach weight W1 for x and y (needed to get profiled-out scale estimate)
   attr(objFun, which = "W1") <- W1
 
   objFun
 }
+
 
 
 
@@ -873,7 +892,8 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
   x <- rlang::env_get(env = objFunEnv, nm = "x")
   y <- rlang::env_get(env = objFunEnv, nm = "y", default = NULL)
 
-  par_orig <- extractPars(optObj$par, distribution = distribution, transform = TRUE) # /!\ keep in sync with update()!
+  # /!\ keep in sync with update()!
+  par_orig <- extractPars(optObj$par, distribution = distribution, transform = TRUE)
   if (profile){
     stopifnot( distribution == 'weibull', ! twoGroup, !twoPhase ) #XXX generalize, twoGroup should be not too hard!
     w1 <- if (method == 'MLEw') attr(objFun, which = "W1", exact = TRUE)[["x"]] else 1
@@ -882,10 +902,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
     par_orig <- c(par_orig, scale1 = (w1*mean((x-par_orig[["delay1"]])^par_orig[["shape1"]]))^(1/par_orig[["shape1"]]))
   }
 
-  denFun <- getDist(distribution = distribution, type = "density")
-  llik_x <- sum(purrr::exec(denFun, !!! c(list(x=x, log=TRUE), extractPars(par_orig, distribution = distribution, group = "x"))))
-  llik_y <- if (twoGroup) sum(purrr::exec(denFun, !!! c(list(x=y, log=TRUE), extractPars(par_orig, distribution = distribution, group = "y")))) else 0
-
+  # /!\ keep in sync with update()!
   structure(
     list(
       data = if (twoGroup) list(x = x, y = y) else x,
@@ -897,8 +914,9 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
       ties = ties,
       objFun = objFun,
       par = par_orig,
-      llik = llik_x + llik_y,
-      optimizer = purrr::compact(c(list(parOpt = optObj$par, valOpt = optObj$value, profiled = profile), optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
+      criterion = objFun(pars = par_orig, criterion = TRUE, aggregated = TRUE),
+      optimizer = purrr::compact(c(list(parOpt = optObj$par, valOpt = optObj$value, profiled = profile),
+                                   optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")
 }
 
@@ -906,11 +924,12 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 print.incubate_fit <- function(x, ...){
   coe <- coef(x)
   cat(glue::glue_data(x, .sep = "\n",
-                      "Fit a delayed {distribution} {c('', 'with two delay phases')[[1L+twoPhase]]} through {c('', 'profiled')[[1L+optimizer$profiled]]} {switch(method,
+                      "Fit a delayed {distribution}{c('', ' with two delay phases')[[1L+twoPhase]]} through{c('', ' profiled')[[1L+optimizer$profiled]]} {switch(method,
                       MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
                       MLEw = 'weighted Maximum Likelihood Estimation (MLEw)',
                       MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
+                      "Criterion: {signif(criterion,3)}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
 }
@@ -926,7 +945,7 @@ coef.incubate_fit <- function(object, transformed = FALSE, group = NULL, ...){
   stopifnot( inherits(object, "incubate_fit") )
   transformed <- isTRUE(transformed)
 
-  extractPars(parV = if (transformed) purrr::chuck(object, "optimizer", "parOpt") else object[["par"]],
+  extractPars(parV = purrr::chuck(object, !!! if (transformed) list("optimizer", "parOpt") else "par"),
               distribution = object[["distribution"]], group = group, transform = FALSE)
 }
 
@@ -945,11 +964,12 @@ summary.incubate_fit <- function(object, ...){
 #' @export
 update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
-  stopifnot( all(c("data", "distribution", "objFun", "twoPhase", "twoGroup", "par", "llik", "optimizer") %in% names(object)) )
+  stopifnot( all(c("data", "distribution", "method", "objFun", "twoPhase", "twoGroup", "par", "criterion", "optimizer") %in% names(object)) )
 
 
   ## fit model with given optim_args
-  optObj <- delay_fit(object[["objFun"]], optim_args = optim_args, verbose = verbose)
+  objFun <- object[["objFun"]]
+  optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
 
   if (is.null(optObj)) return(invisible(NULL))
 
@@ -959,23 +979,21 @@ update.incubate_fit <- function(object, optim_args, verbose = 0, ...){
 
   par_orig <- extractPars(optObj$par, distribution = object[["distribution"]], transform = TRUE) # /!\ keep in sync with delay_model()!
   if (isTRUE(object$optimizer$profiled)){
-    stopifnot( distribution == 'weibull', ! object$twoGroup, ! object$twoPhase )
+    stopifnot( distribution == 'weibull', ! object$twoGroup, ! object$twoPhase ) #XXX generalize, twoGroup should be not too hard!
+
+    w1 <- if (object$method == 'MLEw') attr(objFun, which = "W1", exact = TRUE)[["x"]] else 1
     # get parameter estimates that were profiled out!
-    #XXX think of twogroup: currently I only care about scale1 (no .x and .y)!!
-    par_orig <- c(par_orig, scale1 = mean((x - par_orig[["delay1"]])^par_orig[["shape1"]])^(1/par_orig[["shape1"]]))
+    #XXX think of twoGroup: what about scale1.x and scale1.y
+    par_orig <- c(par_orig, scale1 = (w1*mean((x - par_orig[["delay1"]])^par_orig[["shape1"]]))^(1/par_orig[["shape1"]]))
   }
 
-  denFun <- getDist(distribution = object$distribution, type = "density")
-  llik_x <- sum(purrr::exec(denFun, !!! c(list(x=x, log=TRUE), extractPars(par_orig, distribution = object$distribution, group = "x"))))
-  llik_y <- if (object$twoGroup) sum(purrr::exec(denFun, !!! c(list(x=y, log=TRUE), extractPars(par_orig, distribution = object$distribution, group = "y")))) else 0
-
   # update all relevant fields in the list
-  object[c("par", "llik", "optimizer")] <- list(par = par_orig,
-                                                llik = llik_x + llik_y,
-                                                # drop NULLs from list (e.g. if optim_args is not present)
-                                                optimizer = purrr::compact(c(
-                                                  list(parOpt = optObj$par, valOpt = optObj$value, profiled = object$optimizer$profiled),
-                                                  optObj[c("convergence", "message", "counts", "optim_args")])))
+  object[c("par", "criterion", "optimizer")] <- list(par = par_orig,
+                                                     criterion = objFun(pars = par_orig, criterion = TRUE, aggregated = TRUE),
+                                                     # drop NULLs from list (e.g. if optim_args is not present)
+                                                     optimizer = purrr::compact(c(
+                                                       list(parOpt = optObj$par, valOpt = optObj$value, profiled = object$optimizer$profiled),
+                                                       optObj[c("convergence", "message", "counts", "optim_args")])))
 
   object
 }
@@ -1150,8 +1168,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     # but we have to keep last entry if it corresponds to the delay estimate (e.g., as is the case for MLEn-fitting)
     if (delayCandDF$delay1[NROW(delayCandDF)] > del_coef) delayCandDF <- delayCandDF[-NROW(delayCandDF),, drop = FALSE]
     # relative change to optimal value, will be negative as objective function is minimized
-    # XXX does this work also for MLE-based methods with profiling? Then valOpt is the profiled likelihood! Store MPSE-criterion as well?
-    delayCandDF$objValInv <- (object$optimizer$valOpt - delayCandDF$objVal) / (object$optimizer$valOpt+.01)
+    # XXX does this work also for MLE-based methods with profiling? Then valOpt is the profiled likelihood! Store MPSE-criterion as well? Or use getCrit()-function
+    delayCandDF$objValInv <- (object$criterion - delayCandDF$objVal) / (object$criterion+.01)
     # shift upwards into non-negative area
     delayCandDF$objValInv <- delayCandDF$objValInv - min(delayCandDF$objValInv, na.rm = TRUE)
     # scale to be between 0 and 1.
