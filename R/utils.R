@@ -13,6 +13,17 @@ as_percent <- function(x, digits = 1) {
   sprintf(fmt = paste0('%.', as.integer(digits),'f%%', x*100))
 }
 
+#' Minimize an objective function with PORT routine (nlminb)
+minObjFunPORT <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0) {
+  optObj <- NULL
+  try({
+    optObj <- stats::nlminb(start = start, objective = objFun, lower = lower, upper = upper, control = list(trace = verbose))
+    optObj$counts <- optObj$evaluations
+    optObj$methodOpt <- "PORT"
+  }, silent = TRUE)
+  optObj
+}
+
 #' Estimate rounding error based on given sample of metric values
 #' The idea is to check at which level of rounding the sample values do not change.
 #' @param obs numeric. Metric values from a sample to estimate the corresponding rounding error

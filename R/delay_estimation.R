@@ -747,12 +747,16 @@ objFunFactory <- function(x, y = NULL,
 
   # attach analytical solution for MLE
   if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
-    attr(objFun, which = "opt") <- list(par = extractPars(parV = c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]])),
-                                                          distribution = 'exponential', transform = TRUE), #expect transformed parameters
+    par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
+    attr(objFun, which = "opt") <- list(par_orig = par_analytic,
+                                        par = extractPars(parV = par_analytic,
+                                                          distribution = 'exponential', transform = TRUE), #transformed parameters
                                         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
+                                        methodOpt = "analytic",
                                         convergence = 0L,
                                         message = "analytic solution for naive MLE ('MLEn')",
-                                        counts = 1L)
+                                        counts = 0L)
+    rm(list = "par_analytic")
   }
 
   # attach weight W1 for x and y (needed to get profiled-out scale estimate)
@@ -779,13 +783,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
   stopifnot( is.function(objFun) )
   objFunEnv <- rlang::fn_env(objFun)
 
+  # get objects from objective function environment
   objFunObjs <- rlang::env_get_list(env = objFunEnv,
                                     nms = c("bind", "distribution", "method", "optim_args" ,"optpar_names", "profile", "twoGroup", "twoPhase", "x", "y"))
 
   # check if there is already a solution provided by the objective function
   optObj <- attr(objFun, which = "opt", exact = TRUE)
 
-  if ( is.list(optObj) && all( c('par', 'value', 'convergence') %in% names(optObj)) ){
+  if ( is.list(optObj) && all( c('par', "par_orig", 'value', 'convergence') %in% names(optObj)) ){
     if (verbose > 0L) cat("Using provided (analytical) solution to objective function.\n")
   } else {
     optObj <- NULL #start from scratch
@@ -797,8 +802,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     # set objective function (overwrite entry 'fn' if it is already present)
     optim_args[["fn"]] <- objFun
 
-    # optim: 1st attempt
-    try({optObj <- purrr::exec(stats::optim, !!! optim_args)}, silent = TRUE)
+
+    # optim: 1st attempt ----
+
+    try({
+      optObj <- purrr::exec(stats::optim, !!! optim_args)
+      optObj$methodOpt <- optim_args$method
+    }, silent = TRUE)
+
 
     if (is.null(optObj)){
       if (verbose > 0L) warning(glue("{objFunObjs$method}-optimization failed during model fit!"),
@@ -810,21 +821,32 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       # Use parameter values of non-converged fit as new start values (and adapt parscale accordingly)
       #+The objFun is to be minimized,  smaller is better!
       if ( isTRUE(is.numeric(optObj$par) && all(is.finite(optObj$par)) && optObj$value < objFun(optim_args$par)) ){
-        optim_args[['par']] <- optObj$par  # purrr::assign_in(where = "par", value = optObj$par)
+        optim_args[["par"]] <- optObj$par  # purrr::assign_in(where = "par", value = optObj$par)
 
-        if ( isTRUE("parscale" %in% names(optim_args[["control"]])) ){
+        if ( "parscale" %in% names(optim_args[["control"]]) ){
           optim_args[['control']][['parscale']] <- scalePars(optim_args[['par']])
         }
 
-        # optim: 2nd attempt
+        # optim: 2nd attempt ----
         optObj <- NULL
-        try({optObj <- purrr::exec(stats::optim, !!! optim_args)}, silent = TRUE)
+        if (verbose > 1L) message("Do 2nd attempt with renewed start values and parameter scaling")
+        try({
+          optObj <- purrr::exec(stats::optim, !!! optim_args)
+          optObj$methodOpt <- optim_args$method
+          }, silent = TRUE)
 
-        # XXX 3rd attempt: try PORT routine nlminb instead of optim?!
-        if ( is.null(optObj) || isTRUE(optObj$convergence > 0L && verbose > 0L) ) warning("No proper convergence after re-try.",
-                                                                                          call. = FALSE)
+        if ( is.null(optObj) || isTRUE(optObj$convergence > 0L && verbose > 0L) ) warning("No proper convergence after re-try.", call. = FALSE)
       }## fi rescaling for 2nd attempt
     }## fi 2nd attempt necessary?
+
+
+    # nlminb (PORT): last attempt ----
+
+    if (is.null(optObj) || optObj$convergence > 0L){
+      if (verbose > 1L) message("Do another final attempt with PORT-optimizer.")
+
+      optObj <- minObjFunPORT(objFun = objFun, start = optim_args$par, lower = optim_args$lower, upper = optim_args$upper, verbose = verbose)
+    }
 
     #XXX for MLE with indirect profiling (currently MLEw):
     #+check that we have indeed an local maximum for the log-likelihood (as we have only found candidate values by looking for roots of f')
@@ -839,26 +861,25 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       optObj <- append(optObj, values = list(optim_args = optim_args))
     }
 
+    # add par_orig
+    par_orig <- extractPars(optObj$par, distribution = objFunObjs$distribution, transform = TRUE)
+    if (objFunObjs$profile) {
+      stopifnot( objFunObjs$distribution == 'weibull', !objFunObjs$twoPhase ) #XXX twoPhase not implemented, yet
+      w1 <- if (objFunObjs$method == 'MLEw') attr(objFun, which = "W1", exact = TRUE) else c(x=1, y=1)
+      # get parameter estimates that were profiled out!
+      # any binding does not harm here because we get the scaling per group (and binding affects how parameters within groups are estimated)
+      #XXX move scFun into mergePars??
+      scFun <- function(obs, paro_gr, w1_gr) if (is.null(obs)) NULL else (w1_gr*mean((obs-paro_gr[["delay1"]])^paro_gr[["shape1"]]))^(1/paro_gr[["shape1"]])
+      parox <- extractPars(par_orig, distribution = objFunObjs$distribution, transform = FALSE, group = "x")
+      paroy <- if (objFunObjs$twoGroup) extractPars(par_orig, distribution = objFunObjs$distribution, transform = FALSE, group = "y") else NULL
+
+      par_orig <- mergePars(par.x = c(parox, scale1 = scFun(objFunObjs$x, parox, w1_gr = w1[["x"]])),
+                            par.y = c(paroy, scale1 = scFun(objFunObjs$y, paroy, w1_gr = w1[["y"]])),
+                            bind = objFunObjs$bind)
+    }
+
+    optObj <- append(optObj, values = list(par_orig = par_orig))
   } #esle numeric optimization
-
-  # add par_orig
-  par_orig <- extractPars(optObj$par, distribution = objFunObjs$distribution, transform = TRUE)
-  if (objFunObjs$profile) {
-    stopifnot( objFunObjs$distribution == 'weibull', !objFunObjs$twoPhase ) #XXX twoPhase not implemented, yet
-    w1 <- if (objFunObjs$method == 'MLEw') attr(objFun, which = "W1", exact = TRUE) else c(x=1, y=1)
-    # get parameter estimates that were profiled out!
-    ##if (is.null(bind) || ! "scale" %in% bind){}
-    #XXX move scFun into mergePars??
-    scFun <- function(obs, paro_gr, w1_gr) if (is.null(obs)) NULL else (w1_gr*mean((obs-paro_gr[["delay1"]])^paro_gr[["shape1"]]))^(1/paro_gr[["shape1"]])
-    parox <- extractPars(par_orig, distribution = objFunObjs$distribution, transform = FALSE, group = "x")
-    paroy <- if (objFunObjs$twoGroup) extractPars(par_orig, distribution = objFunObjs$distribution, transform = FALSE, group = "y") else NULL
-
-    par_orig <- mergePars(par.x = c(parox, scale1 = scFun(objFunObjs$x, parox, w1_gr = w1[["x"]])),
-                          par.y = c(paroy, scale1 = scFun(objFunObjs$y, paroy, w1_gr = w1[["y"]])),
-                          bind = objFunObjs$bind)
-  }
-
-  optObj <- append(optObj, values = list(par_orig = par_orig))
 
   optObj
 }
@@ -960,7 +981,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
       par = optObj$par_orig,
       criterion = objFun(pars = optObj$par_orig, criterion = TRUE, aggregated = TRUE),
       optimizer = purrr::compact(c(list(parOpt = optObj$par, valOpt = optObj$value, profiled = profile),
-                                   optObj[c('convergence', 'message', 'counts', 'optim_args')]))),
+                                   optObj[c("methodOpt", 'convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")
 }
 
@@ -1027,7 +1048,7 @@ update.incubate_fit <- function(object, optim_args = NULL, verbose = 0, ...){
                                                      # drop NULLs from list (e.g. if optim_args is not present)
                                                      optimizer = purrr::compact(c(
                                                        list(parOpt = optObj$par, valOpt = optObj$value, profiled = object$optimizer$profiled),
-                                                       optObj[c("convergence", "message", "counts", "optim_args")])))
+                                                       optObj[c("methodOpt", "convergence", "message", "counts", "optim_args")])))
 
   object
 }

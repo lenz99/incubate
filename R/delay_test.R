@@ -226,29 +226,30 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
   switch(EXPR = type,
          all = { testMask <- testMask | TRUE },
-         # bootstrap + LR-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLR=?!
+         # bootstrap + log-rank-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLR=?!
          bootstrap = {testMask[c('bootstrap', 'lr', 'lr_pp')] <- TRUE},
          gof = {testMask[c('pearson', 'moran')] <- TRUE},
          moran = {testMask['moran'] <- TRUE},
          pearson = {testMask['pearson'] <- TRUE},
          lr = {testMask['lr'] <- TRUE},
          lr_pp = {testMask['lr_pp'] <- TRUE},
-         stop('This type of tests is not supported!')
+         stop('This type of test is not supported!', call. = FALSE)
   )
 
   # Test statistic calculated from the given data and the model specification.
   #
   # The test statistic takes non-negative values.
   # High values of the test statistic speak in favour of H1:
+  # @param strict logical. Accept models only if they converged flawlessly, i.e., if convergence=0?
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
-  testStat <- function(x, y) {
+  testStat <- function(x, y, strict = TRUE) {
     fit0 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase, method = 'MPSE', ties = ties, bind = param)
     fit1 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase, method = 'MPSE', ties = ties)
 
     if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
 
     # if the more restricted model (fit0) yields better fit (=lower criterion) than the more general model (fit1)
-    #+we are in trouble, possibly due to non-convergence, e.g. convergence code 52
+    #+we are in trouble, possibly due to non-convergence, e.g., optim's convergence code 52
     #+we refit the general fit1 again using parameter-values from fit0
     if ( fit0[["criterion"]] + TOL_CRIT < fit1[["criterion"]] &&
          !is.null(fit1oa <- purrr::pluck(fit1, 'optimizer', 'optim_args')) ) {
@@ -271,10 +272,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       }
     }# fi bad fit1
 
-    # convergence of re-fits?
-    # keep also fits with error-code 52: in my tests all those fits *looked* actually OK..
-    # XXX try harder for non-convergence when testStat is called for the first time (to have basis model)
-    if ( STRICT && (purrr::chuck(fit0, 'optimizer', 'convergence') != 0 || purrr::chuck(fit1, 'optimizer', 'convergence') != 0) ) return(invisible(NULL))
+    # check convergence of re-fits when in strict mode only:
+    if ( strict && (purrr::chuck(fit0, 'optimizer', 'convergence') != 0 || purrr::chuck(fit1, 'optimizer', 'convergence') != 0) ) return(invisible(NULL))
 
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
@@ -284,7 +283,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   } #fn testStat
 
   # observed test statistic
-  ts_obs <- testStat(x, y)
+  ts_obs <- testStat(x, y, strict = TRUE)
   if ( is.null(ts_obs) || ! is.list(ts_obs) || ! is.numeric(ts_obs[['val']]) || ts_obs[['val']] < -TOL_CRIT ){
     stop("Delay model failed for restricted null-model or free full model", call. = FALSE)
   }
@@ -331,9 +330,11 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
                                              # generate new data according to given fitted null-model
                                              # sort is not needed here, as it goes through the whole pipeline (factory method)
                                              ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
-                                                                 y = rlang::exec(ranFun, !!! ranFunArgsY))
+                                                                 y = rlang::exec(ranFun, !!! ranFunArgsY),
+                                                                 strict = FALSE)
                                              if (is.null(ts_boot)) rep.int(NA_real_, times = retL) else
                                                  c(ts_boot[['val']],
+                                                   # verbose-mode: include convergence code
                                                    purrr::chuck(ts_boot, 'fit0', 'optimizer', 'convergence'))[seq_len(retL)]
 
                                            }, future.seed = TRUE)
@@ -371,6 +372,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
 
   structure(
+    # compact cleanses NULL entries
     purrr::compact(list(
       #fit0 = fit0, fit1 = fit1, ##for debugging only
       t_obs = ts_obs[["val"]],
@@ -378,7 +380,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
       R = if (testMask[['bootstrap']]) length(t0_dist),
       chisq_df_hat = chisq_df_hat,
       param = param,
-      P = purrr::compact( # compact = cleanse NULL entries
+      P = purrr::compact(
         list(
           bootstrap = P_boot,
           moran = as.vector(GOF_mo0$p.value),

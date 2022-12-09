@@ -89,7 +89,7 @@ When you are done with the heavy computing, it is best practice to release the p
 The `incubate` package is found on [CRAN](https://CRAN.R-project.org/package=incubate)
 and development happens at [Gitlab](https://gitlab.com/imb-dev/incubate).
 
-Use `install.packages` to install `incubate` from CRAN as usual, i.e., `install.packages('incubate')` should do.
+Use `install.packages` to install `incubate` from CRAN as usual, i.e., `install.packages("incubate")` should do.
 
 To install its **latest version** from the main branch on Gitlab use the following R-code:
 

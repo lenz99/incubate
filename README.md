@@ -95,7 +95,7 @@ The `incubate` package is found on
 happens at [Gitlab](https://gitlab.com/imb-dev/incubate).
 
 Use `install.packages` to install `incubate` from CRAN as usual, i.e.,
-`install.packages('incubate')` should do.
+`install.packages("incubate")` should do.
 
 To install its **latest version** from the main branch on Gitlab use the
 following R-code:

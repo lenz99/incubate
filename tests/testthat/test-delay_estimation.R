@@ -69,7 +69,7 @@ test_that("Fit delayed Exponentials", {
   expect_type(fd_exp$data, type = 'double')
   expect_identical(length(fd_exp$data), expected = 16L)
   expect_named(coef(fd_exp), expected = c('delay1', 'rate1'))
-  expect_named(fd_exp$optimizer, expected = c('parOpt', "valOpt", 'profiled', 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp$optimizer, expected = c('parOpt', "valOpt", 'profiled', "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   # optim converges properly for this data vector!
   # * convergence=51 is warning from L-BFGS-B
   # * convergence=52 is error from L-BFGS-B
@@ -99,11 +99,11 @@ test_that("Fit delayed Exponentials", {
   expect_identical(length(coef(fd_exp_MLEn)), expected = 2L)
 
   # MLEn uses analytical solution when in single group mode
-  expect_named(fd_exp_MLEn$optimizer, expected = c("parOpt", "valOpt", 'profiled', "convergence", "message", "counts"))
+  expect_named(fd_exp_MLEn$optimizer, expected = c("parOpt", "valOpt", 'profiled', "methodOpt", "convergence", "message", "counts")) ##analytic with no "optim_args"))
   expect_identical(purrr::chuck(fd_exp_MLEn, 'optimizer', 'convergence'), expected = 0L)
   fd_exp_MLEn_opt <- attr(fd_exp_MLEn$objFun, which = 'opt', exact = TRUE)
   expect_type(fd_exp_MLEn_opt, type = 'list')
-  expect_named(fd_exp_MLEn_opt, expected = c('par', 'value', 'convergence', 'message', 'counts'))
+  expect_named(fd_exp_MLEn_opt, expected = c("par_orig", 'par', 'value', "methodOpt", 'convergence', 'message', 'counts'))
 
   expect_identical(coef(fd_exp_MLEn)[['delay1']], expected = xx[[1L]])
   # MLE's later delay is compensated for by higher estimated rate
@@ -117,7 +117,7 @@ test_that("Fit delayed Exponentials", {
   expect_identical(length(fd_exp_MLEc$data), expected = 16L)
   expect_identical(length(coef(fd_exp_MLEc)), expected = 2L)
 
-  expect_named(fd_exp_MLEc$optimizer, expected = c("parOpt", "valOpt", "profiled", "convergence", "message", "counts", "optim_args"))
+  expect_named(fd_exp_MLEc$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", "convergence", "message", "counts", "optim_args"))
   expect_identical(purrr::chuck(fd_exp_MLEc, 'optimizer', 'convergence'), expected = 0L)
   # no exact solution for MLEc
   expect_null(attr(fd_exp_MLEc$objFun, which = 'opt', exact = TRUE))
@@ -143,7 +143,7 @@ test_that("Fit delayed Exponentials", {
   expect_type(fd_exp2$data, type = 'list')
   # data gets sorted
   expect_identical(fd_exp2$data$y, sort(yy))
-  expect_named(fd_exp2$optimizer, expected = c("parOpt", "valOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2, 'optimizer', 'convergence'), expected = 0L)
   expect_type(purrr::chuck(fd_exp2, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
@@ -162,7 +162,7 @@ test_that("Fit delayed Exponentials", {
   fd_exp2_MLEn <- delay_model(x = xx, y = yy, distribution = "expon", method = "MLEn")
   expect_type(fd_exp2_MLEn$data, type = "list")
   expect_identical(fd_exp2_MLEn$data$y, sort(yy))
-  expect_named(fd_exp2_MLEn$optimizer, expected = c("parOpt", "valOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2_MLEn$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2_MLEn, 'optimizer', 'convergence'), expected = 0L) # converged
   expect_type(purrr::chuck(fd_exp2_MLEn, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
@@ -173,7 +173,7 @@ test_that("Fit delayed Exponentials", {
   fd_exp2_MLEc <- delay_model(x = xx, y = yy, distribution = "expon", method = "MLEc")
   expect_type(fd_exp2_MLEc$data, type = "list")
   expect_identical(fd_exp2_MLEc$data$y, sort(yy))
-  expect_named(fd_exp2_MLEc$optimizer, expected = c("parOpt", "valOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2_MLEc$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2_MLEc, 'optimizer', 'convergence'), expected = 0L) # converged
   expect_type(purrr::chuck(fd_exp2_MLEc, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
@@ -184,7 +184,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp2b <- coef(fd_exp2b)
 
   expect_named(coef_exp2b, expected = c("delay1", "rate1.x", "rate1.y"))
-  expect_named(fd_exp2b$optimizer, expected = c("parOpt", "valOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2b$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2b, 'optimizer', 'convergence'), expected = 0L)
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
   expect_equal(coef_exp2b[[1L]],
@@ -196,7 +196,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp2b_MLEn <- coef(fd_exp2b_MLEn)
 
   expect_named(coef_exp2b_MLEn, expected = c("delay1", "rate1.x", "rate1.y"))
-  expect_named(fd_exp2b_MLEn$optimizer, expected = c("parOpt", "valOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2b_MLEn$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2b_MLEn, 'optimizer', 'convergence'), expected = 0L)
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
   expect_equal(coef_exp2b_MLEn[[1L]],
@@ -208,7 +208,7 @@ test_that("Fit delayed Exponentials", {
   coef_exp2b_MLEc <- coef(fd_exp2b_MLEc)
 
   expect_named(coef_exp2b_MLEc, expected = c("delay1", "rate1.x", "rate1.y"))
-  expect_named(fd_exp2b_MLEc$optimizer, expected = c("parOpt", "valOpt", "profiled", 'convergence', 'message', 'counts', 'optim_args'))
+  expect_named(fd_exp2b_MLEc$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2b_MLEc, 'optimizer', 'convergence'), expected = 0L)
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
   expect_equal(coef_exp2b_MLEc[[1L]],
@@ -267,6 +267,7 @@ test_that("Fit delayed Weibull", {
   fd_maxFl_MLEn <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
   coef_maxFl_MLEn <- coef(fd_maxFl_MLEn)
   expect_identical(purrr::chuck(fd_maxFl_MLEn, "optimizer", "convergence"), expected = 0L)
+  expect_named(fd_maxFl_MLEn$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_gte(coef_maxFl_MLEn[["delay1"]], coef_maxFl[["delay1"]])
   expect_lte(coef_maxFl_MLEn[["scale1"]], coef_maxFl[["scale1"]])
 
@@ -386,7 +387,7 @@ test_that("Fit delayed Weibull", {
   expect_gt(coef(fd_wb2_mlen)[["delay1.y"]], coef(fd_wb2)[["delay1.y"]])
 
   fd_wb2_mlenp <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEn", profile = TRUE)
-  #expect_identical(fd_wb2_mlenp$optimizer$convergence, expected = 0L)
+  expect_identical(fd_wb2_mlenp$optimizer$convergence, expected = 0L)
   # roughly equal coefficients as compared to single fits
   expect_equal(coef(fd_wb2_mlenp, group = "x"), expected = coef(fd_maxFl_MLEnp), tolerance = .2)
   expect_equal(coef(fd_wb2_mlenp, group = "y"), expected = coef(fd_poll_MLEnp), tolerance = .01)
