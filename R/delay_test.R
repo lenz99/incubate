@@ -222,7 +222,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   }
 
   # bitmask for test types
-  testMask <- purrr::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'lr', 'lr_pp'))
+  testMask <- rlang::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'lr', 'lr_pp'))
 
   switch(EXPR = type,
          all = { testMask <- testMask | TRUE },
@@ -526,8 +526,8 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
 
   stopifnot( is.numeric(parx), is.numeric(pary) )
   stopifnot( length(parx) == length(onames), length(pary) == length(onames))
-  parx <- purrr::set_names(parx, onames)
-  pary <- purrr::set_names(pary, onames)
+  parx <- rlang::set_names(parx, onames)
+  pary <- rlang::set_names(pary, onames)
 
 
   simulatePower <- function(nx, ny, B = nPowerSim, R){

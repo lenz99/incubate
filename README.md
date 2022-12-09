@@ -57,7 +57,7 @@ comparisons in a two group setting.
 confint(fm, parm = c('delay1.x', 'delay1.y'))
 #>             2.5%  97.5%
 #> delay1.x 0.80603 1.0943
-#> delay1.y 1.35056 1.7531
+#> delay1.y 1.35055 1.7531
 
 # test on difference in delay
 # for real applications use R>=1000 bootstrap draws

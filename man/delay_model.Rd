@@ -12,7 +12,7 @@ delay_model(
   bind = NULL,
   ties = c("density", "equidist", "random", "error"),
   method = c("MPSE", "MLEn", "MLEw", "MLEc"),
-  profile = FALSE,
+  profile = method == "MLEw",
   optim_args = NULL,
   verbose = 0
 )
