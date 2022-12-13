@@ -1,7 +1,7 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.2.1.9024
-Date: 2022-12-09
+Version: 1.2.1.9025
+Date: 2022-12-13
 Authors@R: 
     person(given = "Matthias",
            family = "Kuhn",
@@ -37,10 +37,14 @@ Suggests:
 URL: https://gitlab.com/imb-dev/incubate/
 BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
 <<<<<<< HEAD
+<<<<<<< HEAD
 RoxygenNote: 7.2.3
 =======
 RoxygenNote: 7.2.1
 >>>>>>> 40140c7 (add restricted mean survival)
+=======
+RoxygenNote: 7.2.3
+>>>>>>> 5f589ca (implement LR-test with chisq-based P-value)
 Config/testthat/edition: 3
 Depends: 
     R (>= 2.10)

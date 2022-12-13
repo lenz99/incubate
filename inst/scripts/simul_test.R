@@ -12,6 +12,7 @@ library('incubate')
 #+ 1.1.9.9000 script is developed as part of the incubate package (not separate as part of the MS)
 #+ 1.1.9.9014 ties='density' as default now also for tests
 #+ 1.1.9.9016 avoid attributes, use transform() for Pearson/AD GOF tests
+#+ 1.2.0.9025: rename logrank P-values to logrank and logrank_pp (to avoid confusion with likelihood ratio (=LR) tests)
 stopifnot( packageVersion('incubate') >= '1.1.9.9016' )
 cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
 
@@ -262,8 +263,8 @@ doMCSim <- function(xx){
     gof_pearson1 = purrr::map_dbl(testList, list("P", "pearson1"), .default = NA_real_),
     gof_ad0 = purrr::map_dbl(testList, list("P", "ad"), .default = NA_real_),
     gof_ad1 = purrr::map_dbl(testList, list("P", "ad1"), .default = NA_real_),
-    lr = purrr::map_dbl(testList, list("P", "lr"), .default = NA_real_),
-    lr_pp = purrr::map_dbl(testList, list("P", "lr_pp"), .default = NA_real_) ) %>%
+    lr = purrr::map_dbl(testList, list("P", "logrank"), .default = NA_real_),
+    lr_pp = purrr::map_dbl(testList, list("P", "logrank_pp"), .default = NA_real_) ) %>%
     # make long format, all output in column 'P'
     tidyr::pivot_longer(cols = !run, names_to = "method", values_to = "value",
                         # drop NAs (for instance, missing boot2 P-value)

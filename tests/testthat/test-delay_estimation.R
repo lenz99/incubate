@@ -48,10 +48,11 @@ test_that('Parameter extraction and transformation', {
   expect_identical(incubate:::extractPars(par_weib2s, distribution = "weibull", group = "y"),
                    setNames(par_weib2s[c(3,4)], nm = c("delay1", "shape1")))
 
-  expect_identical(incubate:::extractPars(par_weib2s, distribution = "weib", group = "y", transform = TRUE),
+  expect_identical(incubate:::extractPars(par_weib2s, distribution = "weibull", group = "y", transform = TRUE),
                    setNames(c(par_weib2s[3], log(par_weib2s[4])), nm = c("delay1_tr", "shape1_tr")))
 
 })
+
 
 
 test_that("Fit delayed Exponentials", {
@@ -100,6 +101,7 @@ test_that("Fit delayed Exponentials", {
 
   # MLEn uses analytical solution when in single group mode
   expect_named(fd_exp_MLEn$optimizer, expected = c("parOpt", "valOpt", 'profiled', "methodOpt", "convergence", "message", "counts")) ##analytic with no "optim_args"))
+  expect_identical(purrr::chuck(fd_exp_MLEn, 'optimizer', 'methodOpt'), expected = "analytic")
   expect_identical(purrr::chuck(fd_exp_MLEn, 'optimizer', 'convergence'), expected = 0L)
   fd_exp_MLEn_opt <- attr(fd_exp_MLEn$objFun, which = 'opt', exact = TRUE)
   expect_type(fd_exp_MLEn_opt, type = 'list')

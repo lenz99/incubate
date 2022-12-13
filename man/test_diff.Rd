@@ -9,10 +9,12 @@ test_diff(
   y = stop("Provide data for group y!"),
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
-  param = "delay1",
-  R = 400,
+  method = c("MPSE", "MLEn", "MLEw", "MLEc"),
+  profile = method == "MLEw",
   ties = c("density", "equidist", "random", "error"),
-  type = c("all", "bootstrap", "gof", "moran", "pearson", "lr", "lr_pp"),
+  param = "delay1",
+  type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LR"),
+  R = 400,
   chiSqApprox = FALSE,
   verbose = 0
 )
@@ -26,13 +28,17 @@ test_diff(
 
 \item{twoPhase}{logical(1). Do we model two phases per group? Default is \code{FALSE}, i.e. a single delay phase per group.}
 
-\item{param}{character. Names of parameters to test difference for. Default value is \code{'delay1'}.}
+\item{method}{character. Which method to fit the models.}
 
-\item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
+\item{profile}{logical. Do we use the profiled likelihood?}
 
 \item{ties}{character. How to handle ties in data vector of a group?}
 
+\item{param}{character. Names of parameters to test difference for. Default value is \code{'delay1'}.}
+
 \item{type}{character. Which type of tests to perform?}
+
+\item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 
 \item{chiSqApprox}{logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?}
 

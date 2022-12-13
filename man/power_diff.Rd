@@ -8,7 +8,7 @@ power_diff(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
   param = "delay1",
-  test = c("bootstrap", "pearson", "moran", "lr", "lr_pp"),
+  test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LR"),
   eff = stop("Provide parameters for both groups that reflect the effect!"),
   n = NULL,
   r = 1,

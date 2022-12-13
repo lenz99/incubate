@@ -46,14 +46,16 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
   pNames <- names(parV)
 
   # isTransformed when all parameter names contain '_tr'
-  trNames <- grepl(pattern = "_tr", pNames, fixed = TRUE)
-  stopifnot( sum(trNames) %in% c(0L, length(parV)) ) #all or nothing
-  isTransformed <- all(trNames)
-  twoPhase <- any(grepl(pattern = "delay2", pNames, fixed = TRUE))
+  isTransformed <- local({
+    trNames <- grepl(pattern = "_tr", pNames, fixed = TRUE)
+    stopifnot( sum(trNames) %in% c(0L, length(parV)) ) #all or nothing
+    all(trNames)
+  })
+  twoPhase <- any(grepl(pattern = "delay2", pNames, fixed = TRUE)) #exact matching
   # parameter names of single group where we start from!
   oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
 
-  # index of parameters that are not specific for one of the groups
+  # index of parameters that are *not* group-specific
   idx.nongrp <- which(!grepl(pattern = paste0("[.][xy]$"), pNames))
   #Is there any .x or .y parameter name?
   #+when two group but all parameters bound then isTwoGroup is FALSE
@@ -68,7 +70,6 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
     # @param parV1: parameter vector for a single group
     # @return transformed parameter vector
     transformPars1 <- function(parV1){
-
       # parameter transformation matrices
       PARAM_TRANSF_M <- switch(distribution,
                                exponential = matrix(c( 1, 0, 0, 0,
@@ -85,7 +86,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                                                 dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
                                stop("Unknown distribution!", call. = FALSE)
       )
-      PARAM_TRANSF_MINV <- switch(distribution,
+      PARAM_TRANSF_Minv <- switch(distribution,
                                   exponential = matrix(c(1, 0, 0, 0,
                                                          0, 1, 0, 0,
                                                          1, 0, 1, 0,
@@ -105,7 +106,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
       PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
                              weibull = c(identity, log, #log1p, #identity, #=shape1
                                          log, log, log, log))[[distribution]]
-      PARAM_TRANSF_FINV <- list(exponential = c(identity, exp, exp, exp),
+      PARAM_TRANSF_Finv <- list(exponential = c(identity, exp, exp, exp),
                                 weibull = c(identity, exp, #expm1, #identity, #=shape1
                                             exp, exp, exp, exp))[[distribution]]
 
@@ -115,11 +116,11 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
       if (isTransformed) {
         # b = Ainv %*% Finv(b')
         rlang::set_names(
-          as.numeric(PARAM_TRANSF_MINV[seq_along(parV1), seq_along(parV1)] %*%
+          as.numeric(PARAM_TRANSF_Minv[seq_along(parV1), seq_along(parV1)] %*%
                        as.numeric(.mapply(FUN = function(f, x) f(x),
-                                          dots = list(PARAM_TRANSF_FINV[seq_along(parV1)], parV1),
+                                          dots = list(PARAM_TRANSF_Finv[seq_along(parV1)], parV1),
                                           MoreArgs = NULL))),
-          nm = rownames(PARAM_TRANSF_MINV)[seq_along(parV1)])
+          nm = rownames(PARAM_TRANSF_Minv)[seq_along(parV1)])
       } else {
         # b' = F(A %*% b)
         rlang::set_names(
@@ -129,13 +130,14 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                              MoreArgs = NULL)),
           nm = rownames(PARAM_TRANSF_M)[seq_along(parV1)])
       }
+    }# fn transformPars1
 
-    } # fn transformPars1
 
     # update parameter vector according to transformation
     parV <- if (! isTwoGroup) {
       transformPars1(parV1 = parV)
     } else {
+      # **twoGroup** case (effectively)
       # target parameter names
       pNames_trgt <- if (isTransformed) {
         sub(pattern = "_tr", replacement = "", pNames, fixed = TRUE) # remove '_tr' string
@@ -144,6 +146,7 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
                        .f = function(s) if (length(s) == 1L) paste0(s, "_tr") else paste0(s[[1L]], "_tr.", s[[2L]]))
       }
 
+      # list of transformed parameters, for both groups x and y
       h <- purrr::map(.x = c("x", "y"),
                       .f = ~ {
                         idx.grp <- which(grepl(pattern = paste0("[.]", .x, "$"), pNames))
@@ -171,7 +174,8 @@ extractPars <- function(parV, distribution = c('exponential', 'weibull'), group 
     # single group extraction
     stopifnot( is.character(group), nzchar(group) )
 
-    # extract all group parameters and restore original name (e.g. remove ".x")
+    # extract all group parameters (=contain .x or .y at the end)
+    #+and restore original name (=remove ".x")
     # contract: parV is canonically ordered
     parV.gr <- parV[grepl(pattern = paste0(".", group), x = pNames, fixed = TRUE)]
     names(parV.gr) <- substr(names(parV.gr), start = 1L, stop = nchar(names(parV.gr))-2L)
@@ -593,7 +597,8 @@ objFunFactory <- function(x, y = NULL,
 
 
     if (criterion){
-      sum(purrr::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+      # log-likelihood
+      sum(rlang::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
     } else {
 
       n <- length(obs)
@@ -747,16 +752,17 @@ objFunFactory <- function(x, y = NULL,
 
   # attach analytical solution for MLE
   if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
-    par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
-    attr(objFun, which = "opt") <- list(par_orig = par_analytic,
-                                        par = extractPars(parV = par_analytic,
-                                                          distribution = 'exponential', transform = TRUE), #transformed parameters
-                                        value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
-                                        methodOpt = "analytic",
-                                        convergence = 0L,
-                                        message = "analytic solution for naive MLE ('MLEn')",
-                                        counts = 0L)
-    rm(list = "par_analytic")
+    attr(objFun, which = "opt") <- local({
+      par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
+      list(par_orig = par_analytic,
+           par = extractPars(parV = par_analytic,
+                             distribution = 'exponential', transform = TRUE), #transformed parameters
+           value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
+           methodOpt = "analytic",
+           convergence = 0L,
+           message = "analytic solution for naive MLE ('MLEn')",
+           counts = 0L)
+    })
   }
 
   # attach weight W1 for x and y (needed to get profiled-out scale estimate)
@@ -819,7 +825,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       if (verbose > 1L) message("No proper convergence during 1st optimization in delay fit. Re-try with different parameter scaling.")
 
       # Use parameter values of non-converged fit as new start values (and adapt parscale accordingly)
-      #+The objFun is to be minimized,  smaller is better!
+      #+The objFun is to be minimized, smaller is better!
       if ( isTRUE(is.numeric(optObj$par) && all(is.finite(optObj$par)) && optObj$value < objFun(optim_args$par)) ){
         optim_args[["par"]] <- optObj$par  # purrr::assign_in(where = "par", value = optObj$par)
 
