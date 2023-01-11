@@ -5,50 +5,50 @@
 test_that('Parameter extraction and transformation', {
   par_exp1 <- c(delay1 = 3, rate1 = .8)
 
-  expect_identical(incubate:::extractPars(parV = par_exp1), par_exp1)
-  expect_identical(incubate:::extractPars(parV = par_exp1, group = "x"), par_exp1)
-  expect_identical(incubate:::extractPars(parV = par_exp1, group = "y"), par_exp1) # group is ignored here
-  expect_identical(incubate:::extractPars(parV = par_exp1, transform = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
+  expect_identical(incubate:::extractParsExt(parV = par_exp1), par_exp1)
+  expect_identical(incubate:::extractParsExt(parV = par_exp1, group = "x"), par_exp1)
+  expect_identical(incubate:::extractParsExt(parV = par_exp1, group = "y"), par_exp1) # group is ignored here
+  expect_identical(incubate:::extractParsExt(parV = par_exp1, transform = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
 
   par_exp2 <- c(delay1.x = 2.8, rate1.x = .81, delay1.y = 5.1, rate1.y = 1.1)
-  expect_identical(incubate:::extractPars(parV = par_exp2), par_exp2)
-  expect_identical(incubate:::extractPars(parV = par_exp2, group = "z"), par_exp2) # strange groups are ignored
-  expect_identical(incubate:::extractPars(parV = par_exp2, group = "x"), setNames(par_exp2[1:2], c("delay1", "rate1")))
-  expect_identical(incubate:::extractPars(parV = par_exp2, group = "y"), setNames(par_exp2[3:4], c("delay1", "rate1")))
+  expect_identical(incubate:::extractParsExt(parV = par_exp2), par_exp2)
+  expect_identical(incubate:::extractParsExt(parV = par_exp2, group = "z"), par_exp2) # strange groups are ignored
+  expect_identical(incubate:::extractParsExt(parV = par_exp2, group = "x"), setNames(par_exp2[1:2], c("delay1", "rate1")))
+  expect_identical(incubate:::extractParsExt(parV = par_exp2, group = "y"), setNames(par_exp2[3:4], c("delay1", "rate1")))
 
   par_exp2b <- c(rate1 = .23, delay1.x = 2.8, delay1.y = 5.1)
-  expect_identical(incubate:::extractPars(parV = par_exp2b), par_exp2b)
-  expect_identical(incubate:::extractPars(parV = par_exp2b, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
-  expect_identical(incubate:::extractPars(parV = par_exp2b, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
-  expect_identical(incubate:::extractPars(parV = par_exp2b, transform = TRUE),
+  expect_identical(incubate:::extractParsExt(parV = par_exp2b), par_exp2b)
+  expect_identical(incubate:::extractParsExt(parV = par_exp2b, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
+  expect_identical(incubate:::extractParsExt(parV = par_exp2b, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
+  expect_identical(incubate:::extractParsExt(parV = par_exp2b, transform = TRUE),
                    c(rate1_tr = log(par_exp2b[["rate1"]]), delay1_tr.x = par_exp2b[[2]], delay1_tr.y = par_exp2b[[3]]))
-  expect_identical(incubate:::extractPars(parV = par_exp2b, group = "x", transform = TRUE),
+  expect_identical(incubate:::extractParsExt(parV = par_exp2b, group = "x", transform = TRUE),
                    c(delay1_tr = par_exp2b[[2]], rate1_tr = log(par_exp2b[[1]])))
   # idem-potent (round-trip)
-  expect_identical(incubate:::extractPars(incubate:::extractPars(parV = par_exp2b, transform = TRUE), transform = TRUE), par_exp2b)
+  expect_identical(incubate:::extractParsExt(incubate:::extractParsExt(parV = par_exp2b, transform = TRUE), transform = TRUE), par_exp2b)
 
 
   par_weib1 <- c(delay = 5, shape = .8, scale = 1.2)
-  expect_identical(incubate:::extractPars(parV = par_weib1, distribution = "weibull"), par_weib1)
+  expect_identical(incubate:::extractParsExt(parV = par_weib1, distribution = "weibull"), par_weib1)
 
   par_weib1s <- c(delay1 = 5, shape1 = .8)
-  expect_identical(incubate:::extractPars(parV = par_weib1s, distribution = "weibull"), par_weib1s)
-  expect_identical(incubate:::extractPars(parV = par_weib1s, distribution = "weibull", transform = TRUE),
+  expect_identical(incubate:::extractParsExt(parV = par_weib1s, distribution = "weibull"), par_weib1s)
+  expect_identical(incubate:::extractParsExt(parV = par_weib1s, distribution = "weibull", transform = TRUE),
                    c(delay1_tr = par_weib1s[["delay1"]], shape1_tr = log(par_weib1s[["shape1"]])))
 
   par_weib2 <- c(delay1.x = 1, shape1.x = 1.8, scale1.x = 34, delay1.y = 4.2, shape1.y = 3.4, scale1.y = 12)
   par_weib2.y <- setNames(par_weib2[-c(1:3)], nm = c("delay1", "shape1", "scale1"))
-  expect_identical(incubate:::extractPars(parV = par_weib2, distribution = "weibull"), par_weib2)
-  expect_identical(incubate:::extractPars(par_weib2, distribution = "weibull", group = "y"),
+  expect_identical(incubate:::extractParsExt(parV = par_weib2, distribution = "weibull"), par_weib2)
+  expect_identical(incubate:::extractParsExt(par_weib2, distribution = "weibull", group = "y"),
                    par_weib2.y)
-  expect_identical(incubate:::extractPars(par_weib2, distribution = "weibull", group = "y", transform = TRUE),
+  expect_identical(incubate:::extractParsExt(par_weib2, distribution = "weibull", group = "y", transform = TRUE),
                    setNames(c(par_weib2.y[1], log(par_weib2.y[-1])), nm = paste0(names(par_weib2.y), "_tr")))
 
   par_weib2s <- par_weib2[-c(3, 6)] # drop scale
-  expect_identical(incubate:::extractPars(par_weib2s, distribution = "weibull", group = "y"),
+  expect_identical(incubate:::extractParsExt(par_weib2s, distribution = "weibull", group = "y"),
                    setNames(par_weib2s[c(3,4)], nm = c("delay1", "shape1")))
 
-  expect_identical(incubate:::extractPars(par_weib2s, distribution = "weibull", group = "y", transform = TRUE),
+  expect_identical(incubate:::extractParsExt(par_weib2s, distribution = "weibull", group = "y", transform = TRUE),
                    setNames(c(par_weib2s[3], log(par_weib2s[4])), nm = c("delay1_tr", "shape1_tr")))
 
 })
@@ -130,7 +130,7 @@ test_that("Fit delayed Exponentials", {
   purrr::walk2(.x = runif(n=7, min=0.1, max=9),   #delay1
                .y = runif(n=7, min=0.001, max=2), #rate1
                .f = ~ expect_equal(- length(xx) * (log(.y) - .y * (mean(xx) - .x)),
-                                   expected = fd_exp_MLEn$objFun(pars = incubate:::extractPars(parV = c(delay1=.x, rate1=.y), distribution = "expon", transform = TRUE)))
+                                   expected = fd_exp_MLEn$objFun(pars = incubate:::extractParsExt(parV = c(delay1=.x, rate1=.y), distribution = "expon", transform = TRUE)))
   )
 
 
@@ -277,7 +277,7 @@ test_that("Fit delayed Weibull", {
   purrr::pwalk(.l = list(delay1=runif(7, max=0.25), shape1=runif(7, max=3), scale1=runif(7, max=5)),
               .f = ~ {
                 xc <- susquehanna - ..1
-                expect_equal(fd_maxFl_MLEn$objFun(incubate:::extractPars(c(delay1=..1, shape1=..2, scale1=..3), distribution = 'weibull', transform = TRUE)),
+                expect_equal(fd_maxFl_MLEn$objFun(incubate:::extractParsExt(c(delay1=..1, shape1=..2, scale1=..3), distribution = 'weibull', transform = TRUE)),
                              expected = -length(susquehanna) * (log(..2) - ..2 * log(..3) + (..2 - 1L) * mean(log(xc)) - mean(xc**..2)/..3**..2))
 
                 })
@@ -338,7 +338,7 @@ test_that("Fit delayed Weibull", {
 
   expect_identical(purrr::chuck(fd_poll, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_poll), expected = 3L)
-  expect_lt(objFun_poll(incubate:::extractPars(parV = coef_poll, distribution = "weibull", transform = TRUE)), expected = 3.75)
+  expect_lt(objFun_poll(incubate:::extractParsExt(parV = coef_poll, distribution = "weibull", transform = TRUE)), expected = 3.75)
   expect_equal(coef_poll, expected = c(delay1=1085, shape1=0.95, scale1=6562), tolerance = .001)
 
   # MLE-based fits for pollution
