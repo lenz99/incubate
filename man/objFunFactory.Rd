@@ -14,6 +14,7 @@ objFunFactory(
   method = c("MPSE", "MLEn", "MLEc", "MLEw"),
   profile = FALSE,
   ties = c("density", "equidist", "random", "error"),
+  externalPars = FALSE,
   verbose = 0L
 )
 }

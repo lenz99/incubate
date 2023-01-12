@@ -14,6 +14,7 @@ delay_model(
   method = c("MPSE", "MLEn", "MLEw", "MLEc"),
   profile = method == "MLEw",
   optim_args = NULL,
+  externalPars = FALSE,
   verbose = 0
 )
 }
