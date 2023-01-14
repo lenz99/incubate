@@ -12,7 +12,7 @@ delay_model(
   bind = NULL,
   ties = c("density", "equidist", "random", "error"),
   method = c("MPSE", "MLEn", "MLEw", "MLEc"),
-  profile = method == "MLEw",
+  profiled = method == "MLEw",
   optim_args = NULL,
   externalPars = FALSE,
   verbose = 0
@@ -33,7 +33,7 @@ delay_model(
 
 \item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLEn' = naive maximum likelihood estimation \emph{or} 'MLEw' = weighted MLE' \emph{or} MLEc' = corrected MLE}
 
-\item{profile}{logical. Profile out scale from log-likelihood if possibe.}
+\item{profiled}{logical. Profile out scale from log-likelihood if possible.}
 
 \item{optim_args}{list. optimization arguments to use. Use \code{NULL} to use the data-dependent default values.}
 

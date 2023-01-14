@@ -58,7 +58,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
                                        n = nObs, k = k/2)) )
            } else {
              # single group
-             c(`X^2` = testStat_mo(mseCrit = delayFit$criterion, n = nObs, k = k) )
+             c(`X^2` = testStat_mo(mseCrit = delayFit[["criterion"]], n = nObs, k = k) )
            }
 
            p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
@@ -331,7 +331,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   P_LR <- NULL
   if (testMask[['LR']]){
     # likelihood ratio test (LR-test), negative values of test statistic give P=1
-    P_LR <- pchisq(q = -2L * (fit1[["criterion"]] - fit0[["criterion"]]), df = length(param), lower.tail = FALSE)
+    P_LR <- stats::pchisq(q = -2L * (fit1[["criterion"]] - fit0[["criterion"]]), df = length(param), lower.tail = FALSE)
   }
 
   t0_dist <- P_boot <- chisq_df_hat <- NULL
@@ -344,8 +344,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
     ranFun <- getDist(distribution, type = "r")
     # arguments to the random function generation
-    ranFunArgsX <- c(list(n=length(x)), coef(fit0, group = "x", transformed = FALSE))
-    ranFunArgsY <- c(list(n=length(y)), coef(fit0, group = "y", transformed = FALSE))
+    ranFunArgsX <- c(list(n=length(x)), coef.incubate_fit(fit0, group = "x", transformed = FALSE))
+    ranFunArgsY <- c(list(n=length(y)), coef.incubate_fit(fit0, group = "y", transformed = FALSE))
 
     retL <- 1L+(verbose>0L)
     t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(retL),

@@ -12,7 +12,7 @@ objFunFactory(
   twoPhase = FALSE,
   bind = NULL,
   method = c("MPSE", "MLEn", "MLEc", "MLEw"),
-  profile = FALSE,
+  profiled = FALSE,
   ties = c("density", "equidist", "random", "error"),
   externalPars = FALSE,
   verbose = 0L
@@ -31,7 +31,7 @@ objFunFactory(
 
 \item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLEn} is the naive MLE-method, calculating the likelihood function as the product of density values. \code{MLEc} is the modified MLE.}
 
-\item{profile}{logical. Should scale parameter be profiled out prior to optimization?}
+\item{profiled}{logical. Should scale parameter be profiled out prior to optimization?}
 
 \item{ties}{character. How to handle ties within data of a group.}
 

@@ -43,7 +43,7 @@ NULL
 
 #' @rdname DelayedExponential
 #' @export
-dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL, log = FALSE) {
+dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1, log = FALSE) {
   stopifnot( length(log) >= 1L, is.logical(log) )
   log <- log[[1L]] # only first value of log is used
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
@@ -89,7 +89,7 @@ dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
 
 #' @rdname DelayedExponential
 #' @export
-pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL, ...) {
+pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1, ...) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
@@ -128,7 +128,8 @@ pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
 
 #' @rdname DelayedExponential
 #' @export
-qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL, lower.tail = TRUE, log.p = FALSE) {
+qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL,
+                         delay = delay1, rate = rate1, lower.tail = TRUE, log.p = FALSE) {
   #lower.tail = TRUE, log.p = FALSE
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
@@ -173,7 +174,7 @@ qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
 
 #' @rdname DelayedExponential
 #' @export
-rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL) {
+rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
@@ -209,7 +210,7 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1,
 
 #' @rdname DelayedExponential
 #' @export
-mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay = delay1, rate = rate1, delay2 = NULL, rate2 = NULL) {
+mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
@@ -283,8 +284,8 @@ NULL
 
 #' @rdname DelayedWeibull
 #' @export
-dweib_delayed <- function(x, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1,
-                          delay2 = NULL, shape2 = NULL, scale2 = 1, log = FALSE) {
+dweib_delayed <- function(x, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 = NULL, scale2 = 1,
+                          delay = delay1, shape = shape1, scale = scale1, log = FALSE) {
   stopifnot( length(log) >= 1L, is.logical(log) )
   log <- log[[1L]] # only first value of log is used
 
@@ -337,8 +338,8 @@ dweib_delayed <- function(x, delay1, shape1, scale1 = 1, delay = delay1, shape =
 
 #' @rdname DelayedWeibull
 #' @export
-pweib_delayed <- function(q, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1,
-                          delay2 = NULL, shape2 = NULL, scale2 = 1, lower.tail = TRUE, log.p = FALSE) {
+pweib_delayed <- function(q, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 = NULL, scale2 = 1,
+                          delay = delay1, shape = shape1, scale = scale1, lower.tail = TRUE, log.p = FALSE) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
   if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
@@ -387,8 +388,8 @@ pweib_delayed <- function(q, delay1, shape1, scale1 = 1, delay = delay1, shape =
 
 #' @rdname DelayedWeibull
 #' @export
-qweib_delayed <- function(p, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1,
-                          delay2 = NULL, shape2 = NULL, scale2 = 1, lower.tail = TRUE, log.p = FALSE) {
+qweib_delayed <- function(p, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 = NULL, scale2 = 1,
+                          delay = delay1, shape = shape1, scale = scale1, lower.tail = TRUE, log.p = FALSE) {
   stopifnot( is.logical(lower.tail), length(lower.tail) >= 1L, is.logical(log.p), length(log.p) >= 1L)
   lower.tail <- isTRUE(lower.tail[[1L]])
   log.p <- isTRUE(log.p[[1L]])
@@ -440,8 +441,8 @@ qweib_delayed <- function(p, delay1, shape1, scale1 = 1, delay = delay1, shape =
 
 #' @rdname DelayedWeibull
 #' @export
-rweib_delayed <- function(n, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1,
-                          delay2 = NULL, shape2 = NULL, scale2 = 1){
+rweib_delayed <- function(n, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 = NULL, scale2 = 1,
+                          delay = delay1, shape = shape1, scale = scale1){
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
   if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
@@ -482,8 +483,8 @@ rweib_delayed <- function(n, delay1, shape1, scale1 = 1, delay = delay1, shape =
 
 #' @rdname DelayedWeibull
 #' @export
-mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay = delay1, shape = shape1, scale = scale1,
-                          delay2 = NULL, shape2 = NULL, scale2 = 1) {
+mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 = NULL, scale2 = 1,
+                          delay = delay1, shape = shape1, scale = scale1) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
   if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
@@ -545,12 +546,12 @@ mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay = delay1, sh
 #' @param twoPhase logical(1). For `type='param'`, do we model two phases?
 #' @param twoGroup logical(1). For type='param', do we have two groups?
 #' @param bind character. For type='param', names of parameters that are bind between the two groups.
-#' @param profile logical(1). For type='param', do we request profiling?
+#' @param profiled logical(1). For type='param', do we request profiling?
 #' @param transformed logical(1). For type='param', do we need parameter names transformed (as used inside the optimization function?)
 #' @return selected distribution function or parameter names
 #' @include delay_estimation.R
 getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", "prob", "density", "random", "param"),
-                    twoPhase = FALSE, twoGroup = FALSE, bind = NULL, profile = FALSE, transformed = FALSE) {
+                    twoPhase = FALSE, twoGroup = FALSE, bind = NULL, profiled = FALSE, transformed = FALSE) {
   distribution <- match.arg(distribution)
   type <- match.arg(type)
 
@@ -569,7 +570,7 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
 
                     pars <- c("delay1", "rate1", "delay2", "rate2")[seq_len(2L*(1L + twoPhase))]
 
-                    if (profile) warning("Profiling has no effect for estimating the exponential distribution.", call. = FALSE)
+                    if (profiled) warning("Profiling has no effect for estimating the exponential distribution.", call. = FALSE)
 
                     if (transformed) {
                       pars <- paste0(pars, "_tr")
@@ -601,7 +602,7 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
                     pars <- c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")[seq_len(3L*(1L + twoPhase))]
 
                     # drop parameters that are profiled out
-                    if (profile && (! "scale1" %in% bind || length(bind) == length(pars))){
+                    if (profiled && (! "scale1" %in% bind || length(bind) == length(pars))){
                       pars <- setdiff(pars, "scale1") #XXX think about profiling and twoPhase! (and twoGroup?!)
                     }
 

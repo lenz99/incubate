@@ -10,7 +10,7 @@ getDist(
   twoPhase = FALSE,
   twoGroup = FALSE,
   bind = NULL,
-  profile = FALSE,
+  profiled = FALSE,
   transformed = FALSE
 )
 }
@@ -25,7 +25,7 @@ getDist(
 
 \item{bind}{character. For type='param', names of parameters that are bind between the two groups.}
 
-\item{profile}{logical(1). For type='param', do we request profiling?}
+\item{profiled}{logical(1). For type='param', do we request profiling?}
 
 \item{transformed}{logical(1). For type='param', do we need parameter names transformed (as used inside the optimization function?)}
 }

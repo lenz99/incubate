@@ -13,10 +13,10 @@ dexp_delayed(
   x,
   delay1 = 0,
   rate1 = 1,
-  delay = delay1,
-  rate = rate1,
   delay2 = NULL,
   rate2 = NULL,
+  delay = delay1,
+  rate = rate1,
   log = FALSE
 )
 
@@ -24,10 +24,10 @@ pexp_delayed(
   q,
   delay1 = 0,
   rate1 = 1,
-  delay = delay1,
-  rate = rate1,
   delay2 = NULL,
   rate2 = NULL,
+  delay = delay1,
+  rate = rate1,
   ...
 )
 
@@ -35,10 +35,10 @@ qexp_delayed(
   p,
   delay1 = 0,
   rate1 = 1,
-  delay = delay1,
-  rate = rate1,
   delay2 = NULL,
   rate2 = NULL,
+  delay = delay1,
+  rate = rate1,
   lower.tail = TRUE,
   log.p = FALSE
 )
@@ -47,20 +47,20 @@ rexp_delayed(
   n,
   delay1 = 0,
   rate1 = 1,
-  delay = delay1,
-  rate = rate1,
   delay2 = NULL,
-  rate2 = NULL
+  rate2 = NULL,
+  delay = delay1,
+  rate = rate1
 )
 
 mexp_delayed(
   t = +Inf,
   delay1 = 0,
   rate1 = 1,
-  delay = delay1,
-  rate = rate1,
   delay2 = NULL,
-  rate2 = NULL
+  rate2 = NULL,
+  delay = delay1,
+  rate = rate1
 )
 }
 \arguments{
@@ -70,13 +70,13 @@ mexp_delayed(
 
 \item{rate1}{numeric. The event rate, must be non-negative.}
 
-\item{delay}{numeric. Alias for first delay.}
-
-\item{rate}{numeric. Alias for first rate.}
-
 \item{delay2}{numeric. The second delay, must be non-negative.}
 
 \item{rate2}{numeric. The second event rate, must be non-negative.}
+
+\item{delay}{numeric. Alias for first delay.}
+
+\item{rate}{numeric. Alias for first rate.}
 
 \item{q}{A numeric vector of quantile values.}
 

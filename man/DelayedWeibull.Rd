@@ -14,12 +14,12 @@ dweib_delayed(
   delay1,
   shape1,
   scale1 = 1,
-  delay = delay1,
-  shape = shape1,
-  scale = scale1,
   delay2 = NULL,
   shape2 = NULL,
   scale2 = 1,
+  delay = delay1,
+  shape = shape1,
+  scale = scale1,
   log = FALSE
 )
 
@@ -28,12 +28,12 @@ pweib_delayed(
   delay1,
   shape1,
   scale1 = 1,
-  delay = delay1,
-  shape = shape1,
-  scale = scale1,
   delay2 = NULL,
   shape2 = NULL,
   scale2 = 1,
+  delay = delay1,
+  shape = shape1,
+  scale = scale1,
   lower.tail = TRUE,
   log.p = FALSE
 )
@@ -43,12 +43,12 @@ qweib_delayed(
   delay1,
   shape1,
   scale1 = 1,
-  delay = delay1,
-  shape = shape1,
-  scale = scale1,
   delay2 = NULL,
   shape2 = NULL,
   scale2 = 1,
+  delay = delay1,
+  shape = shape1,
+  scale = scale1,
   lower.tail = TRUE,
   log.p = FALSE
 )
@@ -58,12 +58,12 @@ rweib_delayed(
   delay1,
   shape1,
   scale1 = 1,
-  delay = delay1,
-  shape = shape1,
-  scale = scale1,
   delay2 = NULL,
   shape2 = NULL,
-  scale2 = 1
+  scale2 = 1,
+  delay = delay1,
+  shape = shape1,
+  scale = scale1
 )
 
 mweib_delayed(
@@ -71,12 +71,12 @@ mweib_delayed(
   delay1,
   shape1,
   scale1 = 1,
-  delay = delay1,
-  shape = shape1,
-  scale = scale1,
   delay2 = NULL,
   shape2 = NULL,
-  scale2 = 1
+  scale2 = 1,
+  delay = delay1,
+  shape = shape1,
+  scale = scale1
 )
 }
 \arguments{
