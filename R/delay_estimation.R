@@ -1090,7 +1090,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
       twoPhase = twoPhase,
       twoGroup = twoGroup,
       method = method,
-      bind = bind,
+      bind = rlang::env_get(env = objFunEnv, nm = "bind"),
       ties = ties,
       objFun = objFun,
       par = optObj$par_orig,
@@ -1330,9 +1330,12 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                               # delay1 is normally transformed via ident (for both exponential and Weibull),
                               #+hence we could spare us the round trip to canonical parameters and to replace there and to transform back for optimization
                               #+but this round-trip approach is more safe (in case we ever introduce a non-ident transformation for delay1)
-                              .f = ~ object$objFun(pars = extractParsExt(parV = replace(coefVect, del1_ind, .x),
-                                                                      distribution = object$distribution, group = NULL, isTransformed = FALSE, transform = TRUE),
-                                                   aggregated = FALSE)[[groupIdx]])
+                              # this older code did not use criterion = TRUE (probably because criterion= was added later!?)
+                              # .f = ~ object$objFun(pars = extractParsExt(parV = replace(coefVect, del1_ind, .x),
+                              #                                         distribution = object$distribution, group = NULL, isTransformed = FALSE, transform = TRUE),
+                              #                      aggregated = FALSE)[[groupIdx]])
+                              # use criterion = TRUE to operate directly on the original parameters
+                              .f = ~ object$objFun(pars = replace(coefVect, del1_ind, .x), criterion = TRUE, aggregated = FALSE)[[groupIdx]])
     )
 
     # we like to drop last entry (delay = 1st observation) as objective function tends to explode

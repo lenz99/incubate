@@ -222,6 +222,11 @@ test_that("Fit delayed Exponentials", {
   fd_exp2c <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("delay1", "rate1"))
   coef_exp2c <- coef(fd_exp2c)
 
+  # bind: order of parameters does not matter
+  fd_exp2cx <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("rate1", "delay1"))
+  expect_identical(coef(fd_exp2cx), expected = coef(fd_exp2c))
+  expect_identical(fd_exp2cx$bind, fd_exp2c$bind)
+
   # data combinded
   fd_exp2comb <- delay_model(x = c(xx, yy), distribution = "expon")
   coef_exp2comb <- coef(fd_exp2comb)
