@@ -1,232 +1,4 @@
 
-#' Merge parameters from two groups back into one vector
-mergeParsExt <- function(par.x, par.y, bind = NULL){
-  stopifnot( is.numeric(par.x), all(nzchar(names(par.x))) )
-
-  if (is.null(par.y)) return(par.x)
-  stopifnot( is.numeric(par.y), all(nzchar(names(par.y))),
-              names(par.x) == names(par.y) )
-
-  if (is.null(bind)) return(rlang::set_names(c(par.x, par.y), nm = c(paste0(names(par.x), ".x"),
-                                                                     paste0(names(par.y), ".y"))))
-  stopifnot( identical(par.x[bind], par.y[bind]) )
-
-  bindInd <- which(bind %in% names(par.x))
-  par.xgr <- par.x[-bindInd]; par.ygr <- par.y[-bindInd]
-  names(par.xgr) <- paste0(names(par.xgr), ".x"); names(par.ygr) <- paste0(names(par.ygr), ".y")
-  # bind first
-  c(par.x[bind], par.xgr, par.ygr)
-}
-
-#' Extract certain parameters from a given named parameter vector.
-#'
-#' This routine handles parameter vectors for one or two groups. To this end, it parses the parameter names.
-#' Bound parameters (cf. `bind=`) are deduced from the naming: they lack the .x or .y suffix.
-#' it can also transform the given parameters from the standard form (as used in the delayed distribution functions)
-#' to the internal transformed parametrization as used by the optimization function, and vice versa.
-#'
-#' When parameters for a single group are requested the parameters are always returned in the canonical order of the distribution.
-#' Otherwise, the order of parameters is unchanged.
-#' It parses the parameter names to find out if it is twoPhase, twoGroup and, when `transform=TRUE`, which direction to transform.
-#'
-#' This is an internal helper function
-#' used in [delay_model()], in the factory method [objFunFactory()] and in [coef.incubate_fit()].
-#' @param parV numeric parameter vector (for single group or two groups)
-#' @param distribution character name. Exponential or Weibull
-#' @param twoPhase logical. Do we model two phases?
-#' @param group character. Extract only parameters for specified group. Recognizes 'x' and 'y'. Other values are ignored.
-#' @param isTransformed logical. Are the parameters transformed? If `NULL` (default) it is deduced from the parameter names.
-#' @param transform logical. Transform the parameters!?
-#' @return requested parameters as named numeric vector
-extractParsExt <- function(parV, distribution = c('exponential', 'weibull'), twoPhase = NULL, group = NULL, isTransformed = NULL, transform = FALSE) {
-
-  stopifnot( is.numeric(parV), all(nzchar(names(parV))) )
-  distribution <- match.arg(distribution)
-
-  # contract: parV is canonically ordered (see below as well)
-  # extractPars will not check if it needs first to reorder the parameters given by checking the names.
-  pNames <- names(parV)
-
-  # isTransformed when all parameter names contain '_tr'
-  if (is.null(isTransformed)) {
-    trNames <- grepl(pattern = "_tr", pNames, fixed = TRUE)
-    stopifnot( sum(trNames) %in% c(0L, length(parV)) ) #all or nothing
-    isTransformed <- all(trNames)
-  }
-  if (is.null(twoPhase)) {
-    twoPhase <- any(grepl(pattern = "delay2", pNames, fixed = TRUE))
-  }
-  # parameter names of single group where we start from!
-  oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
-
-  # index of parameters that are *not* group-specific
-  idx.nongrp <- which(!grepl(pattern = paste0("[.][xy]$"), pNames))
-  #Is there any .x or .y parameter name?
-  #+when two groups but all parameters bound then isTwoGroup is FALSE
-  isTwoGroup <- length(idx.nongrp) < length(parV)
-
-
-  # transform parameters if requested
-  # if no transformation required, simply extract the relevant parameters
-  if ( transform ){
-
-    # transform parameter vector for a single group. Also transforms parameter names.
-    # @param parV1: parameter vector for a single group
-    # @return transformed parameter vector
-    transformPars1Ext <- function(parV1){
-      # parameter transformation matrices
-      PARAM_TRANSF_M <- switch(distribution,
-                               exponential = matrix(c( 1, 0, 0, 0,
-                                                       0, 1, 0, 0,
-                                                       -1, 0, 1, 0,
-                                                       0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                                    dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
-                               weibull = matrix(c( 1, 0, 0, 0, 0, 0,
-                                                   0, 1, 0, 0, 0, 0,
-                                                   0, 0, 1, 0, 0, 0,
-                                                   -1, 0, 0, 1, 0, 0,
-                                                   0, 0, 0, 0, 1, 0,
-                                                   0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                                dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
-                               stop("Unknown distribution!", call. = FALSE)
-      )
-      PARAM_TRANSF_Minv <- switch(distribution,
-                                  exponential = matrix(c(1, 0, 0, 0,
-                                                         0, 1, 0, 0,
-                                                         1, 0, 1, 0,
-                                                         0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                                       dimnames = list(c("delay1", "rate1", "delay2", "rate2"))),
-                                  weibull = matrix(c(1, 0, 0, 0, 0, 0,
-                                                     0, 1, 0, 0, 0, 0,
-                                                     0, 0, 1, 0, 0, 0,
-                                                     1, 0, 0, 1, 0, 0,
-                                                     0, 0, 0, 0, 1, 0,
-                                                     0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                                   dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"))),
-                                  stop("Unknown distribution", call. = FALSE)
-      )
-
-
-      PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
-                             weibull = c(identity, log, #log1p, #identity, #=shape1
-                                         log, log, log, log))[[distribution]]
-      PARAM_TRANSF_Finv <- list(exponential = c(identity, exp, exp, exp),
-                                weibull = c(identity, exp, #expm1, #identity, #=shape1
-                                            exp, exp, exp, exp))[[distribution]]
-
-      stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F) )
-
-
-      if (isTransformed) {
-        # b = Ainv %*% Finv(b')
-        rlang::set_names(
-          as.numeric(PARAM_TRANSF_Minv[seq_along(parV1), seq_along(parV1)] %*%
-                       as.numeric(.mapply(FUN = function(f, x) f(x),
-                                          dots = list(PARAM_TRANSF_Finv[seq_along(parV1)], parV1),
-                                          MoreArgs = NULL))),
-          nm = rownames(PARAM_TRANSF_Minv)[seq_along(parV1)])
-      } else {
-        # b' = F(A %*% b)
-        rlang::set_names(
-          as.numeric(.mapply(FUN = function(f, x) f(x),
-                             dots = list(PARAM_TRANSF_F[seq_along(parV1)],
-                                         as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1)),
-                             MoreArgs = NULL)),
-          nm = rownames(PARAM_TRANSF_M)[seq_along(parV1)])
-      }
-    }# fn transformPars1Ext
-
-
-    # update parameter vector according to transformation
-    parV <- if (! isTwoGroup) {
-      transformPars1Ext(parV1 = parV)
-    } else {
-      # **twoGroup** case (effectively)
-      # target parameter names
-      pNames_trgt <- if (isTransformed) {
-        sub(pattern = "_tr", replacement = "", pNames, fixed = TRUE) # remove '_tr' string
-      } else {
-        purrr::map_chr(.x = strsplit(pNames, split = ".", fixed = TRUE),
-                       .f = function(s) if (length(s) == 1L) paste0(s, "_tr") else paste0(s[[1L]], "_tr.", s[[2L]]))
-      }
-
-      # list of transformed parameters, for both groups x and y
-      h <- list(
-        x = { idx.grp <- which(endsWith(x = pNames, suffix = ".x"))
-        # drop group naming: last two letters
-        pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
-        # apply transform on 1-group parameter vector in canonical order!
-        transformPars1Ext(parV1 = c(parV[idx.nongrp], rlang::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))]) },
-        y = { idx.grp <- which(endsWith(x = pNames, suffix = ".y"))
-        # drop group naming: last two letters
-        pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
-        # apply transform on 1-group parameter vector in canonical order!
-        transformPars1Ext(parV1 = c(parV[idx.nongrp], rlang::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))]) }
-      )
-
-      # parV transformed for effective twoGroup-setting
-      rlang::set_names(c(h[[1L]][pNames_trgt[idx.nongrp]],
-                         h[[1L]][! names(h[[1L]]) %in% pNames_trgt[idx.nongrp]],
-                         h[[2L]][! names(h[[2L]]) %in% pNames_trgt[idx.nongrp]]),
-                       nm = pNames_trgt)
-    }
-
-    # reflect transformation in meta-data
-    isTransformed <- ! isTransformed
-    pNames <- names(parV)
-    oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
-  }# transform
-
-
-
-  # return parameter vector
-  if ( ! isTwoGroup || is.null(group) || length(group) != 1L || ! group %in% c('x', 'y') ) {
-    parV
-  } else {
-    # single group extraction
-    stopifnot( is.character(group), nzchar(group) )
-
-    # extract all group parameters (=contain .x or .y at the end)
-    #+and restore original name (=remove ".x" or ".y")
-    # contract: parV is canonically ordered
-    parV.gr <- parV[grepl(pattern = paste0(".", group), x = pNames, fixed = TRUE)]
-    names(parV.gr) <- substr(names(parV.gr), start = 1L, stop = nchar(names(parV.gr))-2L)
-    #parV.gr <- rlang::set_names(parV.gr, nm = setdiff(oNames, pNames[idx.nongrp]))
-
-    # restore original order
-    # contract: bind is intersected (only valid names, canonical order)
-    c(parV.gr, parV[pNames[idx.nongrp]])[intersect(oNames, c(pNames, names(parV.gr)))]
-  }
-}
-
-
-#' Calculate parameter scaling for optimization routine.
-#'
-#' The scale per parameter corresponds to the step width within the optimization path.
-#' @param parV named numeric parameter vector for optimization
-#' @param lowerB numeric. lower bound for parameter scales
-#' @param upperB numeric. upper bound for parameter scales
-#' @return vector of parameter scaling
-scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
-  if (is.null(lowerB)) lowerB <- -Inf
-  if (is.null(upperB)) upperB <- +Inf
-
-  stopifnot( is.numeric(parV), is.numeric(lowerB), is.numeric(upperB))
-  stopifnot( length(lowerB) == 1L || length(lowerB) == length(parV) )
-  stopifnot( length(upperB) == 1L || length(upperB) == length(parV) )
-
-  # scale vector: default value is 1
-  scVect <- rep.int(1, times = length(parV))
-
-  # non-log parameters get scaling depending on their initial value
-  idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
-  scVect[idx.nonLog] <- parV[idx.nonLog]^.2 #5th root pushes towards 1
-
-  # enforce upper and lower bounds
-  pmax.int(lowerB, pmin.int(upperB, scVect))
-
-}
-
 
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
 #' or according to naive maximum likelihood estimation ('MLEn').
@@ -253,7 +25,6 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 objFunFactory <- function(x, y = NULL,
                           distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL,
                           method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'), profiled = FALSE, ties = c('density', 'equidist', 'random', 'error'),
-                          externalPars = FALSE,
                           verbose = 0L) {
 
   # setup ----
@@ -265,12 +36,16 @@ objFunFactory <- function(x, y = NULL,
 
   twoPhase <- isTRUE(twoPhase)
   profiled <- isTRUE(profiled)
-  externalPars <- isTRUE(externalPars)
 
-  #standard ('original') names of distribution
+  # names: standard names of distribution (say, for a single group)
+  # original
   oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = FALSE)
-  #bind: intersect with oNames enforces the canonical order of dist-parameters and drops unused parameters and empty strings
+  # transformed (within optimization function)
+  trNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = TRUE)
+
+  #bind: enforce the canonical order of dist-parameters and drop unused parameters and empty strings
   bind <- intersect(oNames, bind)
+
 
 
   # data preparation ----
@@ -368,6 +143,13 @@ objFunFactory <- function(x, y = NULL,
   # do we have two groups after pre-processing?
   twoGroup <- isTRUE(!is.null(y) && is.numeric(y) && length(y))
 
+  # full parameter names (for the whole parameter vector spanning all groups)
+  # original (including parameters that are profiled out in optimization) and transformed
+  oNamesFull <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
+                        profiled = FALSE, transformed = FALSE) # profiled = FALSE because we consider her original parameters
+  trNamesFull <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
+                         profiled = profiled, transformed = TRUE) # profiled as requested because we consider optimization parameters
+
 
   # checks ------------------------------------------------------------------
 
@@ -395,34 +177,62 @@ objFunFactory <- function(x, y = NULL,
   # parameter handling ----
 
   # weight W1 for MLEw, becomes an attribute for the objective function (for later reference to get scale parameter)
-  W1 <- c(x=(1-1/(9*length(x)))^3, y = if (! is.null(y)) (1-1/(9*length(y)))^3 else NA_real_)
+  W1 <- if (method == 'MLEw') c(x=(1-1/(9*length(x)))^3, y = if (! is.null(y)) (1-1/(9*length(y)))^3 else NA_real_) else c(x=1, y=1)
 
-  # internal extractPars index: provide indices for x and for y
   stopifnot( ! twoPhase ) #XXX not implemented yet!!
 
+  # internal extractPars index: provide indices for x and for y
   # indices where to find the parameters per group in the parameter vector of the objective function
   extractParOptInd <- if (! twoGroup) {
     # single group!
     if (distribution == 'exponential') list(x = c(1L, 2L)) else # weibull:
-      if (profiled) list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
-  } else if (is.null(bind)) {
-    if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else #weibull:
-      if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
-  } else if ( length(oNames) == length(bind)) {
-    if (distribution == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else #weibull:
-      if (profiled) list(x = c(1L, 2L), y = c(1L, 2L)) else list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
-  } else {    # twoGroups & non-trivial bind
-    local({
-      names_full <- getDist(distribution = distribution, type = "param", twoPhase = twoPhase, twoGroup = TRUE, bind = bind, profiled = profiled)
-      # locally, drop "scale1" from oNames when in profiling mode
-      #XXX not robust! Think about twoPhase and profiling!
-      if (profiled) oNames <- setdiff(oNames, "scale1")
-      nonbind <- setdiff(oNames, bind)
-      list(
-        x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), names_full), nm = c(bind, nonbind))[oNames]),
-        y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), names_full), nm = c(bind, nonbind))[oNames])
-      )
-    })
+      if (profiled) list(x = c(1L, 2L)) else
+        list(x = c(1L, 2L, 3L))
+  } else {
+    # two group!
+    if (is.null(bind)) {
+      if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else #weibull:
+        if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else
+          list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
+    } else if ( length(oNames) == length(bind)) {
+      if (distribution == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else #weibull:
+        if (profiled) list(x = c(1L, 2L), y = c(1L, 2L)) else
+          list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
+    } else {
+      # twoGroups & non-trivial bind
+      local({
+        oNamesFullProf <- if (!profiled) oNamesFull else getDist(distribution = distribution, type = "param", twoPhase = twoPhase, twoGroup = TRUE,
+                                                                 bind = bind, profiled = TRUE)
+        # locally, drop "scale1" from oNames when in profiling mode
+        #XXX not robust! Think about (e.g.) twoPhase and profiling!
+        if (profiled) oNames <- setdiff(oNames, "scale1")
+        nonbind <- setdiff(oNames, bind)
+        list(
+          x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFullProf), nm = c(bind, nonbind))[oNames]),
+          y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFullProf), nm = c(bind, nonbind))[oNames])
+        )
+      })
+    }
+  }
+
+  extractParInd <- if (distribution == 'exponential' || !profiled) {
+    extractParOptInd
+  } else {
+    if (! twoGroup) # single group, non-exponential && profiled,
+      list(x = c(1L, 2L, 3L)) else {
+        # twoGroup && distribution != 'exponential' && profiled
+        if (is.null(bind)) list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L)) else
+          if ( length(oNames) == length(bind)) list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L)) else {    # non-trivial bind
+            local({
+              # we consider the parameter names on original scale, with profiled parameters also back in!
+              nonbind <- setdiff(oNames, bind)
+              list(
+                x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFull), nm = c(bind, nonbind))[oNames]),
+                y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFull), nm = c(bind, nonbind))[oNames])
+              )
+            })
+          }
+      }
   }
 
   # parameter transformation matrices
@@ -466,6 +276,7 @@ objFunFactory <- function(x, y = NULL,
   )
 
   # transform parameter vector for a single group. Does not use parameter names.
+  # transformed parameters are used within optimization. The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativitiy of original parameter)
   # @param parV1 parameter vector for a single group
   # @param inverse logical. If `inverse=TRUE` transforms from optimization parameters back to original parameters
   # @return transformed parameter vector, unnamed!
@@ -486,63 +297,81 @@ objFunFactory <- function(x, y = NULL,
         }
   }# fn transformPars1
 
-
-  # extract parameters (internal variant) for group after performing transformation (if requested)
-  # @param unprofiled logical. Idea: include parameter that was profiled out for optimization. This is only available on original scale (and does not work together with `transform=TRUE`)
-  #XXX But this is currently not working! We use extractParsExt() instead! see objFun(.., criterion=TRUE) where original parameters are given and I hence need to undo the profiling
-  #XXX problem is that ind is on optimize-parameters (without scale1) and not on original parameters
-  extractPars <- function(parV, group = stop("Provide a group!", call. = FALSE), transform = FALSE, inverse = FALSE, unprofile = FALSE){
-    if (transform) {
-      transformPars1(parV[extractParOptInd[[group]]], inverse = inverse)
-    } else {
-      ind <- extractParOptInd[[group]]
-      if (unprofile && profiled) {
-        stop("This is buggy! Need to fix. Currently we use extractParsExt() instead!", call. = FALSE) #XXX fix me
-        stopifnot(length(ind) < length(parV))
-        # add profiled out parameter as last parameter within group
-        ind <- c(ind, max(ind)+1L) # WRONG! ind is for optimized parameters that have parameters profiled out here!!
-      }
-      as.vector(parV[ind])
-    }
-  }
-
-  # merge parameters (internal variant) from individual groups into a common parameter vector
-  # it is used to combine the group-parameter vectors into a common one, e.g. to build the start parameter vector for optimization
-  # idea: we could implement here also the "unprofiling" of parameters that were profiled out
-  mergePars <- function(parx, pary, unprofile=FALSE){
-    stopifnot(!unprofile) #XXX not implemented yet
-    # aggregate parameters (by default via mean). Aggregation is necessary for merging start vector for parameter-optimziation
-    res <- as.vector(tapply(X = c(parx, pary), INDEX = unlist(extractParOptInd), FUN = mean, simplify = TRUE))
-    # .. only for delay1 we use minimum as aggregation function (in this case first entry in extractParsInd$x and extractParsInd$y is 1!)
-    if (extractParOptInd$x[1L] + extractParOptInd$y[1L] == 2){
+  # merge two parameter vectors
+  # @param isOpt flag: are the parameters on optimization scale?
+  # @return merged parameter vector
+  mergePars <- function(parx, pary, isOpt){
+    exParInd <- if (isOpt) extractParOptInd else extractParInd
+    # aggregate parameters (by default via mean). Aggregation is necessary for merging start vector for parameter-optimization
+    res <- as.vector(tapply(X = c(parx, pary),
+                            INDEX = unlist(exParInd),
+                            FUN = mean, simplify = TRUE))
+    # .. only for delay1 we use minimum as aggregation function (in this case first entry in exParInd$x and exParInd$y is 1!)
+    if (exParInd$x[1L] + exParInd$y[1L] == 2){
       res[1L] <- min(parx[1L], pary[1L])
-    }
-
-    # add parameter estimates that were profiled out!
-    if (profiled && unprofile){
-      stop("Not implemented yet here!!", call. = FALSE)
-      stopifnot( distribution == 'weibull', !twoPhase ) #XXX twoPhase not implemented, yet
-      w1 <- if (method == 'MLEw') W1 else c(x=1, y=1)
-      # any binding does not harm here because we get the scaling per group (and binding affects how parameters within groups are estimated)
-      #XXX move scFun into mergeParsExt?? or into mergePars (internal!!?! with option unprofile=T/F)
-      scFun <- function(obs, paro_gr, w1_gr) if (is.null(obs)) NULL else (w1_gr*mean((obs-paro_gr[[1]])^paro_gr[[2]]))^(1/paro_gr[[2]])
-
-      # makes only sense when parx and pary are on original scale!!
-      #XXX think here, how to implement, using res
-      # res <- mergeParsExt(par.x = c(parx, scale1 = scFun(x, parx, w1_gr = w1[["x"]])),
-      #                     par.y = c(pary, scale1 = scFun(y, pary, w1_gr = w1[["y"]])),
-      #                     bind = bind)
-
     }
 
     res
   }
 
-  # optimization arguments -----
+  # extract parameter vector for a specified group
+  # if parameters are for optimization and transformation is requested, unprofiling is done (if relevant)
+  # @param named logical. Get parameters as named vector?
+  # @return parameter vector
+  extractPars <- function(parV, group = NULL, isOpt = TRUE, transform = FALSE, named = FALSE){
+    # result is on optimization scale?
+    resIsOpt <- xor(isOpt, transform)
 
-  # parameters as used inside the optimization function
-  optpar_names <- getDist(distribution = distribution, type = "param", transformed = TRUE,
-                          twoPhase = twoPhase, twoGroup = twoGroup, bind = bind, profiled = profiled)
+    # basically, ignore group= when single group: use always canonical "x" then
+    if (!twoGroup) {
+      group <- "x"
+    }
+
+    if (is.null(group)){
+      return(local({
+
+        parx <- extractPars(parV, group = "x", isOpt = isOpt, transform = transform, named = FALSE)
+        pary <- extractPars(parV, group = "y", isOpt = isOpt, transform = transform, named = FALSE)
+
+        # merge the two parameter vectors back together (after a potential transformation)
+        res0 <- mergePars(parx = parx, pary = pary, isOpt = resIsOpt)
+        if (named){
+          res0 <- rlang::set_names(res0, nm = if (resIsOpt) trNamesFull else oNamesFull)
+        }
+        res0
+      }))
+    }
+
+    # index vector for specified group
+    ind <- if (isOpt) extractParOptInd[[group]] else extractParInd[[group]]
+
+    if (is.null(ind)) return(NULL)
+
+    res <- if (!transform) {
+      parV[ind]
+    } else {
+      local({
+        # transformation requested:
+        res0 <- transformPars1(parV[ind], inverse = isOpt)
+        # unprofile (if relevant), i.e., when going from profiled par_opt to par_orig
+        if (isOpt && profiled){
+          # access observations for specified group
+          obs <- if (group == "y") y else x
+          # add scale parameter
+          res0 <- c(res0, (W1[[group]]*mean((obs-res0[1])^res0[2]))^(1/res0[2]))
+        }
+        res0
+      })
+    }
+
+    # single group names
+    if (named)
+      rlang::set_names(res, nm = if (resIsOpt) trNames else oNames) else
+        as.vector(res)
+  }
+
+
+  # optimization arguments -----
 
 
   # get optimization start values and upper limits based on observations from a single group
@@ -618,8 +447,8 @@ objFunFactory <- function(x, y = NULL,
 
 
   # parameter bounds: set lower & upper bounds
-  lowerB <- upperB <- rlang::set_names(rep_len(NA_real_, length(optpar_names)),
-                                       nm = optpar_names)
+  lowerB <- upperB <- rlang::set_names(rep_len(NA_real_, length(trNamesFull)),
+                                       nm = trNamesFull)
 
   #XXX #QQQ Should this go up to extractPars-function where the transformations are defined???
   PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
@@ -633,7 +462,7 @@ objFunFactory <- function(x, y = NULL,
 
   # alas, purrr::iwalk did not work for me here
   for (nam in names(PAR_BOUNDS)) {
-    idx <- startsWith(optpar_names, prefix = nam)
+    idx <- startsWith(trNamesFull, prefix = nam)
     if (any(idx)) {
       lowerB[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'lower')
       upperB[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'upper')
@@ -693,31 +522,13 @@ objFunFactory <- function(x, y = NULL,
           c(start_x, start_y)
         } else {
 
-          mergePars(parx = start_x, pary = start_y)
-          # startParAggrFuns <- list(delay1_tr = min, delay2_tr = mean,
-          #                          rate1_tr = mean, rate2_tr = mean,
-          #                          shape1_tr = mean, scale1_tr = mean, shape2_tr = mean, scale2_tr = mean)
-          #
-          # # local() leaves fewer traces
-          # local(expr = {
-          #   startBind <- paste(bind, "tr", sep = "_") # start parameters are transformed (for optimization)
-          #   #XXX DEBUG here:  fd_exp2b <- delay_model(x = xx, y = yy, distribution = "expon", bind = "delay1")
-          #   stopifnot( all(startBind %in% names(start_x)), all(startBind %in% names(start_y)) )
-          #   # put bind-parameters first: aggregate start values between both groups
-          #   c(rlang::set_names(as.numeric(.mapply(FUN = function(f, x) f(x),
-          #                                         dots = list(startParAggrFuns[startBind],
-          #                                                     # list: per parameter, a vector of start-values for x and y
-          #                                                     lapply(purrr::transpose(list(x=start_x, y = start_y))[startBind], FUN = unlist)),
-          #                                         MoreArgs = NULL)), nm = startBind),
-          #     # extract unbound start values
-          #     start_x[! names(start_x) %in% startBind], start_y[! names(start_y) %in% startBind])
-          # })
+          mergePars(parx = start_x, pary = start_y, isOpt = TRUE)
         }
       } #twoGrp, not all params bound!
     } # twoGrp
 
   # ensure we have names of transformed parameters
-  parV <- rlang::set_names(parV, nm = optpar_names)
+  parV <- rlang::set_names(parV, nm = trNamesFull)
 
   stopifnot( ! any(is.na(lowerB), is.na(upperB)) )
   # clean up env. # use local() more???
@@ -743,23 +554,20 @@ objFunFactory <- function(x, y = NULL,
   # @param criterion logical. if criterion = TRUE, then pars are on original scale and the proper log-likelihood is returned
   getLogLik <- function(pars, group, criterion = FALSE) {
 
-    obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
-    # extract parameters for specified group on original scale (for CDF)
-    # when profiled and criterion = FALSE, then pars lacks scale (but extractParsExt does not fall over this)
-    # when criterion is requested, the parameters are on original scale and we do not need to transform
-    # XXX hack to get correct parameters when they are already on original scale
-    pars.gr <- if (externalPars || criterion) extractParsExt(pars, distribution = distribution, group = group, isTransformed = !criterion, transform = !criterion) else
-      extractPars(par = pars, group = group, transform = !criterion, inverse = !criterion, unprofile = criterion)
+    # access observations of group
+    obs <- if (group == "y") y else x #direct access by name
+    #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
 
-    denFun <- getDist(distribution, type = "density")
-    cdfFun <- getDist(distribution, type = "cdf")
+    # extract parameters for specified group on original scale (for CDF)
+    pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
+
 
     # for Weibull, do we want to penalize high shape values in MLE?
     penalize_shape <- FALSE
 
     if (criterion){
       # log-likelihood
-      sum(rlang::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+      sum(rlang::exec(getDist(distribution, type = "density"), !!! c(list(x=obs, log=TRUE), pars.gr)))
     } else {
 
       n <- length(obs)
@@ -788,7 +596,7 @@ objFunFactory <- function(x, y = NULL,
                  }
 
                } else {
-                 sum(rlang::exec(denFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+                 sum(rlang::exec(getDist(distribution, type = "density"), !!! c(list(x=obs, log=TRUE), pars.gr)))
                }
              },
              MLEw = {
@@ -818,8 +626,8 @@ objFunFactory <- function(x, y = NULL,
              },
              MLEc = {
                stopifnot( n >= 2L )
-               log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[1:2]), pars.gr)))) +
-                 sum(rlang::exec(denFun, !!! c(list(x=obs[-1L], log=TRUE), pars.gr))) -
+               log(diff(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs[1:2]), pars.gr)))) +
+                 sum(rlang::exec(getDist(distribution, type = "density"), !!! c(list(x=obs[-1L], log=TRUE), pars.gr))) -
                  # optional penalization term
                  penalize_shape * log(k+1)
              },
@@ -834,20 +642,20 @@ objFunFactory <- function(x, y = NULL,
   # @param criterion logical. When `criterion = TRUE`, then pars are on original scale.
   # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
   getCumDiffs <- function(pars, group, criterion = FALSE) {
+
+    # access observations of group
+    obs <- if (group == "y") y else x #direct access by name
     # get() would (by default) start looking in the execution environment of getCumDiffs and would find the object in its parent
     # or: env = rlang::env_parent() # parent of caller env is (normally!?) the function-env
     # or: env = rlang::fn_env(getCumDiffs) # referring directly to the function environment (but requires function obj)
-    obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
+    #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
 
     # extract parameters for specified group on original scale (for CDF)
-    # when criterion=TRUE the parameters are on original scale and we do *not* need to transform
-    # XXX hack to get correct parameters when already on original scale
-    pars.gr <- if (externalPars || criterion) extractParsExt(pars, distribution = distribution, group = group, isTransformed = !criterion, transform = !criterion) else
-      extractPars(pars, group = group, transform = !criterion, inverse = !criterion)
+    pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
 
     if (verbose > 1L){
       cat(glue("Parameter vector for group {group} after back-transformation: ",
-               "{paste(names(pars.gr), round(pars.gr, 2), sep = ': ', collapse = ', ')}"), "\n")
+               "{paste(round(pars.gr, 2), collapse = ', ')}"), "\n")
     }
 
     # calculate spacings
@@ -881,10 +689,6 @@ objFunFactory <- function(x, y = NULL,
   # param `criterion` a logical flag. If requested, give the original criterion to minimize. Then, the parameters are on original scale
   # param `aggregated` a logical flag. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
   objFun <- function(pars, criterion = FALSE, aggregated = TRUE) {
-    if (!criterion){
-      stopifnot( length(pars) == length(optpar_names) )
-      pars <- rlang::set_names(pars, optpar_names) # extractPars in getCumDiffs needs names! #XXX not any more for internal variant
-    }
 
     switch(method,
            MPSE = {
@@ -914,14 +718,15 @@ objFunFactory <- function(x, y = NULL,
            },
            stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
     )
-  }
+  } #fn objFun
 
   # attach analytical solution for MLE
   if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
     attr(objFun, which = "opt") <- local({
       par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
       list(par_orig = par_analytic,
-           par = extractParsExt(parV = par_analytic, distribution = 'exponential', isTransformed = FALSE, transform = TRUE), #transformed parameters
+           #transformed parameters
+           par = extractPars(par_analytic, isOpt = FALSE, transform = TRUE, named = TRUE),
            value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
            methodOpt = "analytic",
            convergence = 0L,
@@ -929,9 +734,6 @@ objFunFactory <- function(x, y = NULL,
            counts = 0L)
     })
   }
-
-  # attach weight W1 for x and y (needed to get profiled-out scale estimate)
-  attr(objFun, which = "W1") <- W1
 
   objFun
 }
@@ -956,7 +758,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
   # get objects from objective function environment
   objFunObjs <- rlang::env_get_list(env = objFunEnv,
-                                    nms = c("bind", "distribution", "method", "optim_args" ,"optpar_names", "profiled", "twoGroup", "twoPhase", "x", "y", "extractPars", "oNames"))
+                                    nms = c("bind", "distribution", "method", "optim_args" ,"trNamesFull", "profiled", "twoGroup", "twoPhase", "x", "y", "extractPars", "oNames"))
 
   # check if there is already a solution provided by the objective function
   optObj <- attr(objFun, which = "opt", exact = TRUE)
@@ -1019,6 +821,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       optObj <- minObjFunPORT(objFun = objFun, start = optim_args$par, lower = optim_args$lower, upper = optim_args$upper, verbose = verbose)
     }
 
+
     # post-process optObj -----
 
     #XXX for MLE with indirect profiling (currently MLEw):
@@ -1028,34 +831,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     if (! is.null(optObj)){
       stopifnot( 'par' %in% names(optObj) )
       # set canonical names for parameters
-      optObj$par <- rlang::set_names(optObj$par, objFunObjs$optpar_names)
+      optObj$par <- rlang::set_names(optObj$par, objFunObjs$trNamesFull)
       # save optim_args in optimization object (but w/o objective function)
       optim_args$fn <- NULL
       optObj <- append(optObj, values = list(optim_args = optim_args))
     }
 
     # add par_orig
-    par_orig <- extractParsExt(optObj$par, distribution = objFunObjs$distribution, isTransformed = TRUE, transform = TRUE)
-    if (objFunObjs[["profiled"]]) {
-      stopifnot( objFunObjs$distribution == 'weibull', !objFunObjs$twoPhase ) #XXX twoPhase not implemented, yet
-      w1 <- if (objFunObjs$method == 'MLEw') attr(objFun, which = "W1", exact = TRUE) else c(x=1, y=1)
-      # get parameter estimates that were profiled out!
-      # binding does not harm here because we get the scaling per group
-      # (and binding only affects how parameters within groups are estimated but nevertheless, each group has its estimates)
-      #XXX move scFun into mergeParsExt?? or into mergePars (internal!!?! with option unprofile=T/F)
-      scFun <- function(obs, paro_gr, w1_gr) if (is.null(obs)) NULL else (w1_gr*mean((obs-paro_gr[[1]])^paro_gr[[2]]))^(1/paro_gr[[2]])
-      parox <- objFunObjs$extractPars(par_orig, group = "x", transform = FALSE)
-      parox <- rlang::set_names(parox, nm = objFunObjs$oNames[seq_along(parox)]) #for the time being, to make mergeParsExt work
-      paroy <- if (objFunObjs$twoGroup) objFunObjs$extractPars(par_orig, group = "y", transform = FALSE) else NULL
-      if (!is.null(paroy)) paroy <- rlang::set_names(paroy, nm = objFunObjs$oNames[seq_along(paroy)]) #for the time being, to make mergeParsExt work
-
-      #XXX thrive to use mergePars (internal variant)!
-      par_orig <- mergeParsExt(par.x = c(parox, scale1 = scFun(objFunObjs$x, parox, w1_gr = w1[["x"]])),
-                               par.y = c(paroy, scale1 = scFun(objFunObjs$y, paroy, w1_gr = w1[["y"]])),
-                               bind = objFunObjs$bind)
-    }
-
-    optObj <- append(optObj, values = list(par_orig = par_orig))
+    optObj <- append(optObj, values = list(par_orig = objFunObjs$extractPars(parV = optObj$par, group = NULL, isOpt = TRUE, transform = TRUE, named = TRUE)))
   } #esle numeric optimization
 
   optObj
@@ -1085,7 +868,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
                         bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
                         method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profiled = method == 'MLEw',
-                        optim_args = NULL, externalPars = FALSE, verbose = 0) {
+                        optim_args = NULL, verbose = 0) {
 
   # setup -------------------------------------------------------------------
 
@@ -1130,7 +913,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
   # objective function ------------------------------------------------------
 
   objFun <- objFunFactory(x = x, y = y, method = method, profiled = profiled, distribution = distribution,
-                          twoPhase = twoPhase, bind = bind, ties = ties, externalPars = externalPars, verbose = verbose)
+                          twoPhase = twoPhase, bind = bind, ties = ties, verbose = verbose)
   objFunEnv <- rlang::fn_env(objFun)
 
   # optimise objective function
@@ -1138,6 +921,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 
   if (is.null(optObj)) return(invisible(NULL))
 
+  # return -----
   twoGroup <- rlang::env_get(env = objFunEnv, nm = "twoGroup")
   # overwrite data with  pre-processed data
   x <- rlang::env_get(env = objFunEnv, nm = "x")
@@ -1186,8 +970,8 @@ coef.incubate_fit <- function(object, transformed = FALSE, group = NULL, ...){
   stopifnot( inherits(object, "incubate_fit") )
   transformed <- isTRUE(transformed)
 
-  extractParsExt(parV = purrr::chuck(object, !!! if (transformed) list("optimizer", "parOpt") else "par"),
-              distribution = object[["distribution"]], group = group, isTransformed = transformed, transform = FALSE)
+  rlang::env_get(rlang::fn_env(object$objFun), nm = "extractPars")(purrr::chuck(object, !!! if (transformed) list("optimizer", "parOpt") else "par"),
+                                                                      group = group, isOpt = transformed, transform = FALSE, named = TRUE)
 }
 
 #' @export
@@ -1387,15 +1171,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                        length.out = max(997L, 2L * min(ceiling(R/2), 100L*ceiling(diff(del_interv)))+1L)),
       # fixing all parameter estimates other than delay1
       objVal = purrr::map_dbl(.x = .data[["delay1"]],
-                              # objective function expects transformed parameters for all involved groups
-                              # delay1 is normally transformed via ident (for both exponential and Weibull),
-                              #+hence we could spare us the round trip to canonical parameters and to replace there and to transform back for optimization
-                              #+but this round-trip approach is more safe (in case we ever introduce a non-ident transformation for delay1)
-                              # this older code did not use criterion = TRUE (probably because criterion= was added later!?)
-                              # .f = ~ object$objFun(pars = extractParsExt(parV = replace(coefVect, del1_ind, .x),
-                              #                                         distribution = object$distribution, group = NULL, isTransformed = FALSE, transform = TRUE),
-                              #                      aggregated = FALSE)[[groupIdx]])
-                              # use criterion = TRUE to operate directly on the original parameters
+                              # objective function with delay1-entries a little bit varied
+                              # use `criterion = TRUE` to operate directly on the original parameters
+                              # del1_ind: delay1-index within group
                               .f = ~ object$objFun(pars = replace(coefVect, del1_ind, .x), criterion = TRUE, aggregated = FALSE)[[groupIdx]])
     )
 

@@ -3,52 +3,289 @@
 # in particular parameter estimates, convergence etc. from the model fit object
 
 test_that('Parameter extraction and transformation', {
+
+  #' Extract certain parameters from a given named parameter vector. External, slow variant that parses parameter names.
+  #'
+  #' This routine handles parameter vectors for one or two groups. To this end, it parses the parameter names.
+  #' Bound parameters (cf. `bind=`) are deduced from the naming: they lack the .x or .y suffix.
+  #' it can also transform the given parameters from the standard form (as used in the delayed distribution functions)
+  #' to the internal transformed parametrization as used by the optimization function, and vice versa.
+  #'
+  #' When parameters for a single group are requested the parameters are always returned in the canonical order of the distribution.
+  #' Otherwise, the order of parameters is unchanged.
+  #' It parses the parameter names to find out if it is twoPhase, twoGroup and, when `transform=TRUE`, which direction to transform.
+  #'
+  #' @param parV numeric named parameter vector (for single group or two groups)
+  #' @param distribution character name. Exponential or Weibull
+  #' @param twoPhase logical. Do we model two phases?
+  #' @param group character. Extract only parameters for specified group. Recognizes 'x' and 'y'. Other values are ignored.
+  #' @param isTransformed logical. Are the parameters transformed? If `NULL` (default) it is deduced from the parameter names.
+  #' @param transform logical. Transform the parameters!?
+  #' @return requested parameters as named numeric vector
+  extractParsTest <- function(parV, distribution = c('exponential', 'weibull'), twoPhase = NULL, group = NULL, isTransformed = NULL, transform = FALSE) {
+
+    stopifnot( is.numeric(parV), all(nzchar(names(parV))) )
+    distribution <- match.arg(distribution)
+
+    # contract: parV is canonically ordered (see below as well)
+    # extractPars will not check if it needs first to reorder the parameters given by checking the names.
+    pNames <- names(parV)
+
+    # isTransformed when all parameter names contain '_tr'
+    if (is.null(isTransformed)) {
+      trNames <- grepl(pattern = "_tr", pNames, fixed = TRUE)
+      stopifnot( sum(trNames) %in% c(0L, length(parV)) ) #all or nothing
+      isTransformed <- all(trNames)
+    }
+    if (is.null(twoPhase)) {
+      twoPhase <- any(grepl(pattern = "delay2", pNames, fixed = TRUE))
+    }
+    # parameter names of single group where we start from!
+    oNames <- incubate:::getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
+
+    # index of parameters that are *not* group-specific
+    idx.nongrp <- which(!grepl(pattern = paste0("[.][xy]$"), pNames))
+    #Is there any .x or .y parameter name?
+    #+when two groups but all parameters bound then isTwoGroup is FALSE
+    isTwoGroup <- length(idx.nongrp) < length(parV)
+
+
+    # transform parameters if requested
+    # if no transformation required, simply extract the relevant parameters
+    if ( transform ){
+
+      # transform parameter vector for a single group. Also transforms parameter names.
+      # @param parV1: parameter vector for a single group
+      # @return transformed parameter vector
+      transformPars1Test <- function(parV1){
+        # parameter transformation matrices
+        PARAM_TRANSF_M <- switch(distribution,
+                                 exponential = matrix(c( 1, 0, 0, 0,
+                                                         0, 1, 0, 0,
+                                                         -1, 0, 1, 0,
+                                                         0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                                      dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
+                                 weibull = matrix(c( 1, 0, 0, 0, 0, 0,
+                                                     0, 1, 0, 0, 0, 0,
+                                                     0, 0, 1, 0, 0, 0,
+                                                     -1, 0, 0, 1, 0, 0,
+                                                     0, 0, 0, 0, 1, 0,
+                                                     0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
+                                                  dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
+                                 stop("Unknown distribution!", call. = FALSE)
+        )
+        PARAM_TRANSF_Minv <- switch(distribution,
+                                    exponential = matrix(c(1, 0, 0, 0,
+                                                           0, 1, 0, 0,
+                                                           1, 0, 1, 0,
+                                                           0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                                         dimnames = list(c("delay1", "rate1", "delay2", "rate2"))),
+                                    weibull = matrix(c(1, 0, 0, 0, 0, 0,
+                                                       0, 1, 0, 0, 0, 0,
+                                                       0, 0, 1, 0, 0, 0,
+                                                       1, 0, 0, 1, 0, 0,
+                                                       0, 0, 0, 0, 1, 0,
+                                                       0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
+                                                     dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"))),
+                                    stop("Unknown distribution", call. = FALSE)
+        )
+
+
+        PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
+                               weibull = c(identity, log, #log1p, #identity, #=shape1
+                                           log, log, log, log))[[distribution]]
+        PARAM_TRANSF_Finv <- list(exponential = c(identity, exp, exp, exp),
+                                  weibull = c(identity, exp, #expm1, #identity, #=shape1
+                                              exp, exp, exp, exp))[[distribution]]
+
+        stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F) )
+
+
+        if (isTransformed) {
+          # b = Ainv %*% Finv(b')
+          rlang::set_names(
+            as.numeric(PARAM_TRANSF_Minv[seq_along(parV1), seq_along(parV1)] %*%
+                         as.numeric(.mapply(FUN = function(f, x) f(x),
+                                            dots = list(PARAM_TRANSF_Finv[seq_along(parV1)], parV1),
+                                            MoreArgs = NULL))),
+            nm = rownames(PARAM_TRANSF_Minv)[seq_along(parV1)])
+        } else {
+          # b' = F(A %*% b)
+          rlang::set_names(
+            as.numeric(.mapply(FUN = function(f, x) f(x),
+                               dots = list(PARAM_TRANSF_F[seq_along(parV1)],
+                                           as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1)),
+                               MoreArgs = NULL)),
+            nm = rownames(PARAM_TRANSF_M)[seq_along(parV1)])
+        }
+      }# fn transformPars1Test
+
+
+      # update parameter vector according to transformation
+      parV <- if (! isTwoGroup) {
+        transformPars1Test(parV1 = parV)
+      } else {
+        # **twoGroup** case (effectively)
+        # target parameter names
+        pNames_trgt <- if (isTransformed) {
+          sub(pattern = "_tr", replacement = "", pNames, fixed = TRUE) # remove '_tr' string
+        } else {
+          purrr::map_chr(.x = strsplit(pNames, split = ".", fixed = TRUE),
+                         .f = function(s) if (length(s) == 1L) paste0(s, "_tr") else paste0(s[[1L]], "_tr.", s[[2L]]))
+        }
+
+        # list of transformed parameters, for both groups x and y
+        h <- list(
+          x = { idx.grp <- which(endsWith(x = pNames, suffix = ".x"))
+          # drop group naming: last two letters
+          pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
+          # apply transform on 1-group parameter vector in canonical order!
+          transformPars1Test(parV1 = c(parV[idx.nongrp], rlang::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))]) },
+          y = { idx.grp <- which(endsWith(x = pNames, suffix = ".y"))
+          # drop group naming: last two letters
+          pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
+          # apply transform on 1-group parameter vector in canonical order!
+          transformPars1Test(parV1 = c(parV[idx.nongrp], rlang::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))]) }
+        )
+
+        # parV transformed for effective twoGroup-setting
+        rlang::set_names(c(h[[1L]][pNames_trgt[idx.nongrp]],
+                           h[[1L]][! names(h[[1L]]) %in% pNames_trgt[idx.nongrp]],
+                           h[[2L]][! names(h[[2L]]) %in% pNames_trgt[idx.nongrp]]),
+                         nm = pNames_trgt)
+      }
+
+      # reflect transformation in meta-data
+      isTransformed <- ! isTransformed
+      pNames <- names(parV)
+      oNames <- incubate:::getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
+    }# transform
+
+
+
+    # return parameter vector
+    if ( ! isTwoGroup || is.null(group) || length(group) != 1L || ! group %in% c('x', 'y') ) {
+      parV
+    } else {
+      # single group extraction
+      stopifnot( is.character(group), nzchar(group) )
+
+      # extract all group parameters (=contain .x or .y at the end)
+      #+and restore original name (=remove ".x" or ".y")
+      # contract: parV is canonically ordered
+      parV.gr <- parV[grepl(pattern = paste0(".", group), x = pNames, fixed = TRUE)]
+      names(parV.gr) <- substr(names(parV.gr), start = 1L, stop = nchar(names(parV.gr))-2L)
+      #parV.gr <- rlang::set_names(parV.gr, nm = setdiff(oNames, pNames[idx.nongrp]))
+
+      # restore original order
+      # contract: bind is intersected (only valid names, canonical order)
+      c(parV.gr, parV[pNames[idx.nongrp]])[intersect(oNames, c(pNames, names(parV.gr)))]
+    }
+  }
+
+  objFun_exp1 <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE)
+  extPars_exp1 <- rlang::env_get(rlang::fn_env(objFun_exp1), "extractPars")
+
   par_exp1 <- c(delay1 = 3, rate1 = .8)
 
-  expect_identical(incubate:::extractParsExt(parV = par_exp1), par_exp1)
-  expect_identical(incubate:::extractParsExt(parV = par_exp1, group = "x"), par_exp1)
-  expect_identical(incubate:::extractParsExt(parV = par_exp1, group = "y"), par_exp1) # group is ignored here
-  expect_identical(incubate:::extractParsExt(parV = par_exp1, transform = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, named = TRUE), par_exp1)
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, named = FALSE), as.vector(par_exp1))
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "x", named = TRUE), par_exp1)
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "y", named = TRUE), par_exp1) # group= is ignored for single group!
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "z", named = TRUE), par_exp1) # group= is ignored for single group!
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE), c(par_exp1[[1L]], log(par_exp1[[2L]])))
+
+  # my original (but slow) implementation
+  expect_identical(extractParsTest(parV = par_exp1), par_exp1)
+  expect_identical(extractParsTest(parV = par_exp1, group = "x"), par_exp1)
+  expect_identical(extractParsTest(parV = par_exp1, group = "y"), par_exp1) # group= is ignored here
+  expect_identical(extractParsTest(parV = par_exp1, transform = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
+
+  # exponential, two groups, unbound
+  objFun_exp2 <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2), y = rexp_delayed(n=3, delay1 = 3, rate1 = .1), distribution = "expon", twoPhase = FALSE)
+  extPars_exp2 <- rlang::env_get(rlang::fn_env(objFun_exp2), "extractPars")
 
   par_exp2 <- c(delay1.x = 2.8, rate1.x = .81, delay1.y = 5.1, rate1.y = 1.1)
-  expect_identical(incubate:::extractParsExt(parV = par_exp2), par_exp2)
-  expect_identical(incubate:::extractParsExt(parV = par_exp2, group = "z"), par_exp2) # strange groups are ignored
-  expect_identical(incubate:::extractParsExt(parV = par_exp2, group = "x"), setNames(par_exp2[1:2], c("delay1", "rate1")))
-  expect_identical(incubate:::extractParsExt(parV = par_exp2, group = "y"), setNames(par_exp2[3:4], c("delay1", "rate1")))
+
+  expect_identical(extPars_exp2(par_exp2, isOpt = FALSE, named = TRUE), par_exp2)
+  expect_identical(extPars_exp2(par_exp2, isOpt = FALSE, named = TRUE, group = "z"), NULL) # strange groups gives NULL in two group setting
+  expect_identical(extPars_exp2(par_exp2, isOpt = FALSE, named = TRUE, group = "x"), setNames(par_exp2[1:2], c("delay1", "rate1")))
+  expect_identical(extPars_exp2(par_exp2, isOpt = FALSE, named = TRUE, group = "y"), setNames(par_exp2[3:4], c("delay1", "rate1")))
+
+  # my original (but slow) implementation
+  expect_identical(extractParsTest(parV = par_exp2), par_exp2)
+  expect_identical(extractParsTest(parV = par_exp2, group = "z"), par_exp2) # strange groups are ignored with extractParsTest!
+  expect_identical(extractParsTest(parV = par_exp2, group = "x"), setNames(par_exp2[1:2], c("delay1", "rate1")))
+  expect_identical(extractParsTest(parV = par_exp2, group = "y"), setNames(par_exp2[3:4], c("delay1", "rate1")))
+
+  # exponential, two groups, unbound
+  objFun_exp2b <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2), y = rexp_delayed(n=3, delay1 = 3, rate1 = .1),
+                                           distribution = "expon", twoPhase = FALSE, bind = "rate1")
+  extPars_exp2b <- rlang::env_get(rlang::fn_env(objFun_exp2b), "extractPars")
 
   par_exp2b <- c(rate1 = .23, delay1.x = 2.8, delay1.y = 5.1)
-  expect_identical(incubate:::extractParsExt(parV = par_exp2b), par_exp2b)
-  expect_identical(incubate:::extractParsExt(parV = par_exp2b, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
-  expect_identical(incubate:::extractParsExt(parV = par_exp2b, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
-  expect_identical(incubate:::extractParsExt(parV = par_exp2b, transform = TRUE),
+  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE), par_exp2b)
+  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
+  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
+  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, transform = TRUE),
                    c(rate1_tr = log(par_exp2b[["rate1"]]), delay1_tr.x = par_exp2b[[2]], delay1_tr.y = par_exp2b[[3]]))
-  expect_identical(incubate:::extractParsExt(parV = par_exp2b, group = "x", transform = TRUE),
+  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "x", transform = TRUE),
                    c(delay1_tr = par_exp2b[[2]], rate1_tr = log(par_exp2b[[1]])))
   # idem-potent (round-trip)
-  expect_identical(incubate:::extractParsExt(incubate:::extractParsExt(parV = par_exp2b, transform = TRUE), transform = TRUE), par_exp2b)
+  expect_identical(extPars_exp2b(extPars_exp2b(par_exp2b, isOpt = FALSE, transform = TRUE),
+                                 isOpt = TRUE, named = TRUE, transform = TRUE), par_exp2b)
+
+  # my original (but slow) implementation
+  expect_identical(extractParsTest(parV = par_exp2b), par_exp2b)
+  expect_identical(extractParsTest(parV = par_exp2b, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
+  expect_identical(extractParsTest(parV = par_exp2b, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
+  expect_identical(extractParsTest(parV = par_exp2b, transform = TRUE),
+                   c(rate1_tr = log(par_exp2b[["rate1"]]), delay1_tr.x = par_exp2b[[2]], delay1_tr.y = par_exp2b[[3]]))
+  expect_identical(extractParsTest(parV = par_exp2b, group = "x", transform = TRUE),
+                   c(delay1_tr = par_exp2b[[2]], rate1_tr = log(par_exp2b[[1]])))
+  # idem-potent (round-trip)
+  expect_identical(extractParsTest(extractParsTest(parV = par_exp2b, transform = TRUE), transform = TRUE), par_exp2b)
 
 
-  par_weib1 <- c(delay = 5, shape = .8, scale = 1.2)
-  expect_identical(incubate:::extractParsExt(parV = par_weib1, distribution = "weibull"), par_weib1)
+  # weibull
+  objFun_weib1 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2), distribution = "weib", twoPhase = FALSE)
+  extPars_weib1 <- rlang::env_get(rlang::fn_env(objFun_weib1), "extractPars")
 
+  par_weib1 <- c(delay1 = 5, shape1 = .8, scale1 = 1.2)
+  expect_identical(extPars_weib1(par_weib1, isOpt = FALSE, named = TRUE), par_weib1)
+  expect_identical(extractParsTest(par_weib1, distribution = "weibull"), par_weib1)
+
+  # extractParsTest specific: incomplete parameter vector
   par_weib1s <- c(delay1 = 5, shape1 = .8)
-  expect_identical(incubate:::extractParsExt(parV = par_weib1s, distribution = "weibull"), par_weib1s)
-  expect_identical(incubate:::extractParsExt(parV = par_weib1s, distribution = "weibull", transform = TRUE),
+  expect_identical(extPars_weib1(par_weib1s, isOpt = FALSE, named = TRUE), c(par_weib1s, scale1=NA)) #missing parameter gets named NA
+  expect_identical(extractParsTest(par_weib1s, distribution = "weibull"), par_weib1s)
+  expect_identical(extractParsTest(par_weib1s, distribution = "weibull", transform = TRUE),
                    c(delay1_tr = par_weib1s[["delay1"]], shape1_tr = log(par_weib1s[["shape1"]])))
+
+  # weibull two groups
+  objFun_weib2 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2), y = rweib_delayed(n=4, delay1=3, shape1 = 2.8, scale1 = .9),
+                                           distribution = "weib", twoPhase = FALSE)
+  extPars_weib2 <- rlang::env_get(rlang::fn_env(objFun_weib2), "extractPars")
 
   par_weib2 <- c(delay1.x = 1, shape1.x = 1.8, scale1.x = 34, delay1.y = 4.2, shape1.y = 3.4, scale1.y = 12)
   par_weib2.y <- setNames(par_weib2[-c(1:3)], nm = c("delay1", "shape1", "scale1"))
-  expect_identical(incubate:::extractParsExt(parV = par_weib2, distribution = "weibull"), par_weib2)
-  expect_identical(incubate:::extractParsExt(par_weib2, distribution = "weibull", group = "y"),
-                   par_weib2.y)
-  expect_identical(incubate:::extractParsExt(par_weib2, distribution = "weibull", group = "y", transform = TRUE),
-                   setNames(c(par_weib2.y[1], log(par_weib2.y[-1])), nm = paste0(names(par_weib2.y), "_tr")))
+  par_weib2.y.tr <- setNames(c(par_weib2.y[1], log(par_weib2.y[-1])), nm = paste0(names(par_weib2.y), "_tr"))
 
+  expect_identical(extPars_weib2(par_weib2, isOpt = FALSE, named = TRUE), par_weib2)
+  expect_identical(extPars_weib2(par_weib2, isOpt = FALSE, named = TRUE, group = "y"), par_weib2.y)
+  expect_identical(extPars_weib2(par_weib2, isOpt = FALSE, named = TRUE, group = "y", transform = TRUE), par_weib2.y.tr)
+
+  expect_identical(extractParsTest(par_weib2, distribution = "weibull"), par_weib2)
+  expect_identical(extractParsTest(par_weib2, distribution = "weibull", group = "y"), par_weib2.y)
+  expect_identical(extractParsTest(par_weib2, distribution = "weibull", group = "y", transform = TRUE), par_weib2.y.tr)
+
+  # extractParsTest specific: incomplete parameter vector
   par_weib2s <- par_weib2[-c(3, 6)] # drop scale
-  expect_identical(incubate:::extractParsExt(par_weib2s, distribution = "weibull", group = "y"),
+  expect_identical(extractParsTest(par_weib2s, distribution = "weibull", group = "y"),
                    setNames(par_weib2s[c(3,4)], nm = c("delay1", "shape1")))
 
-  expect_identical(incubate:::extractParsExt(par_weib2s, distribution = "weibull", group = "y", transform = TRUE),
+  expect_identical(extractParsTest(par_weib2s, distribution = "weibull", group = "y", transform = TRUE),
                    setNames(c(par_weib2s[3], log(par_weib2s[4])), nm = c("delay1_tr", "shape1_tr")))
 
 })
@@ -130,7 +367,7 @@ test_that("Fit delayed Exponentials", {
   purrr::walk2(.x = runif(n=7, min=0.1, max=9),   #delay1
                .y = runif(n=7, min=0.001, max=2), #rate1
                .f = ~ expect_equal(- length(xx) * (log(.y) - .y * (mean(xx) - .x)),
-                                   expected = fd_exp_MLEn$objFun(pars = incubate:::extractParsExt(parV = c(delay1=.x, rate1=.y), distribution = "expon", transform = TRUE)))
+                                   expected = fd_exp_MLEn$objFun(pars = c(delay1=.x, rate1=.y), criterion = TRUE))
   )
 
 
@@ -280,13 +517,14 @@ test_that("Fit delayed Weibull", {
   expect_lte(coef_maxFl_MLEn[["scale1"]], coef_maxFl[["scale1"]])
 
   # check the objective function
-  purrr::pwalk(.l = list(delay1=runif(7, max=0.25), shape1=runif(7, max=3), scale1=runif(7, max=5)),
-              .f = ~ {
-                xc <- susquehanna - ..1
-                expect_equal(fd_maxFl_MLEn$objFun(incubate:::extractParsExt(c(delay1=..1, shape1=..2, scale1=..3), distribution = 'weibull', transform = TRUE)),
-                             expected = -length(susquehanna) * (log(..2) - ..2 * log(..3) + (..2 - 1L) * mean(log(xc)) - mean(xc**..2)/..3**..2))
-
-                })
+  purrr::pwalk(.l = list(delay1=runif(7, max=0.25),
+                         shape1=runif(7, max=3),
+                         scale1=runif(7, max=5)),
+               .f = ~ {
+                 xc <- susquehanna - ..1
+                 expect_equal(fd_maxFl_MLEn$objFun(c(delay1=..1, shape1=..2, scale1=..3), criterion = TRUE),
+                              expected = -length(susquehanna) * (log(..2) - ..2 * log(..3) + (..2 - 1L) * mean(log(xc)) - mean(xc**..2)/..3**..2))
+               })
 
   fd_maxFl_MLEnp <- delay_model(susquehanna, distribution = "weibu", method = "MLEn", profiled = TRUE)
   expect_identical(fd_maxFl_MLEnp$optimizer$convergence, expected = 0L)
@@ -313,13 +551,13 @@ test_that("Fit delayed Weibull", {
                       lower = c(0, 1 + 1.49e-8), upper = c(min(susquehanna)-1.49e-8, +Inf))
   coef_maxFl_MLEnp_man <- purrr::set_names(c(opt_maxFl_MLEnp_man$par, mean((susquehanna-opt_maxFl_MLEnp_man$par["a"])^opt_maxFl_MLEnp_man$par["k"])^(1/opt_maxFl_MLEnp_man$par["k"])),
                                   nm = c("delay1", "shape1", "scale1"))
-
   # estimates are only **roughly** equal
   expect_equal(coef_maxFl_MLEnp_man, coef(fd_maxFl_MLEnp), tolerance = .25)
 
   fd_maxFl_MLEw <- delay_model(x = susquehanna, distribution = "weib", method = "MLEw")
   expect_identical(fd_maxFl_MLEw$optimizer$convergence, expected = 0L)
   expect_named(coef(fd_maxFl_MLEw), expected = c("delay1", "shape1", "scale1"))
+  expect_gte(fd_maxFl_MLEw$criterion, fd_maxFl_MLEn$criterion) #MLEn directly optimizes the criterion
 
   #llProfObjFun(coef_maxFl_MLEnp_man[1:2])
   #llProfObjFun(coef(fd_maxFl_MLEnp)[1:2])
@@ -345,7 +583,7 @@ test_that("Fit delayed Weibull", {
 
   expect_identical(purrr::chuck(fd_poll, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_poll), expected = 3L)
-  expect_lt(objFun_poll(incubate:::extractParsExt(parV = coef_poll, distribution = "weibull", transform = TRUE)), expected = 3.75)
+  expect_lt(objFun_poll(coef_poll, criterion = TRUE), expected = 3.75)
   expect_equal(coef_poll, expected = c(delay1=1085, shape1=0.95, scale1=6562), tolerance = .001)
 
   # MLE-based fits for pollution

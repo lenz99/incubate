@@ -24,6 +24,35 @@ minObjFunPORT <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0
   optObj
 }
 
+
+#' Calculate parameter scaling for optimization routine.
+#'
+#' The scale per parameter corresponds to the step width within the optimization path.
+#' @param parV named numeric parameter vector for optimization
+#' @param lowerB numeric. lower bound for parameter scales
+#' @param upperB numeric. upper bound for parameter scales
+#' @return vector of parameter scaling
+scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
+  if (is.null(lowerB)) lowerB <- -Inf
+  if (is.null(upperB)) upperB <- +Inf
+
+  stopifnot( is.numeric(parV), is.numeric(lowerB), is.numeric(upperB))
+  stopifnot( length(lowerB) == 1L || length(lowerB) == length(parV) )
+  stopifnot( length(upperB) == 1L || length(upperB) == length(parV) )
+
+  # scale vector: default value is 1
+  scVect <- rep.int(1, times = length(parV))
+
+  # non-log parameters get scaling depending on their initial value
+  idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
+  scVect[idx.nonLog] <- parV[idx.nonLog]^.2 #5th root pushes towards 1
+
+  # enforce upper and lower bounds
+  pmax.int(lowerB, pmin.int(upperB, scVect))
+
+}
+
+
 #' Estimate rounding error based on given sample of metric values
 #' The idea is to check at which level of rounding the sample values do not change.
 #' @param obs numeric. Metric values from a sample to estimate the corresponding rounding error
