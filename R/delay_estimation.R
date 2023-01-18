@@ -1,7 +1,7 @@
 
 
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
-#' or according to naive maximum likelihood estimation ('MLEn').
+#' or according to some flavour of maximum likelihood estimation (e.g., naive 'MLEn' or corrected 'MLEc').
 #'
 #' Given the observed data this factory method produces an objective function
 #' which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
@@ -25,13 +25,13 @@
 objFunFactory <- function(x, y = NULL,
                           distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL,
                           method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'), profiled = FALSE, ties = c('density', 'equidist', 'random', 'error'),
-                          verbose = 0L) {
+                          verbose = 0) {
 
   # setup ----
-  stopifnot( is.numeric(x), length(x) > 0L, is.null(y) || is.numeric(y) && length(y) > 0L )
+  stopifnot( is.numeric(x), length(x) > 0, is.null(y) || is.numeric(y) && length(y) > 0 )
   method <- match.arg(method)
   distribution <- match.arg(distribution)
-  stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1L )
+  stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1 )
   ties <- match.arg(ties)
 
   twoPhase <- isTRUE(twoPhase)
@@ -130,7 +130,7 @@ objFunFactory <- function(x, y = NULL,
     } #fi tiesdiff
 
     # we have broken all ties
-    stopifnot( !any(diff(obs)==0L) )
+    stopifnot( !any(diff(obs) == 0) )
 
     obs
   } #fn preprocess
@@ -176,7 +176,7 @@ objFunFactory <- function(x, y = NULL,
 
   # parameter handling ----
 
-  # weight W1 for MLEw, becomes an attribute for the objective function (for later reference to get scale parameter)
+  # weight W1 for MLEw (for later reference to get scale parameter)
   W1 <- if (method == 'MLEw') c(x=(1-1/(9*length(x)))^3, y = if (! is.null(y)) (1-1/(9*length(y)))^3 else NA_real_) else c(x=1, y=1)
 
   stopifnot( ! twoPhase ) #XXX not implemented yet!!
@@ -216,7 +216,7 @@ objFunFactory <- function(x, y = NULL,
   }
 
   extractParInd <- if (distribution == 'exponential' || !profiled) {
-    extractParOptInd
+    extractParOptInd # identical to optimization indices
   } else {
     if (! twoGroup) # single group, non-exponential && profiled,
       list(x = c(1L, 2L, 3L)) else {
@@ -445,6 +445,9 @@ objFunFactory <- function(x, y = NULL,
     )
   }# fn getParSetting.gr
 
+  # profile likelihood: maximize profiled log-lik f directly
+  # if FALSE, go indirectly: consider min(f'^2). As necessary condition, f'^2 == 0
+  profiled_llik_directly <- TRUE
 
   # parameter bounds: set lower & upper bounds
   lowerB <- upperB <- rlang::set_names(rep_len(NA_real_, length(trNamesFull)),
@@ -454,9 +457,8 @@ objFunFactory <- function(x, y = NULL,
   PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),
-                     # shape lower bound for MLEnp actually for shape1
-                     shape = c(lower = if (profiled && method == 'MLEn') 1.49e-8 else -Inf,
-                               upper = +Inf),
+                     # shape lower bound for MLEnp (actually for shape1)
+                     shape = c(lower = if (profiled && method == 'MLEn' && !profiled_llik_directly) 1.49e-8 else -Inf, upper = +Inf),
                      scale = c(lower = -Inf, upper = +Inf))
 
 
@@ -556,7 +558,7 @@ objFunFactory <- function(x, y = NULL,
 
     # access observations of group
     obs <- if (group == "y") y else x #direct access by name
-    #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
+    #rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
 
     # extract parameters for specified group on original scale (for CDF)
     pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
@@ -573,10 +575,6 @@ objFunFactory <- function(x, y = NULL,
       n <- length(obs)
       k <- if (distribution == 'weibull') pars.gr[[2L]] else 0
 
-      # profile likelihood: maximize profiled log-lik f directly
-      # if FALSE, go indirectly: consider min(f'^2). As necessary condition, f'^2 == 0
-      profiled_llik_directly <- TRUE
-
       switch(method,
              # MLEc =,
              MLEn = {
@@ -584,8 +582,10 @@ objFunFactory <- function(x, y = NULL,
                  obs_c <- obs - pars.gr[[1L]]
                  #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
 
-                 # objective function to maximize
+                 # objective function to maximize:
                  if (profiled_llik_directly){
+                   # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
+                   # 2nd & 3rd summand could also be: -log(mean(obs_c**k)) + log(k)
                    n * ((k-1) * mean(log(obs_c)) - log(sum(obs_c**k)) + log(n*k) - 1) - penalize_shape*log(k+1)
                  } else {
                    - (1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 -

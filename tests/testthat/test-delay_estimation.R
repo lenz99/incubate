@@ -587,11 +587,28 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef_poll, expected = c(delay1=1085, shape1=0.95, scale1=6562), tolerance = .001)
 
   # MLE-based fits for pollution
+  fd_poll_MLEn <- delay_model(pollution, distribution = "weibu", method = "MLEn", profile = FALSE)
+  coef_poll_MLEn <- coef(fd_poll_MLEn)
+  expect_identical(fd_poll_MLEn$optimizer$convergence, expected = 0L)
+  expect_named(coef_poll_MLEn, expected = c("delay1", "shape1", "scale1"))
+  # naive MLE gives later delay estimates than MPSE, close to minimal observation
+  expect_gt(coef_poll_MLEn[["delay1"]], coef_poll[["delay1"]])
+  expect_equal(coef_poll_MLEn[["delay1"]], expected = min(pollution), tolerance = 1e-4)
+  # MLEn allows for shape estimates k below 1
+  expect_lt(coef_poll_MLEn[["shape1"]], expected = 1)
+
   fd_poll_MLEnp <- delay_model(pollution, distribution = "weibu", method = "MLEn", profile = TRUE)
+  coef_poll_MLEnp <- coef(fd_poll_MLEnp)
   expect_identical(fd_poll_MLEnp$optimizer$convergence, expected = 0L)
+  expect_named(coef_poll_MLEnp, expected = c("delay1", "shape1", "scale1"))
+  # MLEn and MLEnp give very similar parameter estimates
+  expect_equal(coef_poll_MLEn, expected = coef_poll_MLEnp, tolerance = 1e-4)
+  # profiled MLEn allows for shape estimates k below 1
+  expect_lt(coef_poll_MLEnp[["shape1"]], expected = 1)
 
   fd_poll_MLEw <- delay_model(pollution, distribution = "weibu", method = "MLEw", profile = TRUE)
   expect_identical(fd_poll_MLEw$optimizer$convergence, expected = 0L)
+  expect_named(coef(fd_poll_MLEw), expected = c("delay1", "shape1", "scale1"))
 
 
   # Cousineau's numerical example, taken from Weibull with delay = 300, shape k = 2 and scale = 100
