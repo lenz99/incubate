@@ -261,8 +261,9 @@ doMCSim <- function(xx){
     gof_moran1 = purrr::map_dbl(testList, list("P", "moran1"), .default = NA_real_),
     gof_pearson0 = purrr::map_dbl(testList, list("P", "pearson"), .default = NA_real_),
     gof_pearson1 = purrr::map_dbl(testList, list("P", "pearson1"), .default = NA_real_),
-    gof_ad0 = purrr::map_dbl(testList, list("P", "ad"), .default = NA_real_),
-    gof_ad1 = purrr::map_dbl(testList, list("P", "ad1"), .default = NA_real_),
+    # AD-test is currently not recommended
+    #gof_ad0 = purrr::map_dbl(testList, list("P", "ad"), .default = NA_real_),
+    #gof_ad1 = purrr::map_dbl(testList, list("P", "ad1"), .default = NA_real_),
     lr = purrr::map_dbl(testList, list("P", "logrank"), .default = NA_real_),
     lr_pp = purrr::map_dbl(testList, list("P", "logrank_pp"), .default = NA_real_) ) %>%
     # make long format, all output in column 'P'

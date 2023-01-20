@@ -195,7 +195,6 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
                       chiSqApprox = FALSE, verbose = 0) {
   TOL_CRIT <- 1e-7
   distribution <- match.arg(arg = distribution)
-  type <- tolower(type)
   type <- match.arg(arg = type)
   onames <- getDist(distribution = distribution, type = "param", twoPhase = FALSE, twoGroup = FALSE, transformed = FALSE)
   stopifnot( is.numeric(x), length(x) > length(onames), is.numeric(y), length(y) > length(onames) )
@@ -223,7 +222,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   }
 
   # translate convenience names (for single phase) to canonical names
-  unNmbrdIdx <- !grepl(pattern = "[12]", param, fixed = FALSE)
+  unNmbrdIdx <- !endsWith(param, suffix = "1") & !endsWith(param, suffix = "2")
   if (any(unNmbrdIdx)){
     param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
     if (verbose > 0L) cat("The unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n")
@@ -331,7 +330,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   P_LR <- NULL
   if (testMask[['LR']]){
     # likelihood ratio test (LR-test), negative values of test statistic give P=1
-    P_LR <- stats::pchisq(q = -2L * (fit1[["criterion"]] - fit0[["criterion"]]), df = length(param), lower.tail = FALSE)
+    P_LR <- stats::pchisq(q = ts_obs[["val"]], df = length(param), lower.tail = FALSE)
   }
 
   t0_dist <- P_boot <- chisq_df_hat <- NULL
@@ -402,7 +401,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   structure(
     # compact cleanses NULL entries
     purrr::compact(list(
-      #fit0 = fit0, fit1 = fit1, ##for debugging only
+      # two initial model fits
+      #fit0 = fit0, fit1 = fit1, ##debug only?!
       t_obs = ts_obs[["val"]],
       testDist = t0_dist,
       R = if (testMask[['bootstrap']]) length(t0_dist),

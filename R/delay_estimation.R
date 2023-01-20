@@ -756,7 +756,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
   stopifnot( is.function(objFun) )
   objFunEnv <- rlang::fn_env(objFun)
 
-  # get objects from objective function environment
+  # gather information from objective function environment
   objFunObjs <- rlang::env_get_list(env = objFunEnv,
                                     nms = c("bind", "distribution", "method", "optim_args" ,"trNamesFull", "profiled", "twoGroup", "twoPhase", "x", "y", "extractPars", "oNames"))
 
