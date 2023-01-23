@@ -5,6 +5,7 @@
 
 
 # init -----
+
 library('incubate')
 # minimal version check:
 #+ 0.7.6 for GOF-Pvalues for restricted & unrestricted model: e.g. gof_mo0 (was gof_mo) and gof_mo1 (new)
@@ -13,7 +14,7 @@ library('incubate')
 #+ 1.1.9.9014 ties='density' as default now also for tests
 #+ 1.1.9.9016 avoid attributes, use transform() for Pearson/AD GOF tests
 #+ 1.2.0.9025: rename logrank P-values to logrank and logrank_pp (to avoid confusion with likelihood ratio (=LR) tests)
-stopifnot( packageVersion('incubate') >= '1.1.9.9016' )
+stopifnot( packageVersion('incubate') >= '1.1.9.9025' )
 cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
 
 library('dplyr', warn.conflicts = FALSE)
@@ -23,6 +24,7 @@ library('tibble')
 
 suppressPackageStartupMessages(library('R.utils'))
 
+stopifnot( packageVersion("dplyr") > "1.0.10")
 TODAY <- Sys.Date()
 
 
@@ -38,18 +40,18 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('Run Monte-Carlo simulations with delayed Exponential or Weibull data in a two group setting.\n')
   cat('A test for difference in delay (and sometimes delay+rate) is performed.\n')
   cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values (see code in this script).\n')
-  cat('Flexible command line parameter options are:\n')
+  cat('Command line parameter options allow to adjust what this script actually does:\n')
   cat('  --help\t print this help\n')
   cat('  --print\t show scenarios to simulate and exit.\n')
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
-  cat('  --dist=\t specify distribution that governs the data generation\n')
+  cat('  --dist=\t specify distribution that governs the data generation. Default is the exponential distribution.\n')
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
   cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
   cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
   cat('  --slice=\t if given, pick only this number of scenarios for the simulation\n')
-  cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent. \n')
+  cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent.\n')
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios. Default is no chunking (=0).\n')
-  cat('  --workers=\t number of parallel computations using `future.callr` and `future.apply`. The first level of parallelization is across the MC-replications for each simulation setting.\n')
+  cat('  --workers=\t number of parallel computations using `future.callr` and `future.apply`. The only level of parallelization is across the MC-replications for each simulation setting.\n')
   cat('  --R=\t\t number of samples within parametric bootstrap test: it determines the resolution for our P-value, e.g.,\n\t\t R=100 will allow for P-values at per-cent resolution\n')
   cat('  --mcnrep=\t size of Monte-Carlo study: it is the number of replicated bootstrap data sets on which statistical tests are done.\n')
   quit(save = 'no')
@@ -85,7 +87,7 @@ mySeed <- cmdArgs[["seed"]]
 stopifnot( is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L )
 
 myScenario <- cmdArgs[["scenario"]]
-stopifnot( ! is.null(myScenario), is.character(myScenario), length(myScenario) == 1L )
+stopifnot( ! is.null(myScenario), is.character(myScenario), length(myScenario) == 1L, nzchar(myScenario) )
 myScenario <- match.arg(arg = toupper(myScenario), choices = c("DELAYEQ", "DELAYGT", "MS", "ALL"))
 
 myPrint <- isTRUE(any(c("print", "p") %in% tolower(names(cmdArgs))))
@@ -164,10 +166,10 @@ switch (myScenario,
 
         MS = {
           simSetting <- simSetting %>%
-            dplyr::inner_join(simFilterMS, by = names(simFilterMS))
+            dplyr::inner_join(simFilterMS, by = colnames(simFilterMS))
         },
 
-        ALL = { invisible(NULL) }, # keep everything! (also unused border cases)
+        ALL = { invisible(NULL) }, # no-op, keep everything! (also unused border cases)
         stop("Unknown target!")
 )
 
@@ -180,9 +182,10 @@ if (mySlice > 0L) {
 
 if (myPrint) {
   print(knitr::kable(simSetting, format = 'pipe', digits = 2))
-  cat('\nIn total,', NROW(simSetting), 'simulation scenarios.\n')
-  cat('Each scenario is covered by ', myMCNrep, 'data replications.\n')
-  cat('A bootstrap test has R=', myR, 'parametric bootstrap samples.\n')
+  cat('\n')
+  cat(NROW(simSetting), 'simulation scenarios in total.\n')
+  cat('Each scenario is covered by ', myMCNrep, 'MC-data replications.\n')
+  cat('A bootstrap test has R=', myR, 'parametric bootstrap samples (P-value resolution).\n')
   cat('Seed set initially is: ', if (mySeed>0) mySeed else '-not set-', '\n')
   cat('Results directory is set to ', myResultsDir, '\n')
   quit(save = 'no')
@@ -204,12 +207,13 @@ if (myWorkers > 1L){
 
 # functions -----
 
+
 #' Monte-Carlo simulation for a single simulation setting.
 #' Uses parallel computation (future_replicate) to go through the (=nrep) MC-simulations.
 #' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
 #' @param xx numeric. parameters that specify the simulation model for both groups
 #' @return dataframe. P-values in the different Monte-Carlo runs.
-doMCSim <- function(xx){
+doMCSim_OLD <- function(xx){
   n_x <- xx[[1]]
   n_y <- xx[[2]]
   delay_x <- xx[[3]]
@@ -221,8 +225,8 @@ doMCSim <- function(xx){
 
 
   testList <- future.apply::future_replicate(n = myMCNrep, expr = {
-    x <- y <- 1 #dummy init
     # generate data
+    x <- y <- 1 #dummy init
     if (isExpon) {
       stopifnot( dplyr::near(shape, 1L) )
       x <- rexp_delayed(n = n_x, delay = delay_x, rate = 1/scale_x)
@@ -234,12 +238,12 @@ doMCSim <- function(xx){
     }
 
     te_diff <- NULL
-    # test_diff also uses parallel computations depending on future-settings
+    # test_diff might also use parallel computations depending on future-settings
     try(expr = {
-      te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay', R = myR)
-      # get bootstrap P-value for combined test: delay+rate (if the scale (=1/rate for exponential) is indeed different)
+      te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay', method = "MPSE", R = myR, type = "all")
+      # get bootstrap P-value for combined test: delay+rate (we request it only if the scale (=1/rate for exponential) is indeed different)
       if (scale_ratio != 1){
-        te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay', 'rate'), R = myR, type = 'bootstrap')
+        te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay', 'rate'), method = "MPSE", R = myR, type = 'bootstrap')
         # store P-value of delay+rate in original test_diff-object
         te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, 'P', 'bootstrap', .default = NA_real_)
       }#fi
@@ -252,9 +256,11 @@ doMCSim <- function(xx){
 
   # long dataframe of P-values
   tibble::tibble(
-    run = seq(length(testList)),
+    run = seq_along(testList),
     R_nominal = purrr::map_dbl(testList, "R"),
     R_effective = purrr::map_dbl(testList, list("testDist", length), .default = NA_real_),
+    # likelihood-ratio style test
+    lr = purrr::map_dbl(testList, list("P", "LR"), .default = NA_real_),
     boot  = purrr::map_dbl(testList, list("P", "bootstrap"), .default = NA_real_),
     boot2 = purrr::map_dbl(testList, list("P", "bootstrap2"), .default = NA_real_),
     gof_moran0 = purrr::map_dbl(testList, list("P", "moran"), .default = NA_real_),
@@ -264,21 +270,93 @@ doMCSim <- function(xx){
     # AD-test is currently not recommended
     #gof_ad0 = purrr::map_dbl(testList, list("P", "ad"), .default = NA_real_),
     #gof_ad1 = purrr::map_dbl(testList, list("P", "ad1"), .default = NA_real_),
-    lr = purrr::map_dbl(testList, list("P", "logrank"), .default = NA_real_),
-    lr_pp = purrr::map_dbl(testList, list("P", "logrank_pp"), .default = NA_real_) ) %>%
-    # make long format, all output in column 'P'
+    logrank = purrr::map_dbl(testList, list("P", "logrank"), .default = NA_real_),
+    logrank_pp = purrr::map_dbl(testList, list("P", "logrank_pp"), .default = NA_real_) ) %>%
+    # make long format, all output (mostly P-values) into column 'value'
     tidyr::pivot_longer(cols = !run, names_to = "method", values_to = "value",
                         # drop NAs (for instance, missing boot2 P-value)
                         values_drop_na = TRUE)
 
 }
 
+#' Run Monte-Carlo simulations to test difference in delay using an exponential model for a given simulation setting.
+#' A fixed set of estimation methods are used.
+#' Uses parallel computation (future_replicate) to go through the (=nrep) MC-simulations.
+#' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
+#' @param xx numeric. parameters that specify the simulation model for both groups
+#' @return dataframe. P-values in the different Monte-Carlo runs.
+doMCSim <- function(xx){
+  # settings from the environment:
+  stopifnot( exists("isExpon"), exists("myMCNrep"), exists("myR") )
+
+  n_x <- xx[[1]]
+  n_y <- xx[[2]]
+  delay_x <- xx[[3]]
+  delay_y <- xx[[4]]
+
+  scale_x <- xx[[5]]
+  scale_ratio <- xx[[6]]
+  shape <- xx[[7]]
+
+  # do we test for parameters combined?
+  testParamComb <- scale_ratio != 1
+
+  estimMethods <- tidyr::expand_grid(method = c("MPSE", "MLEn", "MLEc"),
+                                     profiled = FALSE,
+                                     R = as.integer(myR)) %>%
+    dplyr::rowwise()
+
+  testDiffList <- future.apply::future_replicate(n = myMCNrep,
+                                                 future.packages = c("dplyr", "incubate"), future.seed = TRUE,
+                                                 expr = {
+                                                   # generate data
+                                                   x <- y <- 1 #dummy init
+                                                   if (isExpon) {
+                                                     stopifnot( dplyr::near(shape, 1L) )
+                                                     x <- rexp_delayed(n = n_x, delay = delay_x, rate = 1/scale_x)
+                                                     y <- rexp_delayed(n = n_y, delay = delay_y, rate = 1/(scale_x * scale_ratio))
+                                                   } else {
+                                                     # weibull
+                                                     x <- rweib_delayed(n = n_x, delay = delay_x, scale = scale_x, shape = shape)
+                                                     y <- rweib_delayed(n = n_y, delay = delay_y, scale = scale_x * scale_ratio, shape = shape)
+                                                   }
+
+                                                   estimMethods %>%
+                                                     dplyr::mutate(testDiffObj = list({
+                                                       te_diff <- NULL
+                                                       # test_diff might also use parallel computations depending on future-settings
+                                                       try(expr = {
+                                                         te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay', method = method, profiled = profiled, R = R, type = "all", doLogrank = method == 'MPSE')
+                                                         # get bootstrap P-value for combined test: delay+rate (we request it only if the scale (=1/rate for exponential) is indeed different)
+                                                         if (testParamComb && ! is.null(te_diff)){
+                                                           te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay', 'rate'), method = method, profiled = profiled, R = R, type = 'bootstrap')
+                                                           # store P-value of delay+rate in original test_diff-object
+                                                           te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, 'P', 'bootstrap', .default = NA_real_)
+                                                         }#fi
+                                                       }, silent = TRUE)
+                                                       te_diff
+                                                     })) %>%
+                                                     # compact testDiff-list column: drop entries that did not work out!
+                                                     dplyr::filter(! is.null(testDiffObj)) %>%
+                                                     # extract P-values via dplyr::reframe (beta v1.1.0):
+                                                     #+it generates all P-values/R_eff in long format from each row!
+                                                     dplyr::reframe(method, profiled, R,
+                                                                    R_eff = length(testDiffObj$testDist),
+                                                                    tibble::enframe(unlist(testDiffObj$P), name = "P"))
+                                                 }, simplify = FALSE)
+
+  # drop NULLs (just in case)
+  testDiffList <- purrr::compact(testDiffList)
+
+  # bind together into a single long tibble
+  dplyr::bind_rows(testDiffList, .id = "run")
+}
 
 #' run MC-simulations for each scenario sequentially (row-by-row)
-#' @return dataframe resulting P-values as list column and add meta information
+#' @return tibble of simulations settings where results tibble has been added
 applyMCSims <- function(simSetDF){
   simSetDF %>%
-    mutate(., P = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim))
+    mutate(., results = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim))
 }
 
 
