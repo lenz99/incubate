@@ -10,7 +10,7 @@ test_diff(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
   method = c("MPSE", "MLEn", "MLEw", "MLEc"),
-  profile = method == "MLEw",
+  profiled = method == "MLEw",
   ties = c("density", "equidist", "random", "error"),
   param = "delay1",
   type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LR"),
@@ -30,7 +30,7 @@ test_diff(
 
 \item{method}{character. Which method to fit the models.}
 
-\item{profile}{logical. Do we use the profiled likelihood?}
+\item{profiled}{logical. Use the profiled likelihood?}
 
 \item{ties}{character. How to handle ties in data vector of a group?}
 

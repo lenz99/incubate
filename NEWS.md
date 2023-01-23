@@ -1,8 +1,11 @@
 
-# incubate 1.2.1.9016
-* use (partially) log-transformed parameters internally for more stable and less constrained optimization
-* [experimental] implement two delay phases for exponential and for Weibull
+# incubate 1.2.1.9033
+* implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter
+* use some log-transformed parameters internally for more stable and less constrained optimization
+* `test_diff`: allow for likelihood-ratio test
 * include restricted mean survival time function for delayed exponential and Weibull
+* [experimental] implement two delay phases for exponential and for Weibull
+* update simulation R-scripts (in `inst/scripts/`) to also use ML-based estimation and LR-tests
 
 # incubate 1.2.1
 * fix package help: due to changes in roxygen

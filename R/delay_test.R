@@ -178,30 +178,34 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 #' @param distribution character(1). Name of the parametric delay distribution to use.
 #' @param twoPhase logical(1). Do we model two phases per group? Default is `FALSE`, i.e. a single delay phase per group.
 #' @param method character. Which method to fit the models.
-#' @param profile logical. Do we use the profiled likelihood?
+#' @param profiled logical. Use the profiled likelihood?
 #' @param param character. Names of parameters to test difference for. Default value is `'delay1'`.
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param type character. Which type of tests to perform?
+#' @param doLogrank logical. In any case do log-rank based tests?
 #' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param chiSqApprox logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), twoPhase = FALSE,
-                      method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profile = method == 'MLEw',
+                      method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profiled = method == 'MLEw',
                       ties = c('density', 'equidist', 'random', 'error'),
                       param = "delay1",
-                      type = c('all', 'bootstrap', 'GOF', 'moran', 'pearson', 'logrank', 'LR'), R = 400,
+                      type = c('all', 'bootstrap', 'GOF', 'moran', 'pearson', 'logrank', 'LR'), doLogrank = TRUE,
+                      R = 400,
                       chiSqApprox = FALSE, verbose = 0) {
-  TOL_CRIT <- 1e-7
+
+  # setup ----
   distribution <- match.arg(arg = distribution)
   type <- match.arg(arg = type)
   onames <- getDist(distribution = distribution, type = "param", twoPhase = FALSE, twoGroup = FALSE, transformed = FALSE)
   stopifnot( is.numeric(x), length(x) > length(onames), is.numeric(y), length(y) > length(onames) )
   stopifnot( is.numeric(R), length(R) == 1L, R >= 1L )
   stopifnot( is.character(param) )
+  # verbose arg
   if (is.logical(verbose)) verbose <- as.numeric(verbose)
-  if ( is.null(verbose) || ! is.numeric(verbose) || ! is.finite(verbose) ) verbose <- 0
+  if (is.null(verbose) || ! is.numeric(verbose) || ! is.finite(verbose)) verbose <- 0
   verbose <- verbose[[1L]]
 
   method <- if (length(method) == 1L && toupper(method) == 'MSE') {
@@ -239,9 +243,12 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   testMask <- rlang::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'logrank', 'LR'))
 
   switch(EXPR = type,
-         all = { testMask <- testMask | TRUE; testMask[c("pearson", "moran")] <- method == 'MPSE' },
+         all = {
+           testMask <- testMask | TRUE
+           testMask[c("pearson", "moran")] <- method == 'MPSE'
+         },
          # bootstrap + log-rank-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLR=?!
-         bootstrap = {testMask[c('bootstrap', 'logrank')] <- TRUE},
+         bootstrap = { testMask[c('bootstrap', 'logrank')] <- TRUE },
          GOF = {testMask[c('pearson', 'moran')] <- TRUE},
          moran = {testMask['moran'] <- TRUE},
          pearson = {testMask['pearson'] <- TRUE},
@@ -250,15 +257,23 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
          stop('This type of test is not supported!', call. = FALSE)
   )
 
-  # Test statistic calculated from the given data and the model specification.
+  # separate control for logrank-based tests
+  testMask['logrank'] <- doLogrank
+
+
+  # test statistic ----
+
+  TOL_CRIT <- 1e-7
+
+  # Test statistic calculated from the given data, method and the model specification.
   #
   # The test statistic takes non-negative values.
   # High values of the test statistic speak in favour of H1:
   # @param strict logical. Accept models only if they converged flawlessly, i.e., if convergence=0?
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y, strict = TRUE) {
-    fit0 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase, method = method, profile = profile, ties = ties, bind = param)
-    fit1 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase, method = method, profile = profile, ties = ties)
+    fit0 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase, method = method, profiled = profiled, ties = ties, bind = param)
+    fit1 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase, method = method, profiled = profiled, ties = ties)
 
     if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
 
@@ -267,7 +282,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     #+we refit the general fit1 again using parameter-values from fit0
     if ( fit0[["criterion"]] + TOL_CRIT < fit1[["criterion"]] &&
          !is.null(fit1oa <- purrr::pluck(fit1, "optimizer", "optim_args")) ) {
-      if (verbose > 0) warning("Restricted model with better fit than unrestricted model.", call. = FALSE)
+      if (verbose > 0) warning("Restricted model with better fit (=smaller criterion) than unrestricted model.", call. = FALSE)
       # re-run fit1 with start values based on fitted parameters of reduced model fit0
       stopifnot( is.list(fit1oa), "par" %in% names(fit1oa) )
 
@@ -305,7 +320,9 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   fit1 <- ts_obs[["fit1"]]
 
 
-  # P-values based GOF-tests
+  # P-values -----
+
+  # GOF-test results
   #+ H0: simpler/restricted model 0 is sufficient
   #+ the GOF-test solely builds on fit0
   #+ take fitted parameters for both groups under null-model
@@ -329,7 +346,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
   P_LR <- NULL
   if (testMask[['LR']]){
-    # likelihood ratio test (LR-test), negative values of test statistic give P=1
+    # likelihood ratio test (LR-test), based on the criterion that was requested (MPSE or ML-based)
     P_LR <- stats::pchisq(q = ts_obs[["val"]], df = length(param), lower.tail = FALSE)
   }
 
@@ -347,7 +364,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     ranFunArgsY <- c(list(n=length(y)), coef.incubate_fit(fit0, group = "y", transformed = FALSE))
 
     retL <- 1L+(verbose>0L)
-    t0_dist <- future.apply::future_vapply(X = seq.int(R), FUN.VALUE = double(retL),
+    t0_dist <- future.apply::future_vapply(X = seq_len(R), FUN.VALUE = double(retL),
                                            FUN = function(dummy){
 
                                              # generate new data according to given fitted null-model
@@ -365,16 +382,15 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     if (verbose > 0L){
       stopifnot( NROW(t0_dist) == 2L )
       fit0_conv <- t0_dist[2L,]
-      cat(glue(
-        'Proportion of model failures: {as_percent(length(which(is.na(fit0_conv)))/length(fit0_conv))}',
-        'Proportion of conv =  0: {as_percent(length(which(fit0_conv == 0))/ length(fit0_conv))}',
-        'Proportion of conv = 52: {as_percent(length(which(fit0_conv == 52))/length(fit0_conv))}',
-        .sep = '\n'), '\n')
+      cat(glue('Proportion of model failures: {as_percent(length(which(is.na(fit0_conv)))/length(fit0_conv))}',
+               'Proportion of conv =  0: {as_percent(length(which(fit0_conv == 0))/ length(fit0_conv))}',
+               'Proportion of conv = 52: {as_percent(length(which(fit0_conv == 52))/length(fit0_conv))}',
+               .sep = '\n'), '\n')
       t0_dist <- t0_dist[1L, , drop=TRUE] #retain only ts_boot[['val']]
     }
     t0_dist <- t0_dist[is.finite(t0_dist)]
 
-    if (chiSqApprox && length(t0_dist) > 3L){
+    if (chiSqApprox && length(t0_dist) > 7L){
       try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
                                                       start = list(df = length(param)),
                                                       method = "Brent", lower = .001, upper = 401))},
@@ -384,7 +400,8 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
   } # bootstrap
 
-  ## P-value from Log-rank tests
+
+  # Log-rank tests
   P_logrank <- P_logrank_pp <- NULL
   if (testMask[["logrank"]]){
     # data in long format
@@ -402,7 +419,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     # compact cleanses NULL entries
     purrr::compact(list(
       # two initial model fits
-      #fit0 = fit0, fit1 = fit1, ##debug only?!
+      #fit0 = fit0, fit1 = fit1, # debug only?!
       t_obs = ts_obs[["val"]],
       testDist = t0_dist,
       R = if (testMask[['bootstrap']]) length(t0_dist),

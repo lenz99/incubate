@@ -3,7 +3,7 @@
 \name{objFunFactory}
 \alias{objFunFactory}
 \title{Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
-or according to naive maximum likelihood estimation ('MLEn').}
+or according to some flavour of maximum likelihood estimation (e.g., naive 'MLEn' or corrected 'MLEc').}
 \usage{
 objFunFactory(
   x,
@@ -14,7 +14,7 @@ objFunFactory(
   method = c("MPSE", "MLEn", "MLEc", "MLEw"),
   profiled = FALSE,
   ties = c("density", "equidist", "random", "error"),
-  verbose = 0L
+  verbose = 0
 )
 }
 \arguments{
