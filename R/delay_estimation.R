@@ -10,7 +10,7 @@
 #'
 #' @details
 #' From the observations, negative or infinite values are discarded during pre-processing.
-#' In any case, the objective function is to be minimized.
+#' In any case, the objective function is to be **minimized**.
 #'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
@@ -1061,7 +1061,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
   p +
     ggplot2::stat_ecdf(pad=TRUE) +
     ggplot2::xlim(0L, NA) +
-    ggplot2::coord_trans(y = "reverse") + # transforms "after_stat" important because of stat_ecdf
+    ggplot2::coord_trans(y = "reverse") + # transforms "after_stat" which matters for stat_ecdf
     ggplot2::labs(x = 'Time', y = 'Cumulative prop. of events',
                   col = 'Group',
                   title = title, subtitle = subtitle)

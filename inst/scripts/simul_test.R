@@ -342,7 +342,7 @@ doMCSim <- function(xx){
                                                      #+it generates all P-values/R_eff in long format from each row!
                                                      dplyr::reframe(method, profiled, R,
                                                                     R_eff = length(testDiffObj$testDist),
-                                                                    tibble::enframe(unlist(testDiffObj$P), name = "P"))
+                                                                    tibble::enframe(unlist(testDiffObj$P), name = "test", value = "pvalue"))
                                                  }, simplify = FALSE)
 
   # drop NULLs (just in case)

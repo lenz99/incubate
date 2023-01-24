@@ -14,6 +14,7 @@ test_diff(
   ties = c("density", "equidist", "random", "error"),
   param = "delay1",
   type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LR"),
+  doLogrank = TRUE,
   R = 400,
   chiSqApprox = FALSE,
   verbose = 0
@@ -37,6 +38,8 @@ test_diff(
 \item{param}{character. Names of parameters to test difference for. Default value is \code{'delay1'}.}
 
 \item{type}{character. Which type of tests to perform?}
+
+\item{doLogrank}{logical. In any case do log-rank based tests?}
 
 \item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 

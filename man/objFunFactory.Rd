@@ -47,5 +47,5 @@ which is either the negative of the MPSE-criterion H or the negative log-likelih
 The objective function takes a vector of model parameters as argument.
 
 From the observations, negative or infinite values are discarded during pre-processing.
-In any case, the objective function is to be minimized.
+In any case, the objective function is to be \strong{minimized}.
 }
