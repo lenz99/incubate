@@ -302,13 +302,14 @@ objFunFactory <- function(x, y = NULL,
   # @return merged parameter vector
   mergePars <- function(parx, pary, isOpt){
     exParInd <- if (isOpt) extractParOptInd else extractParInd
-    # aggregate parameters (by default via mean). Aggregation is necessary for merging start vector for parameter-optimization
+    # aggregate parameters (by default via mean).
+    #+this is necessary for merging start vector for parameter-optimization
     res <- as.vector(tapply(X = c(parx, pary),
                             INDEX = unlist(exParInd),
                             FUN = mean, simplify = TRUE))
     # .. only for delay1 we use minimum as aggregation function (in this case first entry in exParInd$x and exParInd$y is 1!)
     if (exParInd$x[1L] + exParInd$y[1L] == 2){
-      res[1L] <- min(parx[1L], pary[1L])
+      res[[1L]] <- min(parx[1L], pary[1L])
     }
 
     res
@@ -316,7 +317,8 @@ objFunFactory <- function(x, y = NULL,
 
   # extract parameter vector for a specified group
   # if parameters are for optimization and transformation is requested, unprofiling is done (if relevant)
-  # @param named logical. Get parameters as named vector?
+  # @param group character. Extract parameters for the given group. If NULL, keep all parameters.
+  # @param named logical. Extract parameters as named vector?
   # @return parameter vector
   extractPars <- function(parV, group = NULL, isOpt = TRUE, transform = FALSE, named = FALSE){
     # result is on optimization scale?
@@ -340,7 +342,7 @@ objFunFactory <- function(x, y = NULL,
         }
         res0
       }))
-    }
+    } #fi is.null(group)
 
     # index vector for specified group
     ind <- if (isOpt) extractParOptInd[[group]] else extractParInd[[group]]
@@ -350,24 +352,28 @@ objFunFactory <- function(x, y = NULL,
     res <- if (!transform) {
       parV[ind]
     } else {
+      # transformation requested:
       local({
-        # transformation requested:
         res0 <- transformPars1(parV[ind], inverse = isOpt)
         # unprofile (if relevant), i.e., when going from profiled par_opt to par_orig
-        if (isOpt && profiled){
+        if (isOpt && profiled) {
           # access observations for specified group
           obs <- if (group == "y") y else x
-          # add scale parameter
-          res0 <- c(res0, (W1[[group]]*mean((obs-res0[1])^res0[2]))^(1/res0[2]))
+          # add scale parameter at the end of parameter vector
+          k <- if (distribution == 'weibull') res0[[2L]] else 1L
+          scale0 <- (1/W1[[group]]*mean((obs-res0[[1L]])^k))^(1/k)
+          res0 <- c(res0, if (distribution == 'exponential') 1/scale0 else scale0)
         }
         res0
       })
     }
 
     # single group names
-    if (named)
-      rlang::set_names(res, nm = if (resIsOpt) trNames else oNames) else
-        as.vector(res)
+    if (named) {
+      rlang::set_names(res, nm = if (resIsOpt) trNames else oNames)
+    } else {
+      as.vector(res)
+    }
   }
 
 
@@ -565,15 +571,19 @@ objFunFactory <- function(x, y = NULL,
 
 
     # for Weibull, do we want to penalize high shape values in MLE?
-    penalize_shape <- FALSE
+    penalize_shape <- distribution == 'weibull' && FALSE #currently turned off (could become an option)
 
     if (criterion){
-      # log-likelihood
+      # criterion = log-likelihood
       sum(rlang::exec(getDist(distribution, type = "density"), !!! c(list(x=obs, log=TRUE), pars.gr)))
     } else {
+      # calculate the objective function which depends on
+      #+ method
+      #+ profiled
 
       n <- length(obs)
-      k <- if (distribution == 'weibull') pars.gr[[2L]] else 0
+      # shape parameter (candidate)
+      k <- if (distribution == 'weibull') pars.gr[[2L]] else 1L
 
       switch(method,
              # MLEc =,
