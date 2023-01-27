@@ -570,7 +570,12 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
 
                     pars <- c("delay1", "rate1", "delay2", "rate2")[seq_len(2L*(1L + twoPhase))]
 
-                    if (profiled) warning("Profiling has no effect for estimating the exponential distribution.", call. = FALSE)
+                    # drop parameters that are profiled out
+                    # profiled-setting effects outcome for both transformed=TRUE but also on original scale (transformed=FALSE)
+                    # even though profiling is directly relevant only within optimization.
+                    if (profiled && (! "rate1" %in% bind || length(bind) == length(pars))){
+                      pars <- setdiff(pars, "rate1") #XXX think about profiling and twoPhase! (and twoGroup?!)
+                    }
 
                     if (transformed) {
                       pars <- paste0(pars, "_tr")
@@ -582,7 +587,9 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
                       pars_gr <- setdiff(pars, bind)
                       # bind parameters first
                       c(bind, paste(rep.int(pars_gr, times = 2L), rep(c("x", "y"), each = length(pars_gr)), sep = "."))
-                    } else pars
+                    } else {
+                      pars
+                    }
 
                   },
                   stop("Unknown attribute of exponential distribution.", call. = FALSE)

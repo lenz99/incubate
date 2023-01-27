@@ -34,17 +34,16 @@ objFunFactory <- function(x, y = NULL,
   stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1 )
   ties <- match.arg(ties)
 
+  stopifnot( is.logical(twoPhase), length(twoPhase) == 1L)
+  stopifnot( is.logical(profiled), length(profiled) == 1L)
+  # enforce either TRUE or FALSE
   twoPhase <- isTRUE(twoPhase)
   profiled <- isTRUE(profiled)
 
-  # names: standard names of distribution (say, for a single group)
-  # original
-  oNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = FALSE)
-  # transformed (within optimization function)
-  trNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = TRUE)
 
-  #bind: enforce the canonical order of dist-parameters and drop unused parameters and empty strings
-  bind <- intersect(oNames, bind)
+  # original names: standard names of distribution (say, for a single group)
+  oNames <- getDist(distribution, type = "param", twoPhase = twoPhase,
+                    twoGroup = FALSE, bind = NULL, transformed = FALSE, profiled = FALSE)
 
 
 
@@ -143,69 +142,102 @@ objFunFactory <- function(x, y = NULL,
   # do we have two groups after pre-processing?
   twoGroup <- isTRUE(!is.null(y) && is.numeric(y) && length(y))
 
+
+  # adjust bind:
+  #+enforce the canonical order of dist-parameters and drop unused parameters and empty strings
+  #+set to NULL if not effectively two group setting
+  bind <- intersect(oNames, bind)
+
+  if (!twoGroup && !is.null(bind) && length(bind)) {
+    bind <- NULL
+    warning("'bind=' was specified in vain as we have only a single group!", call. = FALSE)
+  }#fi
+
+
+  # adjust profiled:
+  #+profiling is only possible if rate1/scale1 is not bound and single phase
+  #XXX profiling is not implemented for all cases! we sometimes reverse it to FALSE.
+  profiled0 <- profiled
+  profiled <- profiled && (! any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) && ! twoPhase
+  #&& method %in% c("MLEn", "MLEc", "MLEw") #&& distribution == 'weibull' &&
+
+  if (xor(profiled0, profiled)){
+    warning(glue("Option `profiled={profiled0}` was reversed!"), call. = FALSE)
+  }
+  rm("profiled0")
+
+
+  # set some coefficient names:
+  # coefficient names (now that we have settled the profiling flag)
+  # transformed (within optimization function)
+  trNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL,
+                     profiled = profiled, transformed = TRUE)
   # full parameter names (for the whole parameter vector spanning all groups)
-  # original (including parameters that are profiled out in optimization) and transformed
+  # original (including parameters that are profiled out in optimization)
   oNamesFull <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
-                        profiled = FALSE, transformed = FALSE) # profiled = FALSE because we consider her original parameters
+                        profiled = FALSE, transformed = FALSE) # profiled = FALSE because we consider here original parameters
+  # transformed
   trNamesFull <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
                          profiled = profiled, transformed = TRUE) # profiled as requested because we consider optimization parameters
 
 
+
   # checks ------------------------------------------------------------------
 
-  if (!twoGroup && !is.null(bind) && length(bind)) {
-    bind <- NULL
-    warning("bind= was specified in vain as we have only a single group!", call. = FALSE)
-  }
-
+  # MLEw works only with profiling
+  stopifnot( method != 'MLEw' || profiled )
 
   # check that there is enough data (here we also look at bind= if twoGroup)
-  if (!twoGroup && length(x) < length(oNames) || twoGroup && length(x) + length(y) < 2L * length(oNames) - length(bind) && min(length(x), length(y)) < length(oNames) - length(bind)) {
-    warning('Too few valid observations provided!', call. = FALSE)
+  if (!twoGroup && length(x) < length(oNames) ||
+      twoGroup && length(x) + length(y) < 2L * length(oNames) - length(bind) && min(length(x), length(y)) < length(oNames) - length(bind)) {
+    warning("Too few valid observations provided!", call. = FALSE)
     return(invisible(NULL))
   }
-
-  #profiling is only possible if Weibull and scale is not bound and single phase
-  profiled <- profiled && distribution == 'weibull' && (! "scale" %in% bind || length(bind) == length(oNames)) &&
-    ! twoPhase && method %in% c("MLEn", "MLEc", "MLEw")
-
-  # MLEw works only with profiling #XXX twoPhase not implemented!
-  stopifnot( method != 'MLEw' || ! twoPhase && profiled )
-
 
 
   # parameter handling ----
 
-  # weight W1 for MLEw (for later reference to get scale parameter)
-  W1 <- if (method == 'MLEw') c(x=(1-1/(9*length(x)))^3, y = if (! is.null(y)) (1-1/(9*length(y)))^3 else NA_real_) else c(x=1, y=1)
+  # MLEw's W1 as median (for later reference to get scale parameter)
+  W1 <- if (method == 'MLEw')
+    c(x=(1-1/(9*length(x)))^3, y = if (! is.null(y)) (1-1/(9*length(y)))^3 else 1) else
+      c(x=1, y=1)
 
   stopifnot( ! twoPhase ) #XXX not implemented yet!!
+
 
   # internal extractPars index: provide indices for x and for y
   # indices where to find the parameters per group in the parameter vector of the objective function
   extractParOptInd <- if (! twoGroup) {
     # single group!
-    if (distribution == 'exponential') list(x = c(1L, 2L)) else # weibull:
+    if (distribution == 'exponential') {
+      if (profiled) list(x = 1L) else list(x = c(1L, 2L))
+    } else {
+      # weibull:
       if (profiled) list(x = c(1L, 2L)) else
         list(x = c(1L, 2L, 3L))
+    }
+    # could use here also list(x = seq.along(trNames)) ## reacts to twoPhase-setting
   } else {
     # two group!
+    #XXX exponential && profiled: indices are not correct for two groups, yet!!
     if (is.null(bind)) {
       if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else #weibull:
         if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else
           list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
-    } else if ( length(oNames) == length(bind)) {
+    } else if (length(oNames) == length(bind)) {
       if (distribution == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else #weibull:
         if (profiled) list(x = c(1L, 2L), y = c(1L, 2L)) else
           list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
     } else {
       # twoGroups & non-trivial bind
       local({
+        # getDist with profiled=TRUE & transformed = FALSE removes the profile parameters (even when on original scale)
+        #+ as we need the original parameter names without those of profiling
         oNamesFullProf <- if (!profiled) oNamesFull else getDist(distribution = distribution, type = "param", twoPhase = twoPhase, twoGroup = TRUE,
-                                                                 bind = bind, profiled = TRUE)
-        # locally, drop "scale1" from oNames when in profiling mode
-        #XXX not robust! Think about (e.g.) twoPhase and profiling!
-        if (profiled) oNames <- setdiff(oNames, "scale1")
+                                                                 bind = bind, profiled = TRUE, transformed = FALSE)
+        # locally, drop "rate1/scale1" from oNames when in profiling mode
+        #XXX not robust! Think about (e.g.) twoPhase when profiling! (currently profiling is switched off when twoPhase)
+        if (profiled) oNames <- setdiff(oNames, c("rate1", "scale1")) # only *local* temporary change
         nonbind <- setdiff(oNames, bind)
         list(
           x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFullProf), nm = c(bind, nonbind))[oNames]),
@@ -215,24 +247,29 @@ objFunFactory <- function(x, y = NULL,
     }
   }
 
-  extractParInd <- if (distribution == 'exponential' || !profiled) {
-    extractParOptInd # identical to optimization indices
+  extractParInd <- if (!profiled) {
+    extractParOptInd # identical to optimization indices when no profiling
   } else {
-    if (! twoGroup) # single group, non-exponential && profiled,
-      list(x = c(1L, 2L, 3L)) else {
-        # twoGroup && distribution != 'exponential' && profiled
-        if (is.null(bind)) list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L)) else
-          if ( length(oNames) == length(bind)) list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L)) else {    # non-trivial bind
-            local({
-              # we consider the parameter names on original scale, with profiled parameters also back in!
-              nonbind <- setdiff(oNames, bind)
-              list(
-                x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFull), nm = c(bind, nonbind))[oNames]),
-                y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFull), nm = c(bind, nonbind))[oNames])
-              )
-            })
-          }
-      }
+    # profiled!
+    if (! twoGroup) {
+      # profiled single group!
+      if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
+      # could use here also list(x = seq.along(oNames)) ## reacts to twoPhase-setting
+    } else {
+      # twoGroup && profiled
+      stopifnot(distribution != 'exponential') #XXX think through!
+      if (is.null(bind)) list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L)) else
+        if ( length(oNames) == length(bind)) list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L)) else {    # non-trivial bind
+          local({
+            # we consider the parameter names on original scale, with profiled parameters also back in!
+            nonbind <- setdiff(oNames, bind)
+            list(
+              x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFull), nm = c(bind, nonbind))[oNames]),
+              y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFull), nm = c(bind, nonbind))[oNames])
+            )
+          })
+        }
+    }
   }
 
   # parameter transformation matrices
@@ -278,7 +315,7 @@ objFunFactory <- function(x, y = NULL,
   # transform parameter vector for a single group. Does not use parameter names.
   # transformed parameters are used within optimization. The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativitiy of original parameter)
   # @param parV1 parameter vector for a single group
-  # @param inverse logical. If `inverse=TRUE` transforms from optimization parameters back to original parameters
+  # @param inverse logical. If `inverse=TRUE` does inverse transformation, from optimization parameters back to original parameters
   # @return transformed parameter vector, unnamed!
   transformPars1 <- function(parV1, inverse = FALSE){
 
@@ -318,6 +355,7 @@ objFunFactory <- function(x, y = NULL,
   # extract parameter vector for a specified group
   # if parameters are for optimization and transformation is requested, unprofiling is done (if relevant)
   # @param group character. Extract parameters for the given group. If NULL, keep all parameters.
+  # @param isOpt logical. Are the given parameters on optimization function scale?
   # @param named logical. Extract parameters as named vector?
   # @return parameter vector
   extractPars <- function(parV, group = NULL, isOpt = TRUE, transform = FALSE, named = FALSE){
@@ -332,6 +370,7 @@ objFunFactory <- function(x, y = NULL,
     if (is.null(group)){
       return(local({
 
+        # recursive calls for the individual groups
         parx <- extractPars(parV, group = "x", isOpt = isOpt, transform = transform, named = FALSE)
         pary <- extractPars(parV, group = "y", isOpt = isOpt, transform = transform, named = FALSE)
 
@@ -352,21 +391,28 @@ objFunFactory <- function(x, y = NULL,
     res <- if (!transform) {
       parV[ind]
     } else {
-      # transformation requested:
+      # do transform
       local({
         res0 <- transformPars1(parV[ind], inverse = isOpt)
-        # unprofile (if relevant), i.e., when going from profiled par_opt to par_orig
-        if (isOpt && profiled) {
-          # access observations for specified group
-          obs <- if (group == "y") y else x
-          # add scale parameter at the end of parameter vector
-          k <- if (distribution == 'weibull') res0[[2L]] else 1L
-          scale0 <- (1/W1[[group]]*mean((obs-res0[[1L]])^k))^(1/k)
-          res0 <- c(res0, if (distribution == 'exponential') 1/scale0 else scale0)
+
+        if (profiled) {
+          # un-profile (when going from profiled par_opt to par_orig)
+          if (isOpt) {
+            # access observations for specified group
+            obs <- if (group == "y") y else x
+            # add scale parameter at the end of parameter vector
+            k <- if (distribution == 'weibull') res0[[2L]] else 1L
+            scale0 <- (1/W1[[group]]*mean((obs-res0[[1L]])^k))^(1/k)
+            res0 <- c(res0, if (distribution == 'exponential') 1/scale0 else scale0)
+          } else {
+            # extract only remaining parameters
+            res0 <- res0[extractParOptInd[[group]]]
+          }
         }
         res0
       })
     }
+
 
     # single group names
     if (named) {
@@ -399,7 +445,14 @@ objFunFactory <- function(x, y = NULL,
 
                       #parV0 <- rlang::set_names(parV0, nm = oNames)
                       # transform start-parameters for optfun-parametrization
-                      transformPars1(parV1 = parV0, inverse = FALSE)
+                      parV0 <- transformPars1(parV0, inverse = FALSE)
+
+                      # drop scale if profiling
+                      if (profiled) {
+                        stopifnot(! twoPhase) #XXX not implemented, yet!
+                        parV0 <- parV0[1L] # drop "rate1"
+                      }
+                      parV0
                     },
                     weibull = {
                       # start values from 'Weibull plot'
@@ -430,12 +483,12 @@ objFunFactory <- function(x, y = NULL,
 
                       #parV0 <- rlang::set_names(parV0, nm = oNames)
                       # transform start-parameters for optfun-parametrization
-                      parV0 <- transformPars1(parV1 = parV0, inverse = FALSE)
+                      parV0 <- transformPars1(parV0, inverse = FALSE)
 
                       # drop scale if profiling
                       if (profiled) {
                         stopifnot(! twoPhase) #XXX not implemented, yet!
-                        parV0 <- parV0[c(1L, 2L)] # drop "scale1" #XXX not robust! Think about twoPhase and profiling!
+                        parV0 <- parV0[c(1L, 2L)] # drop "scale1"
                       }
                       parV0
 
@@ -606,20 +659,25 @@ objFunFactory <- function(x, y = NULL,
                  }
 
                } else {
+                 # log-likelihood with all parameters
                  sum(rlang::exec(getDist(distribution, type = "density"), !!! c(list(x=obs, log=TRUE), pars.gr)))
                }
              },
              MLEw = {
-               stopifnot(distribution == 'weibull') #XXX exponential?!
+               stopifnot(profiled)
 
                obs_c <- obs - pars.gr[[1L]]
 
                # z is an estimate for the ordered ((x_(i) - a)/gamma)^k ~ Exp(1)
                z <- -log(1-stats::ppoints(n=n, a=.3)) ## = median rank estimates for -log(1-F_i)
 
-               # last term: approximation for -log(GM_n Z)
+               # last term: approximation for -log(GM_n Z) = - AM_n(logZ)
                W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n))
-               W3 <- W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+               W3 <- if (k==1) {
+                 W1[[group]] * mean(1/z)
+               } else {
+                 W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+               }
 
                if (verbose > 1L){
                  cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
@@ -636,11 +694,13 @@ objFunFactory <- function(x, y = NULL,
              },
              MLEc = {
                stopifnot( n >= 2L )
+               # objective function to maximize
                log(diff(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs[1:2]), pars.gr)))) +
                  sum(rlang::exec(getDist(distribution, type = "density"), !!! c(list(x=obs[-1L], log=TRUE), pars.gr))) -
                  # optional penalization term
                  penalize_shape * log(k+1)
              },
+
              stop("This method is not handled here!", call. = FALSE))
     }
   }

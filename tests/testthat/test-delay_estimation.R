@@ -4,6 +4,28 @@
 
 test_that('Parameter extraction and transformation', {
 
+  suppressPackageStartupMessages(library("magrittr"))
+
+  # test getDist for parameter names:
+  # on transformed scale (for optimization)
+  expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
+                                      bind = "shape1", profiled = FALSE, transformed = TRUE),
+                   expected = c("shape1_tr", "delay1_tr.x", "scale1_tr.x", "delay1_tr.y", "scale1_tr.y"))
+  expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
+                                      bind = "shape1", profiled = TRUE, transformed = TRUE),
+                   expected = c("shape1_tr", "delay1_tr.x", "delay1_tr.y"))
+  # original (=non-transformed) scale
+  expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
+                                      bind = "shape1", profiled = FALSE, transformed = FALSE),
+                   expected = c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
+  # getDist takes out profiled parameters even when for original (=non-transformed) scale
+  #+ this is needed in delay_estimation (at extractParOptInd)
+  expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
+                                      bind = "shape1", profiled = TRUE, transformed = FALSE),
+                   expected = c("shape1", "delay1.x", "delay1.y"))
+
+  #' Slow extract-routine based on R's name-matching capabilities as gold standard function.
+  #'
   #' Extract certain parameters from a given named parameter vector. External, slow variant that parses parameter names.
   #'
   #' This routine handles parameter vectors for one or two groups. To this end, it parses the parameter names.
@@ -183,8 +205,11 @@ test_that('Parameter extraction and transformation', {
     }
   }
 
-  objFun_exp1 <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE)
-  extPars_exp1 <- rlang::env_get(rlang::fn_env(objFun_exp1), "extractPars")
+  extPars_exp1 <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE, profiled = FALSE) %>%
+    rlang::fn_env() %>% rlang::env_get("extractPars")
+
+  extPars_exp1P <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE, profiled = TRUE) %>%
+    rlang::fn_env() %>% rlang::env_get("extractPars")
 
   par_exp1 <- c(delay1 = 3, rate1 = .8)
 
@@ -195,6 +220,11 @@ test_that('Parameter extraction and transformation', {
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "z", named = TRUE), par_exp1) # group= is ignored for single group!
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE), c(par_exp1[[1L]], log(par_exp1[[2L]])))
+
+  # objective function with profiled=TRUE is different
+  expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, named = TRUE), par_exp1)
+  expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE), c(delay1_tr = par_exp1[[1L]]))
+  expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE), par_exp1[[1L]])
 
   # my original (but slow) implementation
   expect_identical(extractParsTest(parV = par_exp1), par_exp1)
@@ -297,15 +327,16 @@ test_that("Fit delayed Exponentials", {
   # single group ------------------------------------------------------------
 
   # from a call to rexp_delayed(16, delay = 9, rate = 0.5)
-  xx <- c(9.3758422, 9.436878, 9.440794, 9.63324, 9.6421,
+  exp_d9 <- c(9.3758422, 9.436878, 9.440794, 9.63324, 9.6421,
           9.76594, 9.80527, 9.907327, 10.357, 10.371,
           10.596, 10.623, 11.1074, 11.575, 11.849, 16.38)
 
-  fd_exp <- delay_model(xx, distribution = "expon")
+  fd_exp <- delay_model(exp_d9, distribution = "expon", profiled = FALSE)
   coef_exp <- coef(fd_exp)
 
   expect_type(fd_exp$data, type = 'double')
   expect_identical(length(fd_exp$data), expected = 16L)
+  expect_identical(fd_exp$method, expected = "MPSE")
   expect_named(coef(fd_exp), expected = c('delay1', 'rate1'))
   expect_named(fd_exp$optimizer, expected = c('parOpt', "valOpt", 'profiled', "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   # optim converges properly for this data vector!
@@ -324,51 +355,110 @@ test_that("Fit delayed Exponentials", {
   # effect of worse start values
   fd_exp_updW <- update(fd_exp, optim_args = purrr::assign_in(fd_exp_oa, 'par', c(1, .1)))
   expect_gt(min(fd_exp_updW$optimizer$counts), expected = min(fd_exp$optimizer$counts))
-  # objective function does not reach a much better (=lower) value when starting with worse start value
+  # objective function does not reach a better (=lower) value when starting with worse start value
   # (add a little safety margin as buffer)
   expect_gte(fd_exp_updW$criterion + 1e-05, expected = fd_exp$criterion)
 
+  # MPSE fit with profiled=TRUE
+  fd_exp_P <- delay_model(exp_d9, distribution = "expon", profiled = TRUE)
+  expect_equal(coef(fd_exp_P), coef_exp, tolerance = .01) # similar coefficients
+  expect_named(fd_exp_P$optimizer$parOpt, expected = "delay1_tr")
+
+  # another data set
+  exp_d5 <- c(5.05133760899019, 5.21641483083995, 5.4131497041096, 5.62188922194764,
+              5.75496241915971, 5.98260715969298, 6.18675520061515, 7.41160508326157,
+              9.36626494375473, 10.5935673083787, 10.8441290040006)
+  fd_exp1_mpseNP <- delay_model(exp_d5, method = "MPSE", profiled = FALSE)
+  fd_exp1_mpseP  <- delay_model(exp_d5, method = "MPSE", profiled = TRUE)
+  expect_identical(fd_exp1_mpseNP$optimizer$convergence, expected = 0L)
+  expect_identical(fd_exp1_mpseP$optimizer$convergence, expected = 0L)
+  expect_named(fd_exp1_mpseNP$optimizer$parOpt, expected = c("delay1_tr", "rate1_tr"))
+  expect_named(fd_exp1_mpseP$optimizer$parOpt, expected = "delay1_tr")
+  expect_equal(coef(fd_exp1_mpseP), expected = coef(fd_exp1_mpseNP), tolerance = .01)
+
 
   # MLE fits -----------------------------------------------------------
-  fd_exp_MLEn <- delay_model(xx, distribution = 'expon', method = 'MLEn')
 
-  expect_type(fd_exp_MLEn$data, type = 'double')
-  expect_identical(length(fd_exp_MLEn$data), expected = 16L)
-  expect_identical(length(coef(fd_exp_MLEn)), expected = 2L)
+  # MLEn = naive MLE
+  fd_exp_MLEn_NP <- delay_model(exp_d9, distribution = 'expon', method = 'MLEn')
+  fd_exp_MLEn_P <- delay_model(exp_d9, distribution = 'expon', method = 'MLEn', profiled = TRUE)
+
+  expect_type(fd_exp_MLEn_NP$data, type = 'double')
+  expect_identical(length(fd_exp_MLEn_NP$data), expected = length(exp_d9))
+  expect_identical(fd_exp_MLEn_NP$method, expected = "MLEn")
+  expect_identical(length(coef(fd_exp_MLEn_NP)), expected = 2L)
+  expect_named(coef(fd_exp_MLEn_NP), expected = c("delay1", "rate1"))
+  expect_named(fd_exp_MLEn_NP$optimizer$parOpt, expected = c("delay1_tr", "rate1_tr"))
 
   # MLEn uses analytical solution when in single group mode
-  expect_named(fd_exp_MLEn$optimizer, expected = c("parOpt", "valOpt", 'profiled', "methodOpt", "convergence", "message", "counts")) ##analytic with no "optim_args"))
-  expect_identical(purrr::chuck(fd_exp_MLEn, 'optimizer', 'methodOpt'), expected = "analytic")
-  expect_identical(purrr::chuck(fd_exp_MLEn, 'optimizer', 'convergence'), expected = 0L)
-  fd_exp_MLEn_opt <- attr(fd_exp_MLEn$objFun, which = 'opt', exact = TRUE)
-  expect_type(fd_exp_MLEn_opt, type = 'list')
-  expect_named(fd_exp_MLEn_opt, expected = c("par_orig", 'par', 'value', "methodOpt", 'convergence', 'message', 'counts'))
-
-  expect_identical(coef(fd_exp_MLEn)[['delay1']], expected = xx[[1L]])
-  # MLE's later delay is compensated for by higher estimated rate
-  purrr::walk(seq_along(coef_exp), .f = ~ expect_gt(coef(fd_exp_MLEn)[[.x]], expected = coef_exp[[.x]]))
-  expect_equal(coef(fd_exp_MLEn)[['rate1']], expected = (mean(xx) - min(xx))**-1)
-
-
-  fd_exp_MLEc <- delay_model(xx, distribution = 'expon', method = 'MLEc')
-
-  expect_type(fd_exp_MLEc$data, type = 'double')
-  expect_identical(length(fd_exp_MLEc$data), expected = 16L)
-  expect_identical(length(coef(fd_exp_MLEc)), expected = 2L)
-
-  expect_named(fd_exp_MLEc$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", "convergence", "message", "counts", "optim_args"))
-  expect_identical(purrr::chuck(fd_exp_MLEc, 'optimizer', 'convergence'), expected = 0L)
-  # no exact solution for MLEc
-  expect_null(attr(fd_exp_MLEc$objFun, which = 'opt', exact = TRUE))
-
-
+  expect_named(fd_exp_MLEn_NP$optimizer, expected = c("parOpt", "valOpt", 'profiled', "methodOpt", "convergence", "message", "counts")) ##analytic with no "optim_args"))
+  expect_identical(purrr::chuck(fd_exp_MLEn_NP, 'optimizer', 'methodOpt'), expected = "analytic")
+  expect_identical(purrr::chuck(fd_exp_MLEn_NP, 'optimizer', 'convergence'), expected = 0L)
+  local({
+    fd_exp_MLEn_NPopt <- attr(fd_exp_MLEn_NP$objFun, which = 'opt', exact = TRUE)
+    expect_type(fd_exp_MLEn_NPopt, type = 'list')
+    expect_named(fd_exp_MLEn_NPopt, expected = c("par_orig", 'par', 'value', "methodOpt", 'convergence', 'message', 'counts'))
+  })
   # check objective function
   # objective function is for transformed parameters:
   purrr::walk2(.x = runif(n=7, min=0.1, max=9),   #delay1
                .y = runif(n=7, min=0.001, max=2), #rate1
-               .f = ~ expect_equal(- length(xx) * (log(.y) - .y * (mean(xx) - .x)),
-                                   expected = fd_exp_MLEn$objFun(pars = c(delay1=.x, rate1=.y), criterion = TRUE))
+               .f = ~ expect_equal(- length(exp_d9) * (log(.y) - .y * (mean(exp_d9) - .x)),
+                                   expected = fd_exp_MLEn_NP$objFun(pars = c(delay1=.x, rate1=.y), criterion = TRUE))
   )
+
+  expect_type(fd_exp_MLEn_P$data, type = 'double')
+  expect_identical(length(fd_exp_MLEn_P$data), expected = length(exp_d9))
+  expect_identical(fd_exp_MLEn_P$method, expected = "MLEn")
+  expect_true(fd_exp_MLEn_P$optimizer$profiled)
+  expect_identical(length(coef(fd_exp_MLEn_P)), expected = 2L)
+  expect_named(coef(fd_exp_MLEn_P), expected = c("delay1", "rate1"))
+  expect_named(fd_exp_MLEn_P$optimizer$parOpt, expected = "delay1_tr")
+
+
+
+  # delay1 estimate = min(x)
+  expect_identical(coef(fd_exp_MLEn_NP)[['delay1']], expected = exp_d9[[1L]])
+  # MLEn's later delay is compensated for by higher estimated rate
+  expect_true(all(coef(fd_exp_MLEn_NP) >  coef_exp))
+  expect_equal(coef(fd_exp_MLEn_NP)[['rate1']], expected = (mean(exp_d9) - min(exp_d9))**-1)
+
+
+  # MLEc
+  fd_exp_MLEc_NP <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc')
+  fd_exp_MLEc_P <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc', profiled = TRUE)
+
+  expect_type(fd_exp_MLEc_NP$data, type = 'double')
+  expect_identical(length(fd_exp_MLEc_NP$data), expected = length(exp_d9))
+  expect_identical(length(coef(fd_exp_MLEc_NP)), expected = 2L)
+  expect_named(coef(fd_exp_MLEc_NP), expected = c("delay1", "rate1"))
+  expect_named(fd_exp_MLEc_NP$optimizer$parOpt, expected = c("delay1_tr", "rate1_tr"))
+
+  expect_named(fd_exp_MLEc_NP$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", "convergence", "message", "counts", "optim_args"))
+  expect_identical(purrr::chuck(fd_exp_MLEc_NP, 'optimizer', 'convergence'), expected = 0L)
+  # no exact solution for MLEc
+  expect_null(attr(fd_exp_MLEc_NP$objFun, which = 'opt', exact = TRUE))
+
+  expect_type(fd_exp_MLEc_P$data, type = 'double')
+  expect_identical(length(fd_exp_MLEc_P$data), expected = length(exp_d9))
+  expect_identical(length(coef(fd_exp_MLEc_P)), expected = 2L)
+  expect_named(coef(fd_exp_MLEc_P), expected = c("delay1", "rate1"))
+  expect_named(fd_exp_MLEc_P$optimizer$parOpt, expected = "delay1_tr")
+  # profiled variant is an easier optimization
+  expect_true(all(fd_exp_MLEc_P$optimizer$counts < fd_exp_MLEc_NP$optimizer$counts))
+  # quite similar coefficients
+  expect_equal(coef(fd_exp_MLEc_P), expected = coef(fd_exp_MLEc_NP), tolerance = .01)
+
+  # MLEw
+  fd_exp_MLEw <- delay_model(exp_d9, distribution = "expon", method = "MLEw")
+  expect_identical(fd_exp_MLEw$method, expected = "MLEw")
+  expect_true(fd_exp_MLEw$optimizer$profiled)
+  expect_type(fd_exp_MLEw$data, type = "double")
+  expect_identical(length(fd_exp_MLEw$data), expected = length(exp_d9))
+  expect_identical(fd_exp_MLEw$optimizer$convergence, expected = 0L)
+  expect_named(coef(fd_exp_MLEw), expected = c("delay1", "rate1"))
+  expect_named(fd_exp_MLEw$optimizer$parOpt, expected = "delay1_tr")
+  expect_equal(coef(fd_exp_MLEw), coef(fd_exp_MLEc_P), tolerance = .1) # similar coefficients
 
 
   # 2nd group ---------------------------------------------------------------
@@ -376,7 +466,7 @@ test_that("Fit delayed Exponentials", {
   set.seed(20220429)
   yy <- rexp_delayed(27L, delay1 = 10.2, rate1 = .9)
 
-  fd_exp2 <- delay_model(x = xx, y = yy, distribution = "expon")
+  fd_exp2 <- delay_model(x = exp_d9, y = yy, distribution = "expon")
   coef_exp2 <- coef(fd_exp2)
 
   expect_type(fd_exp2$data, type = 'list')
@@ -391,35 +481,35 @@ test_that("Fit delayed Exponentials", {
   # no delay in 2nd group
   set.seed(20221124)
   zz <- rexp_delayed(13L, delay1=0, rate1=1.1)
-  fd_exp2nd <- delay_model(x = xx, y = zz, distribution = "expon") #nd = no delay
+  fd_exp2nd <- delay_model(x = exp_d9, y = zz, distribution = "expon") #nd = no delay
   coef_exp2nd <- coef(fd_exp2nd)
 
   expect_identical(purrr::chuck(fd_exp2nd, "optimizer", "convergence"), expected = 0L)
   expect_equal(coef_exp2nd[[3]], 0) # no delay in 3rd group
 
   # MLE fits -----
-  fd_exp2_MLEn <- delay_model(x = xx, y = yy, distribution = "expon", method = "MLEn")
+  fd_exp2_MLEn <- delay_model(x = exp_d9, y = yy, distribution = "expon", method = "MLEn")
   expect_type(fd_exp2_MLEn$data, type = "list")
   expect_identical(fd_exp2_MLEn$data$y, sort(yy))
   expect_named(fd_exp2_MLEn$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2_MLEn, 'optimizer', 'convergence'), expected = 0L) # converged
   expect_type(purrr::chuck(fd_exp2_MLEn, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
-  expect_equal(as.numeric(coef(fd_exp2_MLEn)[1:2]), expected = as.numeric(coef(fd_exp_MLEn)), tolerance = .01)
+  expect_equal(as.numeric(coef(fd_exp2_MLEn)[1:2]), expected = as.numeric(coef(fd_exp_MLEn_NP)), tolerance = .01)
   # MLEn fits have larger (=later) delay and (to recover a higher rate)
   purrr::walk(.x = seq_along(coef(fd_exp2)), .f = ~ expect_gte(coef(fd_exp2_MLEn)[.x], coef(fd_exp2)[.x]))
 
-  fd_exp2_MLEc <- delay_model(x = xx, y = yy, distribution = "expon", method = "MLEc")
+  fd_exp2_MLEc <- delay_model(x = exp_d9, y = yy, distribution = "expon", method = "MLEc")
   expect_type(fd_exp2_MLEc$data, type = "list")
   expect_identical(fd_exp2_MLEc$data$y, sort(yy))
   expect_named(fd_exp2_MLEc$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2_MLEc, 'optimizer', 'convergence'), expected = 0L) # converged
   expect_type(purrr::chuck(fd_exp2_MLEc, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
-  expect_equal(as.numeric(coef(fd_exp2_MLEc)[1:2]), expected = as.numeric(coef(fd_exp_MLEc)), tolerance = .01)
+  expect_equal(as.numeric(coef(fd_exp2_MLEc)[1:2]), expected = as.numeric(coef(fd_exp_MLEc_NP)), tolerance = .01)
 
   # bind delay
-  fd_exp2b <- delay_model(x = xx, y = yy, distribution = "expon", bind = "delay1")
+  fd_exp2b <- delay_model(x = exp_d9, y = yy, distribution = "expon", bind = "delay1")
   coef_exp2b <- coef(fd_exp2b)
 
   expect_named(coef_exp2b, expected = c("delay1", "rate1.x", "rate1.y"))
@@ -431,7 +521,7 @@ test_that("Fit delayed Exponentials", {
                tolerance = .01)
 
   # bind delay with MLEn
-  fd_exp2b_MLEn <- delay_model(x = xx, y = yy, distribution = "expon", bind = "delay1", method = "MLEn")
+  fd_exp2b_MLEn <- delay_model(x = exp_d9, y = yy, distribution = "expon", bind = "delay1", method = "MLEn")
   coef_exp2b_MLEn <- coef(fd_exp2b_MLEn)
 
   expect_named(coef_exp2b_MLEn, expected = c("delay1", "rate1.x", "rate1.y"))
@@ -443,7 +533,7 @@ test_that("Fit delayed Exponentials", {
                tolerance = .01)
 
   # bind delay with MLEc
-  fd_exp2b_MLEc <- delay_model(x = xx, y = yy, distribution = "expon", bind = "delay1", method = "MLEc")
+  fd_exp2b_MLEc <- delay_model(x = exp_d9, y = yy, distribution = "expon", bind = "delay1", method = "MLEc")
   coef_exp2b_MLEc <- coef(fd_exp2b_MLEc)
 
   expect_named(coef_exp2b_MLEc, expected = c("delay1", "rate1.x", "rate1.y"))
@@ -456,16 +546,16 @@ test_that("Fit delayed Exponentials", {
 
 
   # bind delay + rate
-  fd_exp2c <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("delay1", "rate1"))
+  fd_exp2c <- delay_model(x = exp_d9, y = yy, distribution = "expon", bind = c("delay1", "rate1"))
   coef_exp2c <- coef(fd_exp2c)
 
   # bind: order of parameters does not matter
-  fd_exp2cx <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("rate1", "delay1"))
+  fd_exp2cx <- delay_model(x = exp_d9, y = yy, distribution = "expon", bind = c("rate1", "delay1"))
   expect_identical(coef(fd_exp2cx), expected = coef(fd_exp2c))
   expect_identical(fd_exp2cx$bind, fd_exp2c$bind)
 
   # data combinded
-  fd_exp2comb <- delay_model(x = c(xx, yy), distribution = "expon")
+  fd_exp2comb <- delay_model(x = c(exp_d9, yy), distribution = "expon")
   coef_exp2comb <- coef(fd_exp2comb)
 
   expect_named(coef_exp2c, expected = c("delay1", "rate1"))
@@ -475,9 +565,9 @@ test_that("Fit delayed Exponentials", {
   expect_equal(coef_exp2c[[2L]], coef_exp2comb[[2L]], tolerance = .05)
 
   # bind delay + rate for MLE
-  fd_exp2c_MLEn <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("delay1", "rate1"), method = "MLEn")
+  fd_exp2c_MLEn <- delay_model(x = exp_d9, y = yy, distribution = "expon", bind = c("delay1", "rate1"), method = "MLEn")
   coef_exp2c_MLEn <- coef(fd_exp2c_MLEn)
-  fd_exp2comb_MLEn <- delay_model(x = c(xx, yy), distribution = "expon", method = "MLEn")
+  fd_exp2comb_MLEn <- delay_model(x = c(exp_d9, yy), distribution = "expon", method = "MLEn")
   coef_exp2comb_MLEn <- coef(fd_exp2comb_MLEn)
 
   expect_named(coef_exp2c_MLEn, expected = c("delay1","rate1"))
@@ -485,9 +575,9 @@ test_that("Fit delayed Exponentials", {
   purrr::walk(seq_along(coef_exp2c_MLEn), ~expect_equal(coef_exp2c_MLEn[[.x]], coef_exp2comb_MLEn[[.x]], tolerance = .05))
 
   # MLEc
-  fd_exp2c_MLEc <- delay_model(x = xx, y = yy, distribution = "expon", bind = c("delay1", "rate1"), method = "MLEc")
+  fd_exp2c_MLEc <- delay_model(x = exp_d9, y = yy, distribution = "expon", bind = c("delay1", "rate1"), method = "MLEc")
   coef_exp2c_MLEc <- coef(fd_exp2c_MLEc)
-  fd_exp2comb_MLEc <- delay_model(x = c(xx, yy), distribution = "expon", method = "MLEc")
+  fd_exp2comb_MLEc <- delay_model(x = c(exp_d9, yy), distribution = "expon", method = "MLEc")
   coef_exp2comb_MLEc <- coef(fd_exp2comb_MLEc)
 
   expect_named(coef_exp2c_MLEc, expected = c("delay1","rate1"))
@@ -500,6 +590,8 @@ test_that("Fit delayed Exponentials", {
 
 test_that("Fit delayed Weibull", {
 
+  # single group ----
+
   # susquehanna is an example dataset within incubate
   fd_maxFl <- delay_model(susquehanna, distribution = "weib")
   coef_maxFl <- coef(fd_maxFl)
@@ -509,10 +601,11 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .005)
 
   # MLE-based fits to susquehanna --
-  fd_maxFl_MLEn <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
-  coef_maxFl_MLEn <- coef(fd_maxFl_MLEn)
-  expect_identical(purrr::chuck(fd_maxFl_MLEn, "optimizer", "convergence"), expected = 0L)
-  expect_named(fd_maxFl_MLEn$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
+  fd_maxFl_MLEn_NP <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
+  coef_maxFl_MLEn <- coef(fd_maxFl_MLEn_NP)
+  expect_false(fd_maxFl_MLEn_NP$optimizer$profiled)
+  expect_identical(purrr::chuck(fd_maxFl_MLEn_NP, "optimizer", "convergence"), expected = 0L)
+  expect_named(fd_maxFl_MLEn_NP$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_gte(coef_maxFl_MLEn[["delay1"]], coef_maxFl[["delay1"]])
   expect_lte(coef_maxFl_MLEn[["scale1"]], coef_maxFl[["scale1"]])
 
@@ -522,15 +615,16 @@ test_that("Fit delayed Weibull", {
                          scale1=runif(7, max=5)),
                .f = ~ {
                  xc <- susquehanna - ..1
-                 expect_equal(fd_maxFl_MLEn$objFun(c(delay1=..1, shape1=..2, scale1=..3), criterion = TRUE),
+                 expect_equal(fd_maxFl_MLEn_NP$objFun(c(delay1=..1, shape1=..2, scale1=..3), criterion = TRUE),
                               expected = -length(susquehanna) * (log(..2) - ..2 * log(..3) + (..2 - 1L) * mean(log(xc)) - mean(xc**..2)/..3**..2))
                })
 
-  fd_maxFl_MLEnp <- delay_model(susquehanna, distribution = "weibu", method = "MLEn", profiled = TRUE)
-  expect_identical(fd_maxFl_MLEnp$optimizer$convergence, expected = 0L)
-  expect_named(coef(fd_maxFl_MLEnp), expected = c("delay1", "shape1", "scale1"))
-  expect_equal(coef(fd_maxFl_MLEnp), expected = coef_maxFl_MLEn, tolerance = .001)
-  expect_equal(fd_maxFl_MLEnp$objFun(pars = fd_maxFl_MLEnp$par, criterion = TRUE), fd_maxFl_MLEn$criterion, tolerance = .001)
+  fd_maxFl_MLEn_P <- delay_model(susquehanna, distribution = "weibu", method = "MLEn", profiled = TRUE)
+  expect_true(fd_maxFl_MLEn_P$optimizer$profiled)
+  expect_identical(fd_maxFl_MLEn_P$optimizer$convergence, expected = 0L)
+  expect_named(coef(fd_maxFl_MLEn_P), expected = c("delay1", "shape1", "scale1"))
+  expect_equal(coef(fd_maxFl_MLEn_P), expected = coef_maxFl_MLEn, tolerance = .001)
+  expect_equal(fd_maxFl_MLEn_P$objFun(pars = fd_maxFl_MLEn_P$par, criterion = TRUE), fd_maxFl_MLEn_NP$criterion, tolerance = .001)
 
   # MLEn profiling by hand, using the indirect criterion of min(f')
   llProfObjFun_ind <- function(theta){
@@ -543,21 +637,21 @@ test_that("Fit delayed Weibull", {
   }
 
   # the indirect objective function variant (using min(f')) is indeed close to 0 at the fit for the coefficients
-  expect_equal(llProfObjFun_ind(coef(fd_maxFl_MLEnp)[1:2]), expected = 0, tolerance = .01)
+  expect_equal(llProfObjFun_ind(coef(fd_maxFl_MLEn_P)[1:2]), expected = 0, tolerance = .01)
 
   # manual optimization, using the indirect objective function
-  opt_maxFl_MLEnp_man <- optim(par = c(a=0.255, k=1.8), #c(a=0.165, k=exp(1.3847)), #c(a=0.25, k=1.5),
+  opt_maxFl_MLEn_Pman <- optim(par = c(a=0.255, k=1.8), #c(a=0.165, k=exp(1.3847)), #c(a=0.25, k=1.5),
                                fn = llProfObjFun_ind, method = "L-BFGS-B",
                       lower = c(0, 1 + 1.49e-8), upper = c(min(susquehanna)-1.49e-8, +Inf))
-  coef_maxFl_MLEnp_man <- purrr::set_names(c(opt_maxFl_MLEnp_man$par, mean((susquehanna-opt_maxFl_MLEnp_man$par["a"])^opt_maxFl_MLEnp_man$par["k"])^(1/opt_maxFl_MLEnp_man$par["k"])),
+  coef_maxFl_MLEnp_man <- purrr::set_names(c(opt_maxFl_MLEn_Pman$par, mean((susquehanna-opt_maxFl_MLEn_Pman$par["a"])^opt_maxFl_MLEn_Pman$par["k"])^(1/opt_maxFl_MLEn_Pman$par["k"])),
                                   nm = c("delay1", "shape1", "scale1"))
   # estimates are only **roughly** equal
-  expect_equal(coef_maxFl_MLEnp_man, coef(fd_maxFl_MLEnp), tolerance = .25)
+  expect_equal(coef_maxFl_MLEnp_man, coef(fd_maxFl_MLEn_P), tolerance = .25)
 
   fd_maxFl_MLEw <- delay_model(x = susquehanna, distribution = "weib", method = "MLEw")
   expect_identical(fd_maxFl_MLEw$optimizer$convergence, expected = 0L)
   expect_named(coef(fd_maxFl_MLEw), expected = c("delay1", "shape1", "scale1"))
-  expect_gte(fd_maxFl_MLEw$criterion, fd_maxFl_MLEn$criterion) #MLEn directly optimizes the criterion
+  expect_gte(fd_maxFl_MLEw$criterion, fd_maxFl_MLEn_NP$criterion) #MLEn directly optimizes the criterion
 
   #llProfObjFun(coef_maxFl_MLEnp_man[1:2])
   #llProfObjFun(coef(fd_maxFl_MLEnp)[1:2])
@@ -608,6 +702,7 @@ test_that("Fit delayed Weibull", {
 
   fd_poll_MLEw <- delay_model(pollution, distribution = "weibu", method = "MLEw", profile = TRUE)
   expect_identical(fd_poll_MLEw$optimizer$convergence, expected = 0L)
+  expect_true(fd_poll_MLEw$optimizer$profiled)
   expect_named(coef(fd_poll_MLEw), expected = c("delay1", "shape1", "scale1"))
 
 
@@ -632,75 +727,125 @@ test_that("Fit delayed Weibull", {
   # but log-likelihood is in fact quite similar (actually, Cousineau's solution is slightly better)
   expect_equal(fd_wbc_mlewp$criterion, -sum(densFun_wb(x, delay1=283.7, shape1=2.29, scale1=116.0, log = TRUE)), tolerance = .01)
 
-  # fit in two groups
+
+  # two groups -----
+
   fd_wb2 <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib")
   coef_wb2 <- coef(fd_wb2)
 
   expect_identical(purrr::chuck(fd_wb2, 'optimizer', 'convergence'), expected = 0L)
   expect_identical(length(coef_wb2), expected = 2L*3L)
+  expect_named(coef_wb2, expected = c("delay1.x", "shape1.x", "scale1.x", "delay1.y", "shape1.y", "scale1.y"))
   expect_equal(as.numeric(coef_wb2[1:3]), expected = as.numeric(coef_maxFl), tolerance = .001)
   # there might occur quite some differences in the coefficients
   expect_equal(as.numeric(coef_wb2[4:6]), expected = as.numeric(coef_poll), tolerance = .25)
 
   # MLE based fits
-  fd_wb2_mlen <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEn")
-  expect_identical(names(coef(fd_wb2_mlen)), expected = names(coef(fd_wb2)))
-  expect_equal(coef(fd_wb2_mlen), expected = coef(fd_wb2), tolerance = .3)
+  fd_wb2_MLEn_NP <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEn")
+  expect_identical(names(coef(fd_wb2_MLEn_NP)), expected = names(coef(fd_wb2)))
+  expect_equal(coef(fd_wb2_MLEn_NP), expected = coef(fd_wb2), tolerance = .3)
   # MLEn has later delay estimates
-  expect_gt(coef(fd_wb2_mlen)[["delay1.x"]], coef(fd_wb2)[["delay1.x"]])
-  expect_gt(coef(fd_wb2_mlen)[["delay1.y"]], coef(fd_wb2)[["delay1.y"]])
+  expect_gt(coef(fd_wb2_MLEn_NP)[["delay1.x"]], coef(fd_wb2)[["delay1.x"]])
+  expect_gt(coef(fd_wb2_MLEn_NP)[["delay1.y"]], coef(fd_wb2)[["delay1.y"]])
 
-  fd_wb2_mlenp <- delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEn", profile = TRUE)
-  expect_identical(fd_wb2_mlenp$optimizer$convergence, expected = 0L)
+  fd_wb2_MLEn_P <- delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEn", profile = TRUE)
+  expect_identical(fd_wb2_MLEn_P$optimizer$convergence, expected = 0L)
   # roughly equal coefficients as compared to single fits
-  expect_equal(coef(fd_wb2_mlenp, group = "x"), expected = coef(fd_maxFl_MLEnp), tolerance = .2)
-  expect_equal(coef(fd_wb2_mlenp, group = "y"), expected = coef(fd_poll_MLEnp), tolerance = .01)
+  expect_equal(coef(fd_wb2_MLEn_P, group = "x"), expected = coef(fd_maxFl_MLEn_P), tolerance = .2)
+  expect_equal(coef(fd_wb2_MLEn_P, group = "y"), expected = coef(fd_poll_MLEnp), tolerance = .01)
 
-  fd_wb2_mlec <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEc")
-  expect_identical(names(coef(fd_wb2_mlec)), expected = names(coef(fd_wb2)))
-  expect_equal(coef(fd_wb2_mlec), expected = coef(fd_wb2), tolerance = .3)
-  expect_gt(coef(fd_wb2_mlec)[["delay1.x"]], coef(fd_wb2)[["delay1.x"]])
-  expect_gt(coef(fd_wb2_mlec)[["delay1.y"]], coef(fd_wb2)[["delay1.y"]])
+  # MLEc
+  fd_wb2_MLEc_NP <- delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEc")
+  expect_named(coef(fd_wb2_MLEc_NP), expected = names(coef(fd_wb2)))
+  expect_false(fd_wb2_MLEc_NP$optimizer$profiled)
+  expect_equal(coef(fd_wb2_MLEc_NP), expected = coef(fd_wb2), tolerance = .3)
+  expect_gt(coef(fd_wb2_MLEc_NP)[["delay1.x"]], coef(fd_wb2)[["delay1.x"]])
+  expect_gt(coef(fd_wb2_MLEc_NP)[["delay1.y"]], coef(fd_wb2)[["delay1.y"]])
 
-  # two group & MLEw
-  fd_wb2_mlew <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEw", profile = TRUE)
-  expect_identical(names(coef(fd_wb2_mlew)), expected = names(coef(fd_wb2)))
-  expect_equal(coef(fd_wb2_mlew, group = "x"), expected = coef(fd_maxFl_MLEw), tolerance = .01)
-  expect_equal(coef(fd_wb2_mlew, group = "y"), expected = coef(fd_poll_MLEw), tolerance = .01)
+  fd_wb2_MLEc_P <- delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEc", profiled = TRUE)
+  expect_true(fd_wb2_MLEc_P$optimizer$profiled)
+  expect_identical(fd_wb2_MLEc_P$optimizer$convergence, expected = 0L)
+  # MLEc profiling has very little impact on coefficient estimates
+  expect_equal(coef(fd_wb2_MLEc_P), expected = coef(fd_wb2_MLEc_NP), tolerance = .01)
+
+  # MLEw with two groups
+  fd_wb2_MLEw_P <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEw", profile = TRUE)
+  expect_identical(names(coef(fd_wb2_MLEw_P)), expected = names(coef(fd_wb2)))
+  expect_equal(coef(fd_wb2_MLEw_P, group = "x"), expected = coef(fd_maxFl_MLEw), tolerance = .01)
+  expect_equal(coef(fd_wb2_MLEw_P, group = "y"), expected = coef(fd_poll_MLEw), tolerance = .01)
 
 
-  # fit model for two groups with binding
+  # two groups with binding
   set.seed(20210430)
   fd_wb2b <- delay_model(x = rweib_delayed(n=37, delay1 = 7, shape1 = 1.8, scale1 = 3),
                          y = rweib_delayed(n=51, delay1 = 5, shape1 = 1.2, scale1 = 1.5),
                          distribution = "weib", bind = "delay1")
-
   coef_wb2b <- coef(fd_wb2b)
 
   expect_identical(purrr::chuck(fd_wb2b, 'optimizer', 'convergence'), expected = 0L)
   #delay is bound
-  expect_true("delay1" %in% names(coef_wb2b))
   expect_identical(length(coef_wb2b), expected = 2L*3L-1L)
+  expect_named(coef_wb2b, c("delay1", "shape1.x", "scale1.x", "shape1.y", "scale1.y"))
   # expect a delay close to the minimum of the two true delay parameters
-  expect_equal(coef_wb2b[1L], expected = c(delay1 = 5), tolerance = .02)
+  expect_equal(coef_wb2b[[1L]], expected = 5, tolerance = .02)
 
-  fd_wb2b_mlen <- delay_model(x = fd_wb2b$data$x, y = fd_wb2b$data$y, distribution = "weib", method = "MLEn", bind = "delay1")
-  expect_identical(fd_wb2b_mlen$optimizer$convergence, expected = 0L)
-  expect_equal(coef(fd_wb2b_mlen), coef_wb2b, tolerance = .03)
+  fd_wb2b_MLEn_NP <- delay_model(x = fd_wb2b$data$x, y = fd_wb2b$data$y, distribution = "weib", method = "MLEn", bind = "delay1")
+  expect_identical(fd_wb2b_MLEn_NP$optimizer$convergence, expected = 0L)
+  expect_named(coef(fd_wb2b_MLEn_NP), c("delay1", "shape1.x", "scale1.x", "shape1.y", "scale1.y"))
+  expect_equal(coef(fd_wb2b_MLEn_NP), coef_wb2b, tolerance = .03)
 
-  fd_wb2b_mlenp <- delay_model(x = fd_wb2b$data$x, y = fd_wb2b$data$y, distribution = "weib", method = "MLEn", profile = TRUE, bind = "delay1")
-  expect_identical(fd_wb2b_mlenp$optimizer$convergence, expected = 0L)
-  expect_equal(coef(fd_wb2b_mlenp), coef_wb2b, tolerance = .03)
+  fd_wb2b_MLEn_P <- delay_model(x = fd_wb2b$data$x, y = fd_wb2b$data$y, distribution = "weib", method = "MLEn", profile = TRUE, bind = "delay1")
+  expect_identical(fd_wb2b_MLEn_P$optimizer$convergence, expected = 0L)
+  expect_equal(coef(fd_wb2b_MLEn_P), coef(fd_wb2b_MLEn_NP), tolerance = .01) # profiling has little effect on coefficients
 
-  fd_wb2b_mlewp <- delay_model(x = fd_wb2b$data$x, y = fd_wb2b$data$y, distribution = "weib", method = "MLEw", profile = TRUE, bind = "delay1")
-  expect_identical(fd_wb2b_mlewp$optimizer$convergence, expected = 0L)
+  fd_wb2b_MLEc_NP <- delay_model(x = fd_wb2b$data$x, y = fd_wb2b$data$y, distribution = "weib", method = "MLEc", profile = FALSE, bind = "delay1")
+  expect_identical(fd_wb2b_MLEc_NP$optimizer$convergence, expected = 0L)
+  fd_wb2b_MLEc_P <- delay_model(x = fd_wb2b$data$x, y = fd_wb2b$data$y, distribution = "weib", method = "MLEc", profile = TRUE, bind = "delay1")
+  expect_identical(fd_wb2b_MLEc_P$optimizer$convergence, expected = 0L)
+  expect_named(coef(fd_wb2b_MLEc_P), c("delay1", "shape1.x", "scale1.x", "shape1.y", "scale1.y"))
+  expect_equal(coef(fd_wb2b_MLEc_P), coef(fd_wb2b_MLEc_NP), tolerance = .001) # profiling has hardly an effect on the coefficients
+
+  fd_wb2b_MLEw_P <- delay_model(x = fd_wb2b$data$x, y = fd_wb2b$data$y, distribution = "weib", method = "MLEw", profile = TRUE, bind = "delay1")
+  expect_identical(fd_wb2b_MLEw_P$optimizer$convergence, expected = 0L)
+
+  # bind shape
+  fd_wb2bb <- delay_model(x = rweib_delayed(n=37, delay1 = 7, shape1 = 1.8, scale1 = 3),
+                          y = rweib_delayed(n=51, delay1 = 5, shape1 = 1.5, scale1 = 1.5),
+                          distribution = "weib", bind = "shape1")
+  coef_wb2bb <- coef(fd_wb2bb)
+
+  expect_identical(fd_wb2bb$optimizer$convergence, expected = 0L)
+  expect_identical(length(coef_wb2bb), expected = 2L*3L-1L)
+  expect_identical(names(coef_wb2bb), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
+
+  fd_wb2bb_MLEn_NP <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEn", bind = "shape1")
+  expect_identical(fd_wb2bb_MLEn_NP$optimizer$convergence, expected = 0L)
+  expect_identical(names(coef(fd_wb2bb_MLEn_NP)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
+  expect_equal(coef(fd_wb2bb_MLEn_NP), coef_wb2bb, tolerance = .05)
+
+  fd_wb2bb_MLEn_P <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEn", profile = TRUE, bind = "shape1")
+  expect_identical(fd_wb2bb_MLEn_P$optimizer$convergence, expected = 0L)
+  expect_true(fd_wb2bb_MLEn_P$optimizer$profiled)
+  expect_identical(names(coef(fd_wb2bb_MLEn_P)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
+  expect_equal(coef(fd_wb2bb_MLEn_P), coef(fd_wb2bb_MLEn_NP), tolerance = .01) # profiling has hardly an effect
+
+  fd_wb2bb_MLEc_NP <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEc", profile = FALSE, bind = "shape1")
+  expect_identical(fd_wb2bb_MLEc_NP$optimizer$convergence, expected = 0L)
+  expect_identical(names(coef(fd_wb2bb_MLEc_NP)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
+  fd_wb2bb_MLEc_P <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEc", profile = TRUE, bind = "shape1")
+  expect_identical(fd_wb2bb_MLEc_P$optimizer$convergence, expected = 0L)
+  expect_equal(coef(fd_wb2bb_MLEc_P), coef(fd_wb2bb_MLEc_NP), tolerance = .001) # profiling has hardly an effect on the coefficients
+
+  fd_wb2bb_MLEw_P <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEw", profile = TRUE, bind = "shape1")
+  expect_identical(fd_wb2bb_MLEw_P$optimizer$convergence, expected = 0L)
+  expect_identical(names(coef(fd_wb2bb_MLEw_P)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
+  expect_equal(coef(fd_wb2bb_MLEw_P), coef(fd_wb2bb_MLEc_P), tolerance = .1) # MLEw and MLEc coefficients are only rougly similar
 })
 
 
 test_that('Confidence intervals', {
   testthat::skip_on_cran()
   set.seed(1234)
-
 
   obs_sim <- rexp_delayed(n = 29L, delay = 5, rate = .3)
 

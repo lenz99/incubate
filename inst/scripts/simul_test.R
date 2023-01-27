@@ -301,9 +301,11 @@ doMCSim <- function(xx){
   # do we test for parameters combined?
   testParamComb <- scale_ratio != 1
 
-  estimMethods <- tidyr::expand_grid(method = c("MPSE", "MLEn", "MLEc"),
-                                     profiled = FALSE,
+  estimMethods <- tidyr::expand_grid(method = c("MPSE", "MLEn", "MLEc", "MLEw"),
+                                     profiled = c(FALSE, TRUE),
                                      R = as.integer(myR)) %>%
+    # MLEw only works profiled
+    dplyr::filter(method != "MLEw" | profiled) %>%
     dplyr::rowwise()
 
   testDiffList <- future.apply::future_replicate(n = myMCNrep,
