@@ -14,7 +14,8 @@ library('incubate')
 #+ 1.1.9.9014 ties='density' as default now also for tests
 #+ 1.1.9.9016 avoid attributes, use transform() for Pearson/AD GOF tests
 #+ 1.2.0.9025: rename logrank P-values to logrank and logrank_pp (to avoid confusion with likelihood ratio (=LR) tests)
-stopifnot( packageVersion('incubate') >= '1.1.9.9025' )
+#+ 1.2.0.9037: allow profiling for MPSE and all MLE-methods, at least with single group..
+stopifnot( packageVersion('incubate') >= '1.1.9.9038' )
 cat('incubate package version: ', toString(packageVersion('incubate')), '\n')
 
 library('dplyr', warn.conflicts = FALSE)
@@ -300,6 +301,7 @@ doMCSim <- function(xx){
 
   # do we test for parameters combined?
   testParamComb <- scale_ratio != 1
+  scale_y <- scale_x * scale_ratio
 
   estimMethods <- tidyr::expand_grid(method = c("MPSE", "MLEn", "MLEc", "MLEw"),
                                      profiled = c(FALSE, TRUE),
@@ -316,11 +318,11 @@ doMCSim <- function(xx){
                                                    if (isExpon) {
                                                      stopifnot( dplyr::near(shape, 1L) )
                                                      x <- rexp_delayed(n = n_x, delay = delay_x, rate = 1/scale_x)
-                                                     y <- rexp_delayed(n = n_y, delay = delay_y, rate = 1/(scale_x * scale_ratio))
+                                                     y <- rexp_delayed(n = n_y, delay = delay_y, rate = 1/scale_y)
                                                    } else {
                                                      # weibull
                                                      x <- rweib_delayed(n = n_x, delay = delay_x, scale = scale_x, shape = shape)
-                                                     y <- rweib_delayed(n = n_y, delay = delay_y, scale = scale_x * scale_ratio, shape = shape)
+                                                     y <- rweib_delayed(n = n_y, delay = delay_y, scale = scale_y, shape = shape)
                                                    }
 
                                                    estimMethods %>%
@@ -328,10 +330,10 @@ doMCSim <- function(xx){
                                                        te_diff <- NULL
                                                        # test_diff might also use parallel computations depending on future-settings
                                                        try(expr = {
-                                                         te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay', method = method, profiled = profiled, R = R, type = "all", doLogrank = method == 'MPSE')
+                                                         te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay1', method = method, profiled = profiled, R = R, type = "all", doLogrank = method == 'MPSE')
                                                          # get bootstrap P-value for combined test: delay+rate (we request it only if the scale (=1/rate for exponential) is indeed different)
                                                          if (testParamComb && ! is.null(te_diff)){
-                                                           te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay', 'rate'), method = method, profiled = profiled, R = R, type = 'bootstrap')
+                                                           te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay1', 'rate1'), method = method, profiled = profiled, R = R, type = 'bootstrap')
                                                            # store P-value of delay+rate in original test_diff-object
                                                            te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, 'P', 'bootstrap', .default = NA_real_)
                                                          }#fi

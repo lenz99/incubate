@@ -156,7 +156,7 @@ objFunFactory <- function(x, y = NULL,
 
   # adjust profiled:
   #+profiling is only possible if rate1/scale1 is not bound and single phase
-  #XXX profiling is not implemented for all cases! we sometimes reverse it to FALSE.
+  #XXX profiling is not implemented for all cases! we sometimes reverse it to FALSE and just issue a warning
   profiled0 <- profiled
   profiled <- profiled && (! any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) && ! twoPhase
   #&& method %in% c("MLEn", "MLEc", "MLEw") #&& distribution == 'weibull' &&
@@ -205,38 +205,51 @@ objFunFactory <- function(x, y = NULL,
   stopifnot( ! twoPhase ) #XXX not implemented yet!!
 
 
-  # internal extractPars index: provide indices for x and for y
-  # indices where to find the parameters per group in the parameter vector of the objective function
+  # provide indices for x and for y
+  # where to find the parameters per group in the parameter vector of the objective function
   extractParOptInd <- if (! twoGroup) {
     # single group!
-    if (distribution == 'exponential') {
-      if (profiled) list(x = 1L) else list(x = c(1L, 2L))
-    } else {
-      # weibull:
-      if (profiled) list(x = c(1L, 2L)) else
-        list(x = c(1L, 2L, 3L))
-    }
-    # could use here also list(x = seq.along(trNames)) ## reacts to twoPhase-setting
+    list(x = seq_along(trNames)) ## Cave: trNames reacts to twoPhase-setting (which I've not thought through, yet)
   } else {
     # two group!
     #XXX exponential && profiled: indices are not correct for two groups, yet!!
+    #XXX continue here!! (this would allow to run simul_test.R!)
     if (is.null(bind)) {
-      if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else #weibull:
+      if (distribution == 'exponential') {
+        if (profiled) list(x = c(1L), y = c(2L)) else list(x = c(1L, 2L), y = c(3L, 4L))
+      } else {
+        #weibull:
         if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else
           list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
+      }
     } else if (length(oNames) == length(bind)) {
-      if (distribution == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else #weibull:
-        if (profiled) list(x = c(1L, 2L), y = c(1L, 2L)) else
-          list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
+      # twoGroup, but all parameters are bound!
+      if (distribution == 'exponential') {
+        # profiled can actually be true (as each group leads to own scale/rate
+        #+but it will be averaged (see mergePars!!)
+        if (profiled) {
+          #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
+          list(x = c(1L), y = c(1L))
+        } else list(x = c(1L, 2L), y = c(1L, 2L))
+      } else {
+        #weibull:
+        if (profiled) {
+          #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
+          list(x = c(1L, 2L), y = c(1L, 2L))
+        } else list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
+      }
     } else {
       # twoGroups & non-trivial bind
+
       local({
-        # getDist with profiled=TRUE & transformed = FALSE removes the profile parameters (even when on original scale)
+        # getDist with profiled=TRUE & transformed = FALSE removes the profile parameters (although it is original scale)
         #+ as we need the original parameter names without those of profiling
-        oNamesFullProf <- if (!profiled) oNamesFull else getDist(distribution = distribution, type = "param", twoPhase = twoPhase, twoGroup = TRUE,
-                                                                 bind = bind, profiled = TRUE, transformed = FALSE)
+        oNamesFullProf <- if (!profiled) oNamesFull else
+          getDist(distribution = distribution, type = "param", twoPhase = twoPhase, bind = bind,
+                  twoGroup = TRUE, profiled = TRUE, transformed = FALSE)
+
         # locally, drop "rate1/scale1" from oNames when in profiling mode
-        #XXX not robust! Think about (e.g.) twoPhase when profiling! (currently profiling is switched off when twoPhase)
+        # Cave: not robust! Think about (e.g.) twoPhase when profiling! (currently profiling is switched off when twoPhase)
         if (profiled) oNames <- setdiff(oNames, c("rate1", "scale1")) # only *local* temporary change
         nonbind <- setdiff(oNames, bind)
         list(
@@ -247,19 +260,33 @@ objFunFactory <- function(x, y = NULL,
     }
   }
 
+  # provide indices for x and for y
+  # where to find the parameters per group in the common parameter vector
   extractParInd <- if (!profiled) {
-    extractParOptInd # identical to optimization indices when no profiling
+    # = optimization indices when no profiling
+    extractParOptInd
   } else {
     # profiled!
     if (! twoGroup) {
       # profiled single group!
-      if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
-      # could use here also list(x = seq.along(oNames)) ## reacts to twoPhase-setting
+      list(x = seq_along(oNames)) ## Cave: oNames reacts to twoPhase-setting (which I've not thought through, yet)
+      #if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
     } else {
       # twoGroup && profiled
-      stopifnot(distribution != 'exponential') #XXX think through!
-      if (is.null(bind)) list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L)) else
-        if ( length(oNames) == length(bind)) list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L)) else {    # non-trivial bind
+      if (is.null(bind)){
+        if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else
+          # weibull
+          list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
+      } else {
+        if ( length(oNames) == length(bind)) {
+          # profiled can actually be true (as each group leads to own scale/rate
+          #+but it will be averaged (see mergePars!!)
+          #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
+          if (distribution == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else
+            # weibull
+            list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
+        } else {
+          # twoGroup & non-trivial bind
           local({
             # we consider the parameter names on original scale, with profiled parameters also back in!
             nonbind <- setdiff(oNames, bind)
@@ -269,8 +296,9 @@ objFunFactory <- function(x, y = NULL,
             )
           })
         }
+      }
     }
-  }
+  } #esle !profiled
 
   # parameter transformation matrices
   paramTransf <- list(
@@ -319,19 +347,19 @@ objFunFactory <- function(x, y = NULL,
   # @return transformed parameter vector, unnamed!
   transformPars1 <- function(parV1, inverse = FALSE){
 
-        if (inverse) {
-          # b = Ainv %*% Finv(b')
-          as.numeric(paramTransf[["Minv"]][seq_along(parV1), seq_along(parV1)] %*%
-                       as.numeric(.mapply(FUN = function(f, x) f(x),
-                                          dots = list(paramTransf[["Finv"]][seq_along(parV1)], parV1),
-                                          MoreArgs = NULL)))
-        } else {
-          # b' = F(A %*% b)
-          as.numeric(.mapply(FUN = function(f, x) f(x),
-                             dots = list(paramTransf[["F"]][seq_along(parV1)],
-                                         as.numeric(paramTransf[["M"]][seq_along(parV1), seq_along(parV1)] %*% parV1)),
-                             MoreArgs = NULL))
-        }
+    if (inverse) {
+      # b = Ainv %*% Finv(b')
+      as.numeric(paramTransf[["Minv"]][seq_along(parV1), seq_along(parV1)] %*%
+                   as.numeric(.mapply(FUN = function(f, x) f(x),
+                                      dots = list(paramTransf[["Finv"]][seq_along(parV1)], parV1),
+                                      MoreArgs = NULL)))
+    } else {
+      # b' = F(A %*% b)
+      as.numeric(.mapply(FUN = function(f, x) f(x),
+                         dots = list(paramTransf[["F"]][seq_along(parV1)],
+                                     as.numeric(paramTransf[["M"]][seq_along(parV1), seq_along(parV1)] %*% parV1)),
+                         MoreArgs = NULL))
+    }
   }# fn transformPars1
 
   # merge two parameter vectors
@@ -339,14 +367,21 @@ objFunFactory <- function(x, y = NULL,
   # @return merged parameter vector
   mergePars <- function(parx, pary, isOpt){
     exParInd <- if (isOpt) extractParOptInd else extractParInd
-    # aggregate parameters (by default via mean).
+    # aggregate parameters (via mean if isOpt or geometric mean if on original scale).
     #+this is necessary for merging start vector for parameter-optimization
     res <- as.vector(tapply(X = c(parx, pary),
                             INDEX = unlist(exParInd),
-                            FUN = mean, simplify = TRUE))
+                            # arithmetic or geometric mean
+                            FUN = function(x) {
+                              stopifnot(length(x) <= 2L)
+                              if (length(x) <= 1L) x else
+                                if (isOpt) (x[[1L]] + x[[2L]])/2L else #mean(x)
+                                  sqrt(x[[1L]] * x[[2L]]) #prod(x)**(1/length(x))
+                              },
+                            simplify = TRUE))
     # .. only for delay1 we use minimum as aggregation function (in this case first entry in exParInd$x and exParInd$y is 1!)
-    if (exParInd$x[1L] + exParInd$y[1L] == 2){
-      res[[1L]] <- min(parx[1L], pary[1L])
+    if (exParInd$x[[1L]] + exParInd$y[[1L]] == 2){
+      res[[1L]] <- min(parx[[1L]], pary[[1L]])
     }
 
     res
@@ -841,7 +876,10 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     if (verbose > 0L) message("Start with numeric optimiziation of objective function.")
 
     if (is.null(optim_args)) optim_args <- objFunObjs[["optim_args"]]
-    stopifnot( is.list(optim_args), 'par' %in% names(optim_args) )
+    stopifnot( is.list(optim_args), 'par' %in% names(optim_args),
+               is.numeric(optim_args$par), length(optim_args$par) == length(objFunObjs$trNamesFull) )
+    if (is.null(names(optim_args$par))) optim_args$par <- rlang::set_names(optim_args$par, objFunObjs$trNamesFull)
+    stopifnot( identical(names(optim_args$par), objFunObjs$trNamesFull))
     # set objective function (overwrite entry 'fn' if it is already present)
     optim_args[["fn"]] <- objFun
 
@@ -876,7 +914,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
         try({
           optObj <- purrr::exec(stats::optim, !!! optim_args)
           optObj$methodOpt <- optim_args$method
-          }, silent = TRUE)
+        }, silent = TRUE)
 
         if ( is.null(optObj) || isTRUE(optObj$convergence > 0L && verbose > 0L) ) warning("No proper convergence after re-try.", call. = FALSE)
       }## fi rescaling for 2nd attempt
@@ -900,8 +938,9 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     # set names to parameter vector
     if (! is.null(optObj)){
       stopifnot( 'par' %in% names(optObj) )
-      # set canonical names for parameters
-      optObj$par <- rlang::set_names(optObj$par, objFunObjs$trNamesFull)
+      stopifnot( identical(names(optObj$par), objFunObjs$trNamesFull))
+      # # set canonical names for parameters
+      # optObj$par <- rlang::set_names(optObj$par, objFunObjs$trNamesFull)
       # save optim_args in optimization object (but w/o objective function)
       optim_args$fn <- NULL
       optObj <- append(optObj, values = list(optim_args = optim_args))
@@ -1041,7 +1080,7 @@ coef.incubate_fit <- function(object, transformed = FALSE, group = NULL, ...){
   transformed <- isTRUE(transformed)
 
   rlang::env_get(rlang::fn_env(object$objFun), nm = "extractPars")(purrr::chuck(object, !!! if (transformed) list("optimizer", "parOpt") else "par"),
-                                                                      group = group, isOpt = transformed, transform = FALSE, named = TRUE)
+                                                                   group = group, isOpt = transformed, transform = FALSE, named = TRUE)
 }
 
 #' @export
