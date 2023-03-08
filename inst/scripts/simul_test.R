@@ -330,9 +330,9 @@ doMCSim <- function(xx){
                                                        te_diff <- NULL
                                                        # test_diff might also use parallel computations depending on future-settings
                                                        try(expr = {
-                                                         te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay1', method = method, profiled = profiled, R = R, type = "all", doLogrank = method == 'MPSE')
+                                                         te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay1', method = method, profiled = profiled, R = R, type = "all", doLogrank = method == 'MPSE' && !profiled)
                                                          # get bootstrap P-value for combined test: delay+rate (we request it only if the scale (=1/rate for exponential) is indeed different)
-                                                         if (testParamComb && ! is.null(te_diff)){
+                                                         if (testParamComb){
                                                            te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay1', 'rate1'), method = method, profiled = profiled, R = R, type = 'bootstrap')
                                                            # store P-value of delay+rate in original test_diff-object
                                                            te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, 'P', 'bootstrap', .default = NA_real_)
@@ -360,7 +360,7 @@ doMCSim <- function(xx){
 #' @return tibble of simulations settings where results tibble has been added
 applyMCSims <- function(simSetDF){
   simSetDF %>%
-    mutate(., results = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim))
+    dplyr::mutate(., results = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim))
 }
 
 
