@@ -1,7 +1,7 @@
 
 
 #' Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
-#' or according to some flavour of maximum likelihood estimation (e.g., naive 'MLEn' or corrected 'MLEc').
+#' or according to some flavour of maximum likelihood estimation (e.g., naive ('MLEn') or corrected ('MLEc') or weighted ('MLEw') MLE).
 #'
 #' Given the observed data this factory method produces an objective function
 #' which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
@@ -162,7 +162,7 @@ objFunFactory <- function(x, y = NULL,
   #&& method %in% c("MLEn", "MLEc", "MLEw") #&& distribution == 'weibull' &&
 
   if (xor(profiled0, profiled)){
-    warning(glue("Option `profiled={profiled0}` was reversed!"), call. = FALSE)
+    warning(glue("Option `profiled={profiled0}` was reversed to profiled={profiled}!"), call. = FALSE)
   }
   rm("profiled0")
 
@@ -540,7 +540,7 @@ objFunFactory <- function(x, y = NULL,
   }# fn getParSetting.gr
 
   # profile likelihood: maximize profiled log-lik f directly
-  # if FALSE, go indirectly: consider min(f'^2). As necessary condition, f'^2 == 0
+  # if FALSE, go indirectly: consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
   profiled_llik_directly <- TRUE
 
   # parameter bounds: set lower & upper bounds
