@@ -300,14 +300,14 @@ doMCSim <- function(xx){
   shape <- xx[[7]]
 
   # do we test for parameters combined?
-  testParamComb <- scale_ratio != 1
+  testParamCombined <- scale_ratio != 1
   scale_y <- scale_x * scale_ratio
 
   estimMethods <- tidyr::expand_grid(method = c("MPSE", "MLEn", "MLEc", "MLEw"),
                                      profiled = c(FALSE, TRUE),
                                      R = as.integer(myR)) %>%
-    # MLEw only works profiled
-    dplyr::filter(method != "MLEw" | profiled) %>%
+    # all MLE-methods use only profiled variant, MPSE uses both, unprofiled & unprofiled
+    dplyr::filter(method == 'MPSE' | profiled) %>%
     dplyr::rowwise()
 
   testDiffList <- future.apply::future_replicate(n = myMCNrep,
@@ -332,7 +332,7 @@ doMCSim <- function(xx){
                                                        try(expr = {
                                                          te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay1', method = method, profiled = profiled, R = R, type = "all", doLogrank = method == 'MPSE' && !profiled)
                                                          # get bootstrap P-value for combined test: delay+rate (we request it only if the scale (=1/rate for exponential) is indeed different)
-                                                         if (testParamComb){
+                                                         if (testParamCombined){
                                                            te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay1', 'rate1'), method = method, profiled = profiled, R = R, type = 'bootstrap')
                                                            # store P-value of delay+rate in original test_diff-object
                                                            te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, 'P', 'bootstrap', .default = NA_real_)
