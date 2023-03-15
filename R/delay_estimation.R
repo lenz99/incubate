@@ -49,20 +49,35 @@ objFunFactory <- function(x, y = NULL,
 
   # data preparation ----
 
+  # drops negative values, NA and Inf values and sorts the remaining real numbers, breaks ties (if necessary)
   # @param obs: data vector of one group
   # @return sorted, cleaned up data vector or NULL in case of trouble
   preprocess <- function(obs) {
 
     if ( is.null(obs) || ! is.numeric(obs)) return(NULL)
 
-    ind_neg <- which(obs < 0L)
-    if (length(ind_neg)){
-      warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
-      obs <- obs[-ind_neg]
-    }# fi
+    # unify Surv-type but keep numeric if no censoring
+    obs <- prepSurvResp(obs, simplify = TRUE)
 
-    # drop NA and +/-Inf & sort
-    obs <- sort(obs[is.finite(obs)])
+    if (! inherits(obs, what = "Surv")) {
+      ind_neg <- which(obs < 0L)
+      if (length(ind_neg)){
+        warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
+        obs <- obs[-ind_neg]
+      }# fi
+      # drop NA and +/-Inf & sort
+      obs <- sort(obs[is.finite(obs)])
+    } else {
+      # for MPSE: check we only have no other censoring than right-censoring
+      if (method == 'MPSE' && any(obs[, "status"] > 1)){
+        warning("MPSE-fitting supports only right censored observations currently.", call. = FALSE)
+        return(NULL)
+      }
+      # sort by time (first column)
+      obs <- sort(obs)
+      #XXX think Surv: what checks do we need?! negative, finite?!?
+    }
+
 
     if (!length(obs)) {
       warning("No valid data! Only non-negative and finite real values are valid.", call. = FALSE)
@@ -73,7 +88,8 @@ objFunFactory <- function(x, y = NULL,
 
     # tie break
     # || ties == 'groupedML') # groupedML not implemented yet
-    if ( startsWith(method, 'MLE') || ties == 'density' ) return(obs)
+    #XXX think Surv: ties?!
+    if ( startsWith(method, 'MLE') || ties == 'density' || inherits(obs, what = "Surv") ) return(obs)
 
     diffobs <- diff(obs)
     stopifnot( all(diffobs >= 0L) ) # i.e. sorted obs
@@ -142,7 +158,6 @@ objFunFactory <- function(x, y = NULL,
   # do we have two groups after pre-processing?
   twoGroup <- isTRUE(!is.null(y) && is.numeric(y) && length(y))
 
-
   # adjust bind:
   #+enforce the canonical order of dist-parameters and drop unused parameters and empty strings
   #+set to NULL if not effectively two group setting
@@ -166,6 +181,43 @@ objFunFactory <- function(x, y = NULL,
   }
   rm("profiled0")
 
+  # little helper function to count the censored observed by type (right, left, interval)
+  countCensObs <- function(.x) {
+    rlang::set_names(
+      if (inherits(.x, what = "Surv")) tabulate(.x[, "status"]+1L, nbins = 4)[-2L] else rep_len(0L, length.out = 3L),
+      nm = c("right", "left", "interval"))
+  }
+  ncens <- if (twoGroup) list(x = countCensObs(x), y = countCensObs(y)) else countCensObs(x)
+
+  # KM fit
+  dataSurv <- tibble(time = c(if (! inherits(x, "Surv")) Surv(x) else x,
+                              if (! inherits(y, "Surv") && ! is.null(y)) Surv(y) else y),
+                     group = rep.int(c("x", "y"), times = c(length(x), length(y))))
+  kmFit <- survival::survfit(time ~ group, data = dataSurv, start.time = 0, se.fit = FALSE, conf.type = "none")
+  #kmFit <- survival::survfit0(kmFit, start.time = 0)
+
+  kmFit <- tibble(time = kmFit$time,
+                  n.risk = kmFit$n.risk,
+                  n.event = kmFit$n.event,
+                  n.censor = kmFit$n.censor,
+                  surv = kmFit$surv,
+                  evrate = 1 - surv)
+
+  # estimate rcens-distribution
+  kmFitrcens <- if (method == 'MPSE') {
+    kmFitrcens_fun <- function(.x, .ncens){
+      if (.ncens[["right"]] > 0) {
+        .x[, "status"] <- !.x[, "status"] # treat right-cens as events and rest as censoring
+        summary( # do we need summary? better off with direct object?
+          survival::survfit(.x ~ 1, conf.type = "none", se.fit = FALSE),
+          censored=TRUE)
+      } else { # no right censorings!
+        # use mock survfit.summary object
+        list(surv = rep_len(1, length.out = length(.x)))
+      }
+    }
+    if (twoGroup) list(x = kmFitrcens_fun(x, ncens[["x"]]), y = kmFitrcens_fun(y, ncens[["y"]])) else kmFitrcens_fun(x, ncens)
+  }#fi
 
   # set some coefficient names:
   # coefficient names (now that we have settled the profiling flag)
@@ -388,7 +440,7 @@ objFunFactory <- function(x, y = NULL,
   }
 
   # extract parameter vector for a specified group
-  # if parameters are for optimization and transformation is requested, unprofiling is done (if relevant)
+  # if parameters are for optimization and transformation is requested, profiling is undone (if relevant)
   # @param group character. Extract parameters for the given group. If NULL, keep all parameters.
   # @param isOpt logical. Are the given parameters on optimization function scale?
   # @param named logical. Extract parameters as named vector?
@@ -398,9 +450,7 @@ objFunFactory <- function(x, y = NULL,
     resIsOpt <- xor(isOpt, transform)
 
     # basically, ignore group= when single group: use always canonical "x" then
-    if (!twoGroup) {
-      group <- "x"
-    }
+    if (!twoGroup) group <- "x"
 
     if (is.null(group)){
       return(local({
@@ -468,6 +518,12 @@ objFunFactory <- function(x, y = NULL,
   getParSetting.gr <- function(obs){
     # contract: obs is sorted!
     DELAY_MIN <- 1e-9
+
+    # Surv: quick fix, use only event times as numeric vector that are observed or right censored
+    # XXX improve here?, use flatten_surv from lme4cens?!
+    if (inherits(obs, what = "Surv")){
+      obs <- obs[, 1L, drop=TRUE][obs[, "status", drop = TRUE] <= 1]
+    }
 
     parV <- switch (EXPR = distribution,
                     # min(obs) = obs[1L]
@@ -748,13 +804,6 @@ objFunFactory <- function(x, y = NULL,
   # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
   getCumDiffs <- function(pars, group, criterion = FALSE) {
 
-    # access observations of group
-    obs <- if (group == "y") y else x #direct access by name
-    # get() would (by default) start looking in the execution environment of getCumDiffs and would find the object in its parent
-    # or: env = rlang::env_parent() # parent of caller env is (normally!?) the function-env
-    # or: env = rlang::fn_env(getCumDiffs) # referring directly to the function environment (but requires function obj)
-    #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
-
     # extract parameters for specified group on original scale (for CDF)
     pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
 
@@ -763,22 +812,54 @@ objFunFactory <- function(x, y = NULL,
                "{paste(round(pars.gr, 2), collapse = ', ')}"), "\n")
     }
 
+    # access observations of group
+    #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
+    #+or use env = rlang::fn_env(getCumDiffs) # (but requires function obj)
+    obs <- if (group == "y") y else x # direct access by name
+
+
     # calculate spacings
     # contract: data is sorted!
-    cumDiffs <- diff(c(0L,
-                       rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)),
-                       1L))
+    cumDiffs <- if (inherits(obs, what = "Surv")){
+      # pick correct rcensKM-object
+      kmFitrcens_gr <- if (group == "y") kmFitrcens[["y"]] else if (twoGroup) kmFitrcens[["x"]] else kmFitrcens
+
+      h <- rep_len(-1, length.out = length(obs))
+      ind_evKM <- kmFit$n.event > 0L
+      # kmFit and kmFitrcens have same number of rows
+      # use CDF of (right-)censored outcome variable for all observed event times
+      h[obs[, "status"] == 1] <- rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens_gr$surv[ind_evKM]) + (1L - kmFitrcens_gr$surv[ind_evKM])
+      # censored observations get interpolated values
+      ind_hneg <- which(h<0)
+      if (length(ind_hneg)) {
+        ind_hpos <- which(h>0)
+        # interpolate values for all censored observations
+        h[ind_hneg] <- stats::approx(x = c(0L, ind_hpos, length(obs)+1L), y = c(0L, h[ind_hpos], 1L),
+                                     method = "linear", ties = "ordered", yleft = NA, yright = NA, xout = ind_hneg)$y
+      } #fi
+
+      diff(c(0L, h, 1L))
+
+      #XXX tie handling with density missing here!
+      #XXX unify plot variants using KM
+
+    } else {
+      h <- diff(c(0L,
+                  rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)),
+                  1L))
 
 
-    # use densFun for ties
-    # we check difference of obs directly (not cumDiffs)
-    #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
-    ind_t <- which(diff(obs) == 0L)
-    if ( length(ind_t) ){
-      stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess*
-      # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
-      cumDiffs[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
-    } #fi
+      # use densFun for ties
+      # we check difference of obs directly (not cumDiffs)
+      #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
+      ind_t <- which(diff(obs) == 0L)
+      if ( length(ind_t) ){
+        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess*
+        # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
+        h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
+      } #fi
+      h
+    }
 
     # respect the machine's numerical lower limit
     cumDiffs[which(cumDiffs < .Machine$double.xmin)] <- .Machine$double.xmin
@@ -826,7 +907,7 @@ objFunFactory <- function(x, y = NULL,
   } #fn objFun
 
   # attach analytical solution for MLE
-  if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' ){
+  if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' && ! inherits(x, what = "Surv") ){
     attr(objFun, which = "opt") <- local({
       par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
       list(par_orig = par_analytic,
@@ -1045,6 +1126,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
       twoGroup = twoGroup,
       method = method,
       bind = rlang::env_get(env = objFunEnv, nm = "bind"),
+      ncens = rlang::env_get(env = objFunEnv, nm = "ncens", default = 0L), ##if (twoGroup)
       ties = ties,
       objFun = objFun,
       par = optObj$par_orig,
@@ -1062,7 +1144,7 @@ print.incubate_fit <- function(x, ...){
                       MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
                       MLEw = 'weighted Maximum Likelihood Estimation (MLEw)',
                       MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
-                      "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {paste(signif(range(data), 4), collapse = ' to ')}",
+                      "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {if (twoGroup) min(data[['x']][1], data[['y']][1]) else data[1L]} to {if (twoGroup) max(data[['x']][lengths(data)[1]], data[['y']][lengths(data)[2]]) else data[length(data)]}",
                       "Criterion: {signif(criterion,3)}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
@@ -1133,7 +1215,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 
   p <- grNames <- NULL
 
-  # catch the one-group case!
+  # different plot code for one or two groups
   if ( x[["twoGroup"]] ){
     stopifnot( is.list(x[["data"]]) )
 
@@ -1145,16 +1227,37 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
       ggplot2::geom_function(mapping = ggplot2::aes(col = "x"), inherit.aes = FALSE,
                              fun = cumFun, args = coef(x, group = "x"), linetype = "dashed") +
       ggplot2::geom_function(mapping = ggplot2::aes(col = "y"), inherit.aes = FALSE,
-                             fun = cumFun, args = coef(x, group = "y"), linetype = "dashed")
+                             fun = cumFun, args = coef(x, group = "y"), linetype = "dashed") +
+      ggplot2::stat_ecdf(pad=TRUE)
 
   } else {
     grNames <- "x"
-    p <- ggplot2::ggplot(data = tibble::tibble(value=x[["data"]]),
-                         mapping = ggplot2::aes(x = .data$value)) +
+
+    p <- if (sum(x$ncens) > 0) {
+      kmFit <- survival::survfit(x[["data"]] ~ 1, start.time = 0, se.fit = FALSE, conf.type = "none")
+      kmFit <- survival::survfit0(kmFit, start.time = 0) # add time 0
+      ggplot2::ggplot(data = tibble(time = kmFit$time,
+                                    n.risk = kmFit$n.risk,
+                                    n.censor = kmFit$n.censor,
+                                    evrate = 1 - kmFit$surv),
+                      mapping = ggplot2::aes(x = .data$time, y = .data$evrate)) +
+        # add estimated delay model
+        ggplot2::geom_function(inherit.aes = FALSE,
+                               fun = cumFun,
+                               args = coef(x, group = grNames), linetype = "dashed") +
+        ggplot2::geom_step() +
+        # mark (right-)censored observations
+        ggplot2::geom_point(data = function(.x) .x[.x$n.censor > 0,], shape = 3L)
+
+    } else {
+      ggplot2::ggplot(data = tibble(value=x[["data"]]),
+                      mapping = ggplot2::aes(x = .data$value)) +
       # add estimated delay model
       ggplot2::geom_function(inherit.aes = FALSE,
                              fun = cumFun,
-                             args = coef(x, group = grNames), linetype = "dashed")
+                             args = coef(x, group = grNames), linetype = "dashed") +
+        ggplot2::stat_ecdf(pad=TRUE)
+    } #esle
   }
 
 
@@ -1168,7 +1271,6 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 
 
   p +
-    ggplot2::stat_ecdf(pad=TRUE) +
     ggplot2::xlim(0L, NA) +
     ggplot2::coord_trans(y = "reverse") + # transforms "after_stat" which matters for stat_ecdf
     ggplot2::labs(x = 'Time', y = 'Cumulative prop. of events',
@@ -1586,6 +1688,7 @@ transform.incubate_fit <- function(`_data`, ...){
   twoGroup <- `_data`$twoGroup
   x <- if (twoGroup) `_data`$data$x else `_data`$data
 
+  #XXX Surv: does not work currently!
   tr <- purrr::exec(cdfFun, !!! c(list(q=x), coef(`_data`, group = 'x')))
   if (twoGroup) tr <- list(x = tr, y = purrr::exec(cdfFun, !!! c(list(q=`_data`$data$y), coef(`_data`, group = 'y'))))
 

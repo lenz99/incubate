@@ -85,3 +85,40 @@ estimRoundingError <- function(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100
                             .f = ~all(abs(obs - round(obs, digits = .x)) < 2L * 10L**min(-2L, -.x-1L)) )
   10L**-if (!any(rDigInd)) max(roundDigits)+1L else if (all(rDigInd)) min(roundDigits)-1L else roundDigits[which.max(rDigInd)]
 }
+
+
+#' Prepare the survival response.
+#' It uses the interval-coding that supports left-, right- and interval-censoring
+#' also in cases when right or left-censoring was used initially.
+#' @param y0 response as numeric or [survival::Surv] using left, right or interval-coding
+#' @param simplify logical. Should the result in any case be a [survival::Surv] object? If `TRUE`, a [survival::Surv] object with no censorings is coerced to numeric.
+#' @return response as [survival::Surv], using interval-coding or numeric (if no censorings and `simplify=TRUE`)
+prepSurvResp <- function(y0, simplify = TRUE) {
+
+  if (! inherits(y0, what = "Surv")) {
+    stopifnot(is.numeric(y0))
+    if (simplify) return(y0) else
+      return(Surv(time = y0, time2 = y0, type = "interval2"))
+  } else if (simplify && all(y0[, "status"] == 1)) return(y0[, 1L, drop=TRUE])
+
+  stopifnot( inherits(y0, what = "Surv") )
+  survType <- attr(y0, which = "type")
+
+  if (survType == 'interval') y0 else {
+    yMat <- as.matrix(y0)
+    yTime <- yMat[, "time"]
+    yStat <- yMat[, "status"]
+    censLevel <- if (max(yStat) == 2) 1 else 0
+    isCens <- (yStat == censLevel)
+
+    switch(survType,
+           right=Surv(time  = yTime,
+                      time2 = ifelse(isCens, yes = Inf, no = yTime),
+                      type = "interval2"),
+           left=Surv(time  = ifelse(isCens, yes = -Inf, no = yTime),
+                     time2 = yTime,
+                     type = "interval2"),
+           stop("This type of censoring is not supported!", call. = FALSE)
+    ) #hctiws
+  }# esle
+}
