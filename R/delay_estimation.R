@@ -191,17 +191,9 @@ objFunFactory <- function(x, y = NULL,
 
   # KM fit
   dataSurv <- tibble(time = c(if (! inherits(x, "Surv")) Surv(x) else x,
-                              if (! inherits(y, "Surv") && ! is.null(y)) Surv(y) else y),
+                              if (! inherits(y, "Surv") && ! is.null(y)) Surv(time = y, time2 = NA, event = rep_len(1, length(y)), type = "interval") else y),
                      group = rep.int(c("x", "y"), times = c(length(x), length(y))))
   kmFit <- survival::survfit(time ~ group, data = dataSurv, start.time = 0, se.fit = FALSE, conf.type = "none")
-  #kmFit <- survival::survfit0(kmFit, start.time = 0)
-
-  kmFit <- tibble(time = kmFit$time,
-                  n.risk = kmFit$n.risk,
-                  n.event = kmFit$n.event,
-                  n.censor = kmFit$n.censor,
-                  surv = kmFit$surv,
-                  evrate = 1 - surv)
 
   # estimate rcens-distribution
   kmFitrcens <- if (method == 'MPSE') {
@@ -429,7 +421,7 @@ objFunFactory <- function(x, y = NULL,
                               if (length(x) <= 1L) x else
                                 if (isOpt) (x[[1L]] + x[[2L]])/2L else #mean(x)
                                   sqrt(x[[1L]] * x[[2L]]) #prod(x)**(1/length(x))
-                              },
+                            },
                             simplify = TRUE))
     # .. only for delay1 we use minimum as aggregation function (in this case first entry in exParInd$x and exParInd$y is 1!)
     if (exParInd$x[[1L]] + exParInd$y[[1L]] == 2){
@@ -520,7 +512,7 @@ objFunFactory <- function(x, y = NULL,
     DELAY_MIN <- 1e-9
 
     # Surv: quick fix, use only event times as numeric vector that are observed or right censored
-    # XXX improve here?, use flatten_surv from lme4cens?!
+    # XXX improve here?, e.g., use flatten_surv from lme4cens?!
     if (inherits(obs, what = "Surv")){
       obs <- obs[, 1L, drop=TRUE][obs[, "status", drop = TRUE] <= 1]
     }
@@ -820,28 +812,34 @@ objFunFactory <- function(x, y = NULL,
 
     # calculate spacings
     # contract: data is sorted!
-    cumDiffs <- if (inherits(obs, what = "Surv")){
+    cumDiffs <- if (inherits(obs, what = "Surv")) {
+      #kmFitInd <- kmFit[kmFit$group == group,]
+      # # drop time=0 first line
+      # if (kmFit$time[1L] == 0 && kmFit$n.event[1L] == 0 && kmFit$n.censor[1L] == 0) kmFit <- kmFit[-1L,]
       # pick correct rcensKM-object
       kmFitrcens_gr <- if (group == "y") kmFitrcens[["y"]] else if (twoGroup) kmFitrcens[["x"]] else kmFitrcens
 
+      ind_evKM <- which(kmFit$n.event > 0L)
+      if (twoGroup) { # get the right subset of indices for specified group
+        # Cave: works only for two groups: x or y
+        ind_evKM <- if (group == "x") ind_evKM[ind_evKM <= kmFit$strata[[1L]]] else ind_evKM[ind_evKM > kmFit$strata[[1L]]]
+      }
       h <- rep_len(-1, length.out = length(obs))
-      ind_evKM <- kmFit$n.event > 0L
       # kmFit and kmFitrcens have same number of rows
       # use CDF of (right-)censored outcome variable for all observed event times
       h[obs[, "status"] == 1] <- rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens_gr$surv[ind_evKM]) + (1L - kmFitrcens_gr$surv[ind_evKM])
       # censored observations get interpolated values
-      ind_hneg <- which(h<0)
-      if (length(ind_hneg)) {
-        ind_hpos <- which(h>0)
+      ind_hrcens <- which(h<0)
+      if (length(ind_hrcens)) {
+        ind_hobs <- which(h>0)
         # interpolate values for all censored observations
-        h[ind_hneg] <- stats::approx(x = c(0L, ind_hpos, length(obs)+1L), y = c(0L, h[ind_hpos], 1L),
-                                     method = "linear", ties = "ordered", yleft = NA, yright = NA, xout = ind_hneg)$y
+        h[ind_hrcens] <- stats::approx(x = c(0L, ind_hobs, length(obs)+1L), y = c(0L, h[ind_hobs], 1L),
+                                       method = "linear", ties = "ordered", yleft = NA, yright = NA, xout = ind_hrcens)$y
       } #fi
 
       diff(c(0L, h, 1L))
 
-      #XXX tie handling with density missing here!
-      #XXX unify plot variants using KM
+      #XXX tie handling for observed event times with density missing here!
 
     } else {
       h <- diff(c(0L,
@@ -1126,8 +1124,9 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
       twoGroup = twoGroup,
       method = method,
       bind = rlang::env_get(env = objFunEnv, nm = "bind"),
-      ncens = rlang::env_get(env = objFunEnv, nm = "ncens", default = 0L), ##if (twoGroup)
       ties = ties,
+      ncens = rlang::env_get(env = objFunEnv, nm = "ncens", default = 0L), ##if (twoGroup)
+      kmFit = rlang::env_get(env = objFunEnv, nm = "kmFit", default = NULL),
       objFun = objFun,
       par = optObj$par_orig,
       criterion = objFun(pars = optObj$par_orig, criterion = TRUE, aggregated = TRUE),
@@ -1139,12 +1138,24 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 #' @export
 print.incubate_fit <- function(x, ...){
   coe <- coef(x)
+  rangeTime <- if (x[["twoGroup"]]) {
+    ns <- lengths(x[["data"]])
+    paste(
+      min(x[["data"]]$x[[1L]], x[["data"]]$y[[1L]]),
+      max(x[["data"]]$x[[ns[["x"]]]], x[["data"]]$y[[ns[["y"]]]]),
+      #XXX bug in print: first left-cens obs: gives -Inf
+      # min(if (!inherits(x[["data"]]$x[1L], "Surv")) Surv(x[["data"]]$x[1L]) else x[["data"]]$x[1L],
+      #     if (!inherits(x[["data"]]$y[1L], "Surv")) Surv(x[["data"]]$y[1L]) else x[["data"]]$y[1L])
+      sep = " to ")
+  } else {
+    paste(x$data[[1L]], x[["data"]][[length(x$data)]], sep = " to ")
+  }
   cat(glue::glue_data(x, .sep = "\n",
                       "Fit a delayed {distribution}{c('', ' with two delay phases')[[1L+twoPhase]]} through{c('', ' profiled')[[1L+optimizer$profiled]]} {switch(method,
                       MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
                       MLEw = 'weighted Maximum Likelihood Estimation (MLEw)',
                       MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
-                      "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {if (twoGroup) min(data[['x']][1], data[['y']][1]) else data[1L]} to {if (twoGroup) max(data[['x']][lengths(data)[1]], data[['y']][lengths(data)[2]]) else data[length(data)]}",
+                      "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {rangeTime}",
                       "Criterion: {signif(criterion,3)}",
                       "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
   )
@@ -1213,69 +1224,56 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 
   cumFun <- getDist(x[["distribution"]], type = "cdf")
 
-  p <- grNames <- NULL
+  # add time = 0 per group
+  kmFit0 <- survival::survfit0(x[["kmFit"]], start.time = 0)
+  kmFit0 <- tibble(group = if (is.null(kmFit0$strata)) "x" else rep.int(c("x", "y"), times = kmFit0$strata),
+                   time = kmFit0$time,
+                   n.risk = kmFit0$n.risk,
+                   n.event = kmFit0$n.event,
+                   n.censor = kmFit0$n.censor,
+                   surv = kmFit0$surv,
+                   evrate = 1 - surv)
 
-  # different plot code for one or two groups
-  if ( x[["twoGroup"]] ){
-    stopifnot( is.list(x[["data"]]) )
 
-    grNames <- names(x[["data"]])
 
-    p <- ggplot2::ggplot(data = tibble::enframe(unlist(x[["data"]]), name = "group"),
-                         mapping = ggplot2::aes(x = .data$value, col = substr(x = .data$group, 1L, 1L))) +
-      # add estimated delay models
+  # add estimated delay model
+  p <- if (x[["twoGroup"]]) {
+    ggplot2::ggplot(data = kmFit0,
+                    mapping = ggplot2::aes(x = .data$time, y = .data$evrate, col = .data$group)) +
       ggplot2::geom_function(mapping = ggplot2::aes(col = "x"), inherit.aes = FALSE,
                              fun = cumFun, args = coef(x, group = "x"), linetype = "dashed") +
       ggplot2::geom_function(mapping = ggplot2::aes(col = "y"), inherit.aes = FALSE,
-                             fun = cumFun, args = coef(x, group = "y"), linetype = "dashed") +
-      ggplot2::stat_ecdf(pad=TRUE)
-
+                             fun = cumFun, args = coef(x, group = "y"), linetype = "dashed")
   } else {
-    grNames <- "x"
-
-    p <- if (sum(x$ncens) > 0) {
-      kmFit <- survival::survfit(x[["data"]] ~ 1, start.time = 0, se.fit = FALSE, conf.type = "none")
-      kmFit <- survival::survfit0(kmFit, start.time = 0) # add time 0
-      ggplot2::ggplot(data = tibble(time = kmFit$time,
-                                    n.risk = kmFit$n.risk,
-                                    n.censor = kmFit$n.censor,
-                                    evrate = 1 - kmFit$surv),
-                      mapping = ggplot2::aes(x = .data$time, y = .data$evrate)) +
-        # add estimated delay model
-        ggplot2::geom_function(inherit.aes = FALSE,
-                               fun = cumFun,
-                               args = coef(x, group = grNames), linetype = "dashed") +
-        ggplot2::geom_step() +
-        # mark (right-)censored observations
-        ggplot2::geom_point(data = function(.x) .x[.x$n.censor > 0,], shape = 3L)
-
-    } else {
-      ggplot2::ggplot(data = tibble(value=x[["data"]]),
-                      mapping = ggplot2::aes(x = .data$value)) +
-      # add estimated delay model
-      ggplot2::geom_function(inherit.aes = FALSE,
-                             fun = cumFun,
-                             args = coef(x, group = grNames), linetype = "dashed") +
-        ggplot2::stat_ecdf(pad=TRUE)
-    } #esle
+    ggplot2::ggplot(data = kmFit0,
+                    mapping = ggplot2::aes(x = .data$time, y = .data$evrate)) +
+      ggplot2::geom_function(inherit.aes = FALSE, fun = cumFun, args = coef(x, group = "x"), linetype = "dashed")
   }
+
+  p <- p +
+    # kaplan meier step function
+    ggplot2::geom_step() +
+    # mark (right-)censored observations
+    ggplot2::geom_point(data = function(.x) .x[.x$n.censor > 0,], shape = 3L)
 
 
   if (missing(title)) title <- glue::glue_data(x,
                                                "Fitted {distribution} delay {c('model ', 'models ')[[1L+twoGroup]]}",
                                                "{c('', 'with two delay phases')[[1L+twoPhase]]}")
-  if (missing(subtitle)) subtitle <- paste(purrr::map_chr(grNames,
-                                                          ~ paste(names(coef(x, group = .)), signif(coef(x, group = .), 4),
-                                                                  sep = ": ", collapse = ", ")),
-                                           collapse = " - ")
+  coefPrint <- function(gr) {
+    co <- coef(x, group = gr)
+    paste(names(co), signif(co, 4), sep = ": ", collapse = ", ")
+  }
+  if (missing(subtitle)) subtitle <- if (x[["twoGroup"]]) paste(coefPrint("x"), coefPrint("y"), sep = " - ") else coefPrint("x")
 
 
   p +
     ggplot2::xlim(0L, NA) +
     ggplot2::coord_trans(y = "reverse") + # transforms "after_stat" which matters for stat_ecdf
     ggplot2::labs(x = 'Time', y = 'Cumulative prop. of events',
-                  col = 'Group',
+                  col = if (x$twoGroup) 'Group' else NULL,
                   title = title, subtitle = subtitle)
+
 }
 
 
