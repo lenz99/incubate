@@ -190,19 +190,19 @@ objFunFactory <- function(x, y = NULL,
   ncens <- if (twoGroup) list(x = countCensObs(x), y = countCensObs(y)) else countCensObs(x)
 
   # KM fit
-  dataSurv <- tibble(time = c(if (! inherits(x, "Surv")) Surv(x) else x,
-                              if (! inherits(y, "Surv") && ! is.null(y)) Surv(time = y, time2 = NA, event = rep_len(1, length(y)), type = "interval") else y),
-                     group = rep.int(c("x", "y"), times = c(length(x), length(y))))
-  kmFit <- survival::survfit(time ~ group, data = dataSurv, start.time = 0, se.fit = FALSE, conf.type = "none")
+  kmFit <- survival::survfit(time ~ group, data = tibble(time = c(if (! inherits(x, "Surv")) Surv(x) else x,
+                                                                  if (! inherits(y, "Surv") && ! is.null(y)) Surv(time = y, time2 = NA, event = rep_len(1, length(y)), type = "interval") else y),
+                                                         group = rep.int(c("x", "y"), times = c(length(x), length(y)))),
+                             start.time = 0, se.fit = FALSE, conf.type = "none")
 
   # estimate rcens-distribution
   kmFitrcens <- if (method == 'MPSE') {
     kmFitrcens_fun <- function(.x, .ncens){
       if (.ncens[["right"]] > 0) {
         .x[, "status"] <- !.x[, "status"] # treat right-cens as events and rest as censoring
-        summary( # do we need summary? better off with direct object?
-          survival::survfit(.x ~ 1, conf.type = "none", se.fit = FALSE),
-          censored=TRUE)
+
+        survival::survfit(.x ~ 1, conf.type = "none", se.fit = FALSE)
+        # summary(censored=TRUE)
       } else { # no right censorings!
         # use mock survfit.summary object
         list(surv = rep_len(1, length.out = length(.x)))
@@ -826,8 +826,10 @@ objFunFactory <- function(x, y = NULL,
       }
       h <- rep_len(-1, length.out = length(obs))
       # kmFit and kmFitrcens have same number of rows
+      stopifnot( length(kmFit$time) == length(kmFitrcens_gr$time) )
       # use CDF of (right-)censored outcome variable for all observed event times
-      h[obs[, "status"] == 1] <- rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens_gr$surv[ind_evKM]) + (1L - kmFitrcens_gr$surv[ind_evKM])
+      h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens_gr$surv[ind_evKM]) + (1L - kmFitrcens_gr$surv[ind_evKM]),
+                                         times = kmFit$n.event[ind_evKM])
       # censored observations get interpolated values
       ind_hrcens <- which(h<0)
       if (length(ind_hrcens)) {
@@ -837,18 +839,26 @@ objFunFactory <- function(x, y = NULL,
                                        method = "linear", ties = "ordered", yleft = NA, yright = NA, xout = ind_hrcens)$y
       } #fi
 
-      diff(c(0L, h, 1L))
+      h <- diff( c(0L, h, 1L) )
 
-      #XXX tie handling for observed event times with density missing here!
+      # tie handling for observed event times with density
+      ind_t <- which(diff(obs[,1L]) == 0L & # equal adjacent times
+                       diff(obs[,"status"] == 1) == 0L & # equal adjacent status
+                       obs[-1L, "status"] == 1L) # status is indeed 1 (=observed)
+      if ( length(ind_t) ){
+        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess*
+        # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
+        h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[[ind_t,1L]]), pars.gr))
+      } #fi
+      h
+
+      #XXX check the effect of right/left vs interval censoring type on n.event (integer!?) and KM-estimate/plot
 
     } else {
-      h <- diff(c(0L,
-                  rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)),
-                  1L))
 
+      h <- diff( c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L) )
 
-      # use densFun for ties
-      # we check difference of obs directly (not cumDiffs)
+      # ties: we check difference of obs directly (not cumDiffs)
       #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
       ind_t <- which(diff(obs) == 0L)
       if ( length(ind_t) ){
