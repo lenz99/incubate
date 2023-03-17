@@ -642,6 +642,41 @@ test_that("Fit delayed Exponentials", {
 })
 
 
+test_that("Fit delayed exponentials with censoring", {
+
+  ti_x <- sort(2 + rpois(17, lambda = 5))
+  ti_y <- sort(5 + rpois(11, lambda = 2.8))
+
+  # right-censoring
+  ti_x2 <- Surv(ti_x); ti_y2 <- Surv(ti_y)
+  ti_x2c <- Surv(ti_x, event = sample(c(1, 1, 0), size = length(ti_x), replace = TRUE))
+  ti_y2c <- Surv(ti_y, event = sample(c(1, 1, 0), size = length(ti_y), replace = TRUE))
+
+  # interval-censoring
+  ti_x3 <- Surv(ti_x, time2=NA, event = rep_len(1, length(ti_x)), type = "interval")
+  ti_y3 <- Surv(ti_y, time2=NA, event = rep_len(1, length(ti_y)), type = "interval")
+
+
+  # single group
+  fm1 <- delay_model(x = ti_x) # numeric observations
+  expect_identical(fm1, delay_model(x = ti_x2)) # right-censoring, no cens
+  expect_identical(fm1, delay_model(x = ti_x3)) # interval-censored, no cens
+
+  # two groups
+  fm2 <- delay_model(x = ti_x, y = ti_y) # numeric observerations
+  expect_identical(fm2, delay_model(x = ti_x2, y = ti_y2)) # right-censoring, no cens
+  expect_identical(fm2, delay_model(x = ti_x3, y = ti_y3)) # interval-censored, no cens
+
+  fm2b <- delay_model(x = ti_x, y = ti_y, bind = "rate1")
+  expect_identical(fm2b, delay_model(x = ti_x2, y = ti_y2, bind = "rate1")) # right-censoring, no cens
+  expect_identical(fm2b, delay_model(x = ti_x3, y = ti_y3, bind = "rate1")) # interval-censored, no cens
+
+  fm3 <- delay_model(x = ti_x2c, y = ti_y, bind = "rate1") # with cens
+  expect_identical(fm3, delay_model(x = ti_x2c, y = ti_y2, bind = "rate1"))
+  expect_identical(fm3, delay_model(x = ti_x2c, y = ti_y3, bind = "rate1"))
+
+})
+
 
 test_that("Fit delayed Weibull", {
 
