@@ -190,7 +190,7 @@ objFunFactory <- function(x, y = NULL,
   ncens <- if (twoGroup) list(x = countCensObs(x), y = countCensObs(y)) else countCensObs(x)
 
   # KM fit
-  kmFit <- survival::survfit(time ~ group, data = tibble(time = c(if (! inherits(x, "Surv")) Surv(x) else x,
+  kmFit <- survival::survfit(time ~ group, data = tibble(time = c(if (! inherits(x, "Surv")) Surv(time = x, time2 = NA, event = rep_len(1, length(x)), type = "interval") else x,
                                                                   if (! inherits(y, "Surv") && ! is.null(y)) Surv(time = y, time2 = NA, event = rep_len(1, length(y)), type = "interval") else y),
                                                          group = rep.int(c("x", "y"), times = c(length(x), length(y)))),
                              start.time = 0, se.fit = FALSE, conf.type = "none")
@@ -202,7 +202,7 @@ objFunFactory <- function(x, y = NULL,
         .x[, "status"] <- !.x[, "status"] # treat right-cens as events and rest as censoring
 
         survival::survfit(.x ~ 1, conf.type = "none", se.fit = FALSE)
-        # summary(censored=TRUE)
+        # summary(.., censored=TRUE)
       } else { # no right censorings!
         # use mock survfit.summary object
         list(surv = rep_len(1, length.out = length(.x)))
@@ -813,22 +813,24 @@ objFunFactory <- function(x, y = NULL,
     # calculate spacings
     # contract: data is sorted!
     cumDiffs <- if (inherits(obs, what = "Surv")) {
-      #kmFitInd <- kmFit[kmFit$group == group,]
-      # # drop time=0 first line
-      # if (kmFit$time[1L] == 0 && kmFit$n.event[1L] == 0 && kmFit$n.censor[1L] == 0) kmFit <- kmFit[-1L,]
       # pick correct rcensKM-object
       kmFitrcens_gr <- if (group == "y") kmFitrcens[["y"]] else if (twoGroup) kmFitrcens[["x"]] else kmFitrcens
 
-      ind_evKM <- which(kmFit$n.event > 0L)
-      if (twoGroup) { # get the right subset of indices for specified group
-        # Cave: works only for two groups: x or y
+      ind_evKM <- which(kmFit$n.event > 0.8) #at least one event (type="interval" makes that we get fractional numbers here)
+
+      # get the right subset of indices for specified group (when having two groups)
+      if (twoGroup) {
+        # Cave: works only for two groups (x or y) as I only use the strata[[1L]] as cutpoint
         ind_evKM <- if (group == "x") ind_evKM[ind_evKM <= kmFit$strata[[1L]]] else ind_evKM[ind_evKM > kmFit$strata[[1L]]]
       }
       h <- rep_len(-1, length.out = length(obs))
       # kmFit and kmFitrcens have same number of rows
       stopifnot( length(kmFit$time) == length(kmFitrcens_gr$time) )
+      # n.event is often not integer for type=interval/left. It is increased by a fraction (depending on number of events). The sum is nbr of events+1 (per group)
+      stopifnot( sum(as.integer(kmFit$n.event[ind_evKM])) == kmFit$n[[if (group == "x") 1L else 2L]] )
       # use CDF of (right-)censored outcome variable for all observed event times
       h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens_gr$surv[ind_evKM]) + (1L - kmFitrcens_gr$surv[ind_evKM]),
+                                         # XXX n.event is not always integer for Surv-objects of type = interval/left. Rounding off should work, still.
                                          times = kmFit$n.event[ind_evKM])
       # censored observations get interpolated values
       ind_hrcens <- which(h<0)
@@ -1281,7 +1283,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
     ggplot2::xlim(0L, NA) +
     ggplot2::coord_trans(y = "reverse") + # transforms "after_stat" which matters for stat_ecdf
     ggplot2::labs(x = 'Time', y = 'Cumulative prop. of events',
-                  col = if (x$twoGroup) 'Group' else NULL,
+                  col = if (x[["twoGroup"]]) 'Group' else NULL,
                   title = title, subtitle = subtitle)
 
 }
