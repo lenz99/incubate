@@ -644,6 +644,40 @@ test_that("Fit delayed Exponentials", {
 
 test_that("Fit delayed exponentials with censoring", {
 
+
+  # single group ------------------------------------------------------------
+  ticr1 <- sort(survival::Surv(1.5 + rpois(17, lambda = 4.8), event = sample(c(0,1,1,1), size = 17, replace = TRUE)))
+
+  fmCR1_mpse <- delay_model(x = ticr1, distribution = "exponential")
+  #plot(fmCR1_mpse)
+  fmCR1_mlen <-  delay_model(x = ticr1, distribution = "exponential", method = "MLEn")
+  #plot(fmCR1_mlen)
+  fmCR1_mlenp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEn", profiled = TRUE)
+  #plot(fmCR1_mlenp)
+
+  expect_named(fmCR1_mpse, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
+                                        "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+  expect_named(fmCR1_mpse$cens, expected = c("isSurv", "n", "ind"))
+  expect_true(fmCR1_mpse$cens$isSurv)
+
+  # XXX
+  # parameters do not change much when profiling
+  expect_equal(coef(fmCR1_mlenp), expected = coef(fmCR1_mlen), tolerance = 1e-3)
+
+  fmCR1w_mpse <- delay_model(x = ticr1, distribution = "w")
+  #plot(fmCR1w_mpse)
+  fmCR1w_mlen <-  delay_model(x = ticr1, distribution = "w", method = "MLEn")
+  #plot(fmCR1w_mlen)
+  fmCR1w_mlenp <- delay_model(x = ticr1, distribution = "w", method = "MLEn", profiled = TRUE)
+  #plot(fmCR1w_mlenp)
+
+  # XXX
+  # parameters do not change much when profiling
+  expect_equal(coef(fmCR1w_mlenp), expected = coef(fmCR1w_mlen), tolerance = 1e-3)
+
+
+  # two group handling ------------------------------------------------------
+
   # numeric, non-Surv
   ti_x <- sort(2 + rpois(17, lambda = 5))
   ti_y <- sort(5 + rpois(11, lambda = 2.8))
