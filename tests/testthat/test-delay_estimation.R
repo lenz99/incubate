@@ -644,6 +644,7 @@ test_that("Fit delayed Exponentials", {
 
 test_that("Fit delayed exponentials with censoring", {
 
+  # numeric, non-Surv
   ti_x <- sort(2 + rpois(17, lambda = 5))
   ti_y <- sort(5 + rpois(11, lambda = 2.8))
 
@@ -673,7 +674,7 @@ test_that("Fit delayed exponentials with censoring", {
 
   fm3 <- delay_model(x = ti_x2c, y = ti_y, bind = "rate1") # with cens
   expect_identical(fm3, delay_model(x = ti_x2c, y = ti_y2, bind = "rate1"))
-  expect_identical(fm3, delay_model(x = ti_x2c, y = ti_y3, bind = "rate1"))
+  expect_error(delay_model(x = ti_x2c, y = ti_y3, bind = "rate1"), regexp = "same type")
 
 })
 

@@ -87,38 +87,80 @@ estimRoundingError <- function(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100
 }
 
 
-#' Prepare the survival response.
-#' It uses the interval-coding that supports left-, right- and interval-censoring
-#' also in cases when right or left-censoring was used initially.
+#' Check and prepare the survival response(s).
+#' Allowed censoring types are right-, left-, and interval-censoring.
+#' If `y0` is not `NULL` it will return either both numeric, non-Surv or both Surv-objects of the same type.
+#' @param x0 response as numeric or [survival::Surv] using left, right or interval-coding
 #' @param y0 response as numeric or [survival::Surv] using left, right or interval-coding
-#' @param simplify logical. Should the result in any case be a [survival::Surv] object? If `TRUE`, a [survival::Surv] object with no censorings is coerced to numeric.
-#' @return response as [survival::Surv], using interval-coding or numeric (if no censorings and `simplify=TRUE`)
-prepSurvResp <- function(y0, simplify = TRUE) {
+#' @param simplify logical. Should the result be as simple as possible? If `FALSE`, result will be in any case [survival::Surv] objects.
+#' @return a list of the two responses, either both as [survival::Surv] or plain numeric (if no censorings and `simplify=TRUE`)
+prepResponseVar <- function(x0, y0=NULL, simplify = TRUE) {
 
-  if (! inherits(y0, what = "Surv")) {
-    stopifnot(is.numeric(y0))
-    if (simplify) return(y0) else
-      return(Surv(time = y0, time2 = y0, type = "interval2"))
-  } else if (simplify && all(y0[, "status"] == 1)) return(y0[, 1L, drop=TRUE])
+  if (missing(x0)) stop("Input for x0 is expected!", call. = FALSE)
+  stopifnot(is.numeric(x0),  is.null(y0) || is.numeric(y0))
 
-  stopifnot( inherits(y0, what = "Surv") )
-  survType <- attr(y0, which = "type")
+  isSurv.x <- inherits(x0, what = "Surv")
+  isSurv.y <- inherits(y0, what = "Surv")
 
-  if (survType == 'interval') y0 else {
-    yMat <- as.matrix(y0)
-    yTime <- yMat[, "time"]
-    yStat <- yMat[, "status"]
-    censLevel <- if (max(yStat) == 2) 1 else 0
-    isCens <- (yStat == censLevel)
+  # check if both are numeric, non-Surv (also y0=NULL)
+  if (! isSurv.x && ! isSurv.y) {
+    # if simplify=FALSE: right-censored, all observed
+    return(if (simplify) list(x=x0, y=y0) else list(x=Surv(time = x0), y=if (is.null(y0)) NULL else Surv(time = y0)))
+  }
 
-    switch(survType,
-           right=Surv(time  = yTime,
-                      time2 = ifelse(isCens, yes = Inf, no = yTime),
-                      type = "interval2"),
-           left=Surv(time  = ifelse(isCens, yes = -Inf, no = yTime),
-                     time2 = yTime,
-                     type = "interval2"),
-           stop("This type of censoring is not supported!", call. = FALSE)
-    ) #hctiws
-  }# esle
+  # from here on: there are some Surv-objects
+
+  # check if all are observed
+  allobsvd.x <- ! isSurv.x || all(x0[, "status"] == 1)
+  allobsvd.y <- ! isSurv.y || all(y0[, "status"] == 1)
+
+  if (simplify && allobsvd.x && allobsvd.y){
+    return(list(x=if (isSurv.x) x0[,1L] else x0, y=if (isSurv.y) y0[,1L] else y0))
+  }
+
+  # from here on: return all Surv-objects (because there are censorings somewhere or simplify=FALSE)
+
+  survType.x <- attr(x0, which = "type", exact = TRUE)
+  survType.y <- attr(y0, which = "type", exact = TRUE)
+
+  SURV_TYPES_ALLOWED <- c("right", "left", "interval")
+
+  # when x is Surv..
+  if (isSurv.x) {
+    stopifnot( is.character(survType.x), nzchar(survType.x) )
+    if (! survType.x %in% SURV_TYPES_ALLOWED ){
+      stop("Survival-objects must be of type {",
+           paste(SURV_TYPES_ALLOWED, collapse = ", "), "}!", call. = FALSE)
+    }
+    if (is.null(y0)) {
+      # y0=NULL remains unchanged
+      return(list(x=x0, y=NULL))
+    } else if (isSurv.y) {
+      # two Surv-objects
+      if (! identical(survType.x, survType.y)) stop("Provide Surv-objects of same type!", call. = FALSE)
+      return(list(x=x0, y=y0))
+    } else {
+      # y is numeric, non-Surv: coerce to Surv of appropriate type!
+      return(list(x = x0, y = switch(survType.x,
+                                     right = Surv(y0),
+                                     left = Surv(y0, event = rep_len(1L, length.out = length(y0)), type = "left"),
+                                     interval = Surv(y0, time2 = NA, event = rep_len(1L, length.out = length(y0)), type = "interval"),
+                                     stop("This type of censoring is not supported!", call. = FALSE))))
+    }
+  } else {
+    # x is numeric, non-Surv. y is Surv
+    stopifnot( is.character(survType.y), nzchar(survType.y) )
+    if (! survType.y %in% SURV_TYPES_ALLOWED ){
+      stop("Survival-objects must be of type {",
+           paste(SURV_TYPES_ALLOWED, collapse = ", "), "}!", call. = FALSE)
+    }
+
+    return(list(x = switch(survType.y,
+                           right = Surv(x0),
+                           left = Surv(x0, event = rep_len(1L, length.out = length(x0)), type = "left"),
+                           interval = Surv(x0, time2 = NA, event = rep_len(1L, length.out = length(x0)), type = "interval"),
+                           stop("This type of censoring is not supported!", call. = FALSE)),
+                y = y0))
+
+  } #esle
 }

@@ -49,19 +49,28 @@ objFunFactory <- function(x, y = NULL,
 
   # data preparation ----
 
+  # unify Surv-type but keep numeric if no censoring
+  respL <- prepResponseVar(x0 = x, y0 = y, simplify = TRUE)
+  stopifnot( is.list(respL), identical(names(respL), c("x", "y")) )
+  x <- respL[["x"]]
+  y <- respL[["y"]]
+  rm(respL)
+
+  # flag if we have Surv-data or not
+  isSurv <- inherits(x, what = "Surv")
+
+  # preprocessing per group
   # drops negative values, NA and Inf values and sorts the remaining real numbers, breaks ties (if necessary)
   # @param obs: data vector of one group
   # @return sorted, cleaned up data vector or NULL in case of trouble
-  preprocess <- function(obs) {
+  preprocess_gr <- function(obs) {
 
     if ( is.null(obs) || ! is.numeric(obs)) return(NULL)
 
-    # unify Surv-type but keep numeric if no censoring
-    obs <- prepSurvResp(obs, simplify = TRUE)
 
-    if (! inherits(obs, what = "Surv")) {
+    if (! isSurv) {
       ind_neg <- which(obs < 0L)
-      if (length(ind_neg)){
+      if (length(ind_neg)) {
         warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
         obs <- obs[-ind_neg]
       }# fi
@@ -71,11 +80,21 @@ objFunFactory <- function(x, y = NULL,
       # for MPSE: check we only have no other censoring than right-censoring
       if (method == 'MPSE' && any(obs[, "status"] > 1)){
         warning("MPSE-fitting supports only right censored observations currently.", call. = FALSE)
-        return(NULL)
+        return(invisible(NULL))
+      }
+      # drop negative times
+      ind_neg <- which(obs[,1L] < 0L)
+      if (length(ind_neg)) {
+        warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
+        obs <- obs[-ind_neg, , drop=FALSE]
+      }
+      # check finite for right- and left-censored observations
+      if (attr(obs, which = "type", exact = TRUE) %in% c("right", "left")){
+        ind_fin <- which(is.finite(obs[,1L]))
+        obs <- obs[ind_fin, , drop=FALSE]
       }
       # sort by time (first column)
       obs <- sort(obs)
-      #XXX think Surv: what checks do we need?! negative, finite?!?
     }
 
 
@@ -88,8 +107,8 @@ objFunFactory <- function(x, y = NULL,
 
     # tie break
     # || ties == 'groupedML') # groupedML not implemented yet
-    #XXX think Surv: ties?!
-    if ( startsWith(method, 'MLE') || ties == 'density' || inherits(obs, what = "Surv") ) return(obs)
+    #XXX think Surv: ties in observed event-times?!
+    if ( startsWith(method, 'MLE') || ties == 'density' || isSurv ) return(obs)
 
     diffobs <- diff(obs)
     stopifnot( all(diffobs >= 0L) ) # i.e. sorted obs
@@ -128,19 +147,19 @@ objFunFactory <- function(x, y = NULL,
         obsInd <- c(tiesDiffInd[startInd:endInd], tiesDiffInd[endInd]+1L)
         stopifnot( stats::sd(obs[obsInd]) == 0L ) #check: tie-group
         obs[obsInd] <- obs[obsInd] + if (ties == 'random') {
-          # sort ensures that data after tie-break is still sorted from small to large
+          # sort ensures that data after tie-break are still sorted from small to large
           sort(stats::runif(n = length(obsInd), min = -rr, max = +rr)) } else {
             stopifnot( ties == 'equidist' )
             # use evenly spaced observations to break tie as proposed by Cheng (1989) on Moran test statistic
-            #+They first use the ties = 'density' approach for initial estimation of parameters for Moran's statistic
+            #+(they first use the ties = 'density' approach for initial estimation of parameters for Moran's statistic, though)
             seq.int(from = -rr, to = +rr, length.out = length(obsInd))
           }
         startInd <- endInd <- endInd+1L
         if ( startInd > length(tiesDiffInd) ) break
       } #repeat
 
-      if (verbose > 1L && length(obs) <= 50L ){
-        cat(glue("New data: {paste(obs, collapse = ', ')}\n"))
+      if (verbose > 1L ){
+        cat(glue("New data: {paste(obs[seq_len(min(25L, length(obs)))], collapse = ', ')}\n"))
       }
     } #fi tiesdiff
 
@@ -148,11 +167,11 @@ objFunFactory <- function(x, y = NULL,
     stopifnot( !any(diff(obs) == 0) )
 
     obs
-  } #fn preprocess
+  } #fn preprocess_gr
 
   # overwrite the data vectors with pre-processed data
-  if (is.null({x <- preprocess(obs = x)})) return(invisible(NULL))
-  y <- preprocess(obs = y)
+  if (is.null({x <- preprocess_gr(obs = x)})) return(invisible(NULL))
+  y <- preprocess_gr(obs = y)
 
 
   # do we have two groups after pre-processing?
@@ -184,15 +203,20 @@ objFunFactory <- function(x, y = NULL,
   # little helper function to count the censored observed by type (right, left, interval)
   countCensObs <- function(.x) {
     rlang::set_names(
-      if (inherits(.x, what = "Surv")) tabulate(.x[, "status"]+1L, nbins = 4)[-2L] else rep_len(0L, length.out = 3L),
+      if (isSurv) {
+        switch(attr(.x, which = "type", exact = TRUE),
+               right = c(sum(.x[, "status"] == 0L), 0, 0),
+               left = c(0, sum(.x[, "status"] == 0L), 0),
+               interval = tabulate(.x[, "status"]+1L, nbins = 4)[-2L],
+               stop("This type of censoring is not supported!", call. = FALSE)
+        ) } else rep_len(0L, length.out = 3L),
       nm = c("right", "left", "interval"))
   }
   ncens <- if (twoGroup) list(x = countCensObs(x), y = countCensObs(y)) else countCensObs(x)
 
   # KM fit
-  survDat <- tibble(time = c(if (! inherits(x, "Surv")) Surv(time = x, time2 = NA, event = rep_len(1, length(x)), type = "interval") else x,
-                  if (! inherits(y, "Surv") && ! is.null(y)) Surv(time = y, time2 = NA, event = rep_len(1, length(y)), type = "interval") else y),
-         group = rep.int(c("x", "y"), times = c(length(x), length(y))))
+  survDat <- tibble(time = if (isSurv) c(x, y) else Surv(c(x,y)),
+                    group = rep.int(c("x", "y"), times = c(length(x), length(y))))
   kmFit <- survival::survfit(time ~ group, data = survDat, start.time = 0, se.fit = FALSE, conf.type = "none")
 
   # estimate rcens-distribution via KM (only for MPSE)
@@ -203,7 +227,7 @@ objFunFactory <- function(x, y = NULL,
     survival::survfit(Surv(time[, 1L], event = !time[, "status"], type = "right") ~ group, data = survDat,
                       conf.type = "none", se.fit = FALSE)
   } else {
-    # use mock survfit-object
+    # mock survfit-object
     list(surv=rlang::rep_along(kmFit$surv, x = 1))
   }
 
@@ -812,9 +836,9 @@ objFunFactory <- function(x, y = NULL,
 
     # calculate spacings
     # contract: data is sorted!
-    cumDiffs <- if (inherits(obs, what = "Surv")) {
+    cumDiffs <- if (isSurv) {
 
-      ind_evKM <- which(kmFit$n.event > 0.63212) #at least one event (type="interval" makes that we get fractional numbers here)
+      ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here)
 
       # get the right subset of indices for specified group (when having two groups)
       if (twoGroup) {
@@ -823,12 +847,13 @@ objFunFactory <- function(x, y = NULL,
       }
       h <- rep_len(-1, length.out = length(obs))
 
-      # n.event is often not integer for type=interval/left. It is increased by a fraction (depending on number of events). The sum is nbr of events+1 (per group)
-      # floored n.event + n.censor = n
-      stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]), if (twoGroup) kmFit$n.censor[(-1)^(1+(group == "x")) * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] ) #useless
+      # n.event is typically not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
+      # floor(n.event + n.censor) = n
+      stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
+                     if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
       # use CDF of right-censored outcome variable for all observed event times
       h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens$surv[ind_evKM]) + (1L - kmFitrcens$surv[ind_evKM]),
-                                         # n.event is not always integer for Surv-objects of type = interval/left. Truncating off should always work, though.
+                                         # n.event is not always integer for Surv-objects of type = interval/left. Truncating off (what rep.int does internally) should always work, though.
                                          times = kmFit$n.event[ind_evKM])
       # censored observations get interpolated values
       ind_hrcens <- which(h<0)
@@ -846,7 +871,7 @@ objFunFactory <- function(x, y = NULL,
                        diff(obs[,"status"] == 1) == 0L & # equal adjacent status
                        obs[-1L, "status"] == 1L) # status is indeed 1 (=observed), drop first row to be on same page as diff(obs)
       if ( length(ind_t) ){
-        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess*
+        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
         # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
         h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t,1L]), pars.gr))
       } #fi
@@ -860,7 +885,7 @@ objFunFactory <- function(x, y = NULL,
       #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
       ind_t <- which(diff(obs) == 0L)
       if ( length(ind_t) ){
-        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess*
+        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
         # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
         h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
       } #fi
