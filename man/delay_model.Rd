@@ -28,7 +28,7 @@ delay_model(
 
 \item{bind}{character. parameter names that are bind together in 2-group situation.}
 
-\item{ties}{character. How to handle ties.}
+\item{ties}{character. Strategy to handle ties for \code{method = "MPSE"}.}
 
 \item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLEn' = naive maximum likelihood estimation \emph{or} 'MLEw' = weighted MLE' \emph{or} MLEc' = corrected MLE}
 

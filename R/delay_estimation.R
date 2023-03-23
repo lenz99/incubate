@@ -738,7 +738,7 @@ objFunFactory <- function(x, y = NULL,
 
   # calculate the log-likelihood, either naive, weighted or in corrected form.
   # What precisely is calculated depends on method but also on the profiled-flag.
-  # @param criterion logical. if criterion = TRUE, then pars are on original scale and the proper log-likelihood is returned
+  # @param criterion logical. if `criterion=TRUE`, then pars are on original scale and the proper log-likelihood is returned
   getLogLik <- function(pars, group, criterion = FALSE) {
 
     # access observations of group
@@ -1139,7 +1139,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
 #' @param twoPhase logical. Allow for two phases?
 #' @param bind character. parameter names that are bind together in 2-group situation.
-#' @param ties character. How to handle ties.
+#' @param ties character. Strategy to handle ties for `method = "MPSE"`.
 #' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEw' = weighted MLE' *or* MLEc' = corrected MLE
 #' @param profiled logical. Profile out scale from log-likelihood if possible.
 #' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
