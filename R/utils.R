@@ -2,6 +2,8 @@
 # Utility functions used within this package
 
 
+TOL_NUM <- sqrt(.Machine$double.eps)
+
 #' Format a number as percentage.
 #'
 #' Internal helper function that is not exported.

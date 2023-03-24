@@ -70,6 +70,10 @@ objFunFactory <- function(x, y = NULL,
 
     if (! isSurv) {
       # numeric response, non-Surv
+
+      # fix numeric instabilities to have proper ties (when observations are pretty close)
+      obs <- survival::aeqSurv(Surv(obs), tolerance = TOL_NUM)[, 1L, drop = TRUE]
+
       ind_neg <- which(obs < 0L)
       if (length(ind_neg)) {
         warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
@@ -84,7 +88,7 @@ objFunFactory <- function(x, y = NULL,
       }# fi
 
       # check spread in data
-      if (obs[[length(obs)]] - obs[[1L]] < sqrt(.Machine$double.eps)) { # && method %in% c("MPSE", "MLEc")) {
+      if (obs[[length(obs)]] < obs[[1L]] + 3L*TOL_NUM) { # && method %in% c("MPSE", "MLEc")) {
         warning("Too small spread in data for this estimation method!", call. = FALSE)
         return(invisible(NULL))
       }
@@ -97,6 +101,10 @@ objFunFactory <- function(x, y = NULL,
         warning("MPSE-fitting supports only right censored observations currently.", call. = FALSE)
         return(invisible(NULL))
       }
+
+      # fix numeric instabilities to have proper ties
+      obs <- survival::aeqSurv(obs, tolerance = TOL_NUM)
+
       # drop negative times
       ind_neg <- which(obs[,1L] < 0L)
       if (length(ind_neg)) {
@@ -118,7 +126,7 @@ objFunFactory <- function(x, y = NULL,
       }# fi
 
       # check spread in data
-      if (obs[length(obs), 1L] - obs[1L, 1L] < sqrt(.Machine$double.eps) ) { #&& method %in% c("MPSE", "MLEc")) {
+      if (obs[length(obs), 1L] < obs[1L, 1L] + 3L*TOL_NUM ) { #&& method %in% c("MPSE", "MLEc")) {
         warning("Too small spread in data for this estimation method!", call. = FALSE)
         return(invisible(NULL))
       }
@@ -135,7 +143,7 @@ objFunFactory <- function(x, y = NULL,
     diffobs <- diff(obs)
     stopifnot( all(diffobs >= 0L) ) # i.e. sorted obs
 
-    tiesDiffInd <- which(diffobs == 0L) # < .Machine$double.xmin
+    tiesDiffInd <- which(diffobs < TOL_NUM) # == 0 or < .Machine$double.xmin
 
     if (length(tiesDiffInd)) {
       #rl <- rle(diff(tiesDiffInd))
@@ -210,8 +218,8 @@ objFunFactory <- function(x, y = NULL,
 
 
   # adjust profiled:
+  #+profiling is not implemented for all cases! we sometimes reverse it to FALSE and just issue a warning
   #+profiling is only possible if rate1/scale1 is not bound and single phase
-  #XXX profiling is not implemented for all cases! we sometimes reverse it to FALSE and just issue a warning
   profiled0 <- profiled
   profiled <- profiled && (! any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) && ! twoPhase
   #&& method %in% c("MLEn", "MLEc", "MLEw") #&& distribution == 'weibull' &&
@@ -289,8 +297,7 @@ objFunFactory <- function(x, y = NULL,
       stopifnot(length(cindo_gr) >= 2L)
 
       # check for easy case: no tie at first two observed event times
-      # XXX think of floating point issues: .111111 vs 1/9 (should be ties but are !=) cf survival::aeqSurv
-      if (obs[cindo_gr[1L], 1L] != obs[cindo_gr[2L], 1L]) {
+      if (obs[cindo_gr[2L], 1L] > obs[cindo_gr[1L], 1L] + TOL_NUM) {
         ind_obs1 <- cindo_gr[1L]
         ind_next <- cindo_gr[2L]
       } else {
@@ -307,7 +314,7 @@ objFunFactory <- function(x, y = NULL,
       # numeric response, non-Surv
       stopifnot( length(obs) >= 2L )
       # check for easy case: no tie at beginning
-      if (obs[[1L]] < obs[[2L]]) { # obs[[1L]] + sqrt(.Machine$double.eps)
+      if (obs[[2L]] > obs[[1L]] + TOL_NUM) {
         ind_obs1 <- 1L
         ind_next <- 2L
       } else {
@@ -607,7 +614,7 @@ objFunFactory <- function(x, y = NULL,
             # add scale parameter at the end of parameter vector
             scale0 <- if (isSurv) {
               # XXX Surv: only right-censored observations currently implemented!
-              stopifnot(attr(obs, which = "type", exact = TRUE) == 'right') #currently only right-censoring is implemented!
+              stopifnot(attr(obs, which = "type", exact = TRUE) == 'right')
               (1/W1[[group]] * mean((obs[,1L]-res0[[1L]])^k) * length(obs)/(length(obs) - cens$n[[group]][["right"]]))^(1/k)
             } else {
               (1/W1[[group]] * mean((obs-res0[[1L]])^k))^(1/k)
@@ -902,6 +909,7 @@ objFunFactory <- function(x, y = NULL,
                  # alternative:
                  #indirect way: ! profiled_llik_directly
                  #consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
+                 #We would need to check that we have indeed an local **maximum** for the log-likelihood (as we have only found candidate values by looking for roots of f')
                  #   - (1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 -
                  #     # 1st factor is inverse of harmonic mean
                  #     (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 -
@@ -1226,8 +1234,6 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
     # post-process optObj -----
 
-    #XXX for MLE with indirect profiling (currently MLEw):
-    #+check that we have indeed an local maximum for the log-likelihood (as we have only found candidate values by looking for roots of f')
 
     # set names to parameter vector
     if (! is.null(optObj)){
@@ -1561,7 +1567,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     del_coef <- coef.incubate_fit(object, transformed = FALSE, group = group)[['delay1']]
 
     # avoid smoothing if 1st observation or estimated delay is too close to zer0
-    if ( min(obs1, del_coef) < sqrt(.Machine$double.eps) ) return(rep_len(del_coef, length.out = R))
+    if ( min(obs1, del_coef) < TOL_NUM ) return(rep_len(del_coef, length.out = R))
 
     stopifnot( is.function(object$objFun) )
 
