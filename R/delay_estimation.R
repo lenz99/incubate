@@ -59,16 +59,17 @@ objFunFactory <- function(x, y = NULL,
   # flag if we have Surv-data or not
   isSurv <- inherits(x, what = "Surv")
 
-  # preprocessing per group
+  # preprocessing of data from one group
   # drops negative values, NA and Inf values and sorts the remaining real numbers, breaks ties (if necessary)
   # @param obs: data vector of one group
   # @return sorted, cleaned up data vector or NULL in case of trouble
-  preprocess_gr <- function(obs) {
+  preprocessF <- function(obs) {
 
     if ( is.null(obs) || ! is.numeric(obs)) return(NULL)
 
 
     if (! isSurv) {
+      # numeric response, non-Surv
       ind_neg <- which(obs < 0L)
       if (length(ind_neg)) {
         warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
@@ -76,9 +77,23 @@ objFunFactory <- function(x, y = NULL,
       }# fi
       # drop NA and +/-Inf & sort
       obs <- sort(obs[is.finite(obs)])
+
+      if (!length(obs)) {
+        warning("Insufficient data! Only non-negative and finite real values are valid.", call. = FALSE)
+        return(invisible(NULL))
+      }# fi
+
+      # check spread in data
+      if (obs[[length(obs)]] - obs[[1L]] < sqrt(.Machine$double.eps)) { # && method %in% c("MPSE", "MLEc")) {
+        warning("Too small spread in data for this estimation method!", call. = FALSE)
+        return(invisible(NULL))
+      }
+
     } else {
+      # Surv response
+      survType <- attr(obs, which = "type", exact = TRUE)
       # for MPSE: check we only have no other censoring than right-censoring
-      if (method == 'MPSE' && any(obs[, "status"] > 1)){
+      if (method == 'MPSE' && survType != 'right') { #any(obs[, "status"] > 1)) {
         warning("MPSE-fitting supports only right censored observations currently.", call. = FALSE)
         return(invisible(NULL))
       }
@@ -88,25 +103,32 @@ objFunFactory <- function(x, y = NULL,
         warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
         obs <- obs[-ind_neg, , drop=FALSE]
       }
-      # check finite for right- and left-censored observations
-      if (attr(obs, which = "type", exact = TRUE) %in% c("right", "left")){
-        ind_fin <- which(is.finite(obs[,1L]))
-        obs <- obs[ind_fin, , drop=FALSE]
+      # check finite for right-, left-censored or interval-censored Surv-times
+      if (survType %in% c("right", "left", "interval")) {
+        obs <- obs[which(is.finite(obs[,1L])), , drop=FALSE]
       }
       # sort by time (first column)
       obs <- sort(obs)
+
+      if (!length(obs) || length(which(obs[, "status"] == 1L)) < 1L + method %in% c("MPSE", "MLEc") ) {
+        warning(glue("Insufficient data! Only non-negative and finite real values are valid, ",
+                     "at least {c('one observed event time', 'two observed event times')[[1L + method %in% c('MPSE', 'MLEc')]]}",
+                     "for estimation method {method}."), call. = FALSE)
+        return(invisible(NULL))
+      }# fi
+
+      # check spread in data
+      if (obs[length(obs), 1L] - obs[1L, 1L] < sqrt(.Machine$double.eps) ) { #&& method %in% c("MPSE", "MLEc")) {
+        warning("Too small spread in data for this estimation method!", call. = FALSE)
+        return(invisible(NULL))
+      }
     }
 
 
-    if (!length(obs)) {
-      warning("No valid data! Only non-negative and finite real values are valid.", call. = FALSE)
-      return(invisible(NULL))
-    }# fi
-
     if (is.null(obs)) return(NULL)
 
+
     # tie break
-    # || ties == 'groupedML') # groupedML not implemented yet
     #XXX think Surv: ties in observed event-times?!
     if ( startsWith(method, 'MLE') || ties == 'density' || isSurv ) return(obs)
 
@@ -115,9 +137,9 @@ objFunFactory <- function(x, y = NULL,
 
     tiesDiffInd <- which(diffobs == 0L) # < .Machine$double.xmin
 
-    if (length(tiesDiffInd)){
+    if (length(tiesDiffInd)) {
       #rl <- rle(diff(tiesDiffInd))
-      if (verbose > 0L){
+      if (verbose > 0L) {
         #length(which(rl$values > 1L))+1L,
         cat(glue('{length(tiesDiffInd) + sum(diff(tiesDiffInd)>1L) + 1L} tied observations ',
                  'in {sum(diff(tiesDiffInd)>1L) + 1L} group(s) within data vector.\n'))
@@ -129,7 +151,6 @@ objFunFactory <- function(x, y = NULL,
       if (verbose > 0L){
         cat(glue("Round-off error has magnitude {roundOffPrecision}\n"))
       }
-
 
       # rounding radius can't be wider than smallest observed diff.
       # plogis to mitigate the effect of sample size: the larger the sample the more we can 'trust' the observed minimal diff
@@ -167,11 +188,11 @@ objFunFactory <- function(x, y = NULL,
     stopifnot( !any(diff(obs) == 0) )
 
     obs
-  } #fn preprocess_gr
+  } #fn preprocessF
 
   # overwrite the data vectors with pre-processed data
-  if (is.null({x <- preprocess_gr(obs = x)})) return(invisible(NULL))
-  y <- preprocess_gr(obs = y)
+  if (is.null({x <- preprocessF(obs = x)})) return(invisible(NULL))
+  y <- preprocessF(obs = y)
 
 
   # do we have two groups after pre-processing?
@@ -199,6 +220,7 @@ objFunFactory <- function(x, y = NULL,
     warning(glue("Option `profiled={profiled0}` was reversed to profiled={profiled}!"), call. = FALSE)
   }
   rm("profiled0")
+
 
   # little helper function to count the censored observed by type (right, left, interval)
   censDescF <- function(.x, what = c("n", "ind")) {
@@ -230,7 +252,8 @@ objFunFactory <- function(x, y = NULL,
   cens <- list(isSurv = isSurv,
                n = purrr::compact(list(x=censDescF(x, what = "n"), y = if (twoGroup) censDescF(y, what = "n"))),
                ind = purrr::compact(list(x=censDescF(x, what = "ind"), y = if (twoGroup) censDescF(y, what = "ind")))
-               )
+  )
+
 
   # KM fit
   survDat <- tibble(time = if (isSurv) c(x, y) else Surv(c(x,y)),
@@ -250,6 +273,68 @@ objFunFactory <- function(x, y = NULL,
 
   # kmFit and kmFitrcens have same number of rows
   stopifnot( length(kmFit$surv) == length(kmFitrcens$surv) )
+
+  # little helper function to get the indices for the first two smallest observed values (non-censorings) in a sorted vector of observations
+  #@param .x sorted numeric/Surv vector
+  forefrontIndF <- function(group = c("x", "y")) {
+    group <- match.arg(group)
+    obs <- if (group == "y") y else x
+
+    ind_obs1 <- ind_next <- integer()
+
+    if (isSurv) {
+      cind_gr <- cens$ind[[group]]
+      cindo_gr <- cens$ind[[group]]$obs
+      # Surv-response
+      stopifnot(length(cindo_gr) >= 2L)
+
+      # check for easy case: no tie at first two observed event times
+      # XXX think of floating point issues: .111111 vs 1/9 (should be ties but are !=) cf survival::aeqSurv
+      if (obs[cindo_gr[1L], 1L] != obs[cindo_gr[2L], 1L]) {
+        ind_obs1 <- cindo_gr[1L]
+        ind_next <- cindo_gr[2L]
+      } else {
+        # walk down the observed event times
+        i1 <- 2L
+        while (obs[cindo_gr[i1], 1L] == obs[cindo_gr[1L], 1L]) {
+          i1 <- i1 + 1L
+        }
+        ind_obs1 <- cindo_gr[seq_len(i1-1L)]
+        if (length(cindo_gr) >= i1) ind_next <- cindo_gr[i1]
+      }
+
+    } else {
+      # numeric response, non-Surv
+      stopifnot( length(obs) >= 2L )
+      # check for easy case: no tie at beginning
+      if (obs[[1L]] < obs[[2L]]) { # obs[[1L]] + sqrt(.Machine$double.eps)
+        ind_obs1 <- 1L
+        ind_next <- 2L
+      } else {
+        # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
+        for (l in sort(c(5, 10, 50, 100, 500, 1000, length(obs)))) {
+          if (l > length(obs)) break
+          obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
+          #which.max(obs_r > 1) # 1st index of 2nd obs
+          firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
+          # check that there are two distinct values
+          if (any(is.na(firstTwoRanks))) {
+            if (l < length(obs)) next
+            if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
+            #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
+          } #fi
+
+          ind_obs1 <- which(obs_r == firstTwoRanks[1L])
+          ind_next <- which(obs_r == firstTwoRanks[2L])
+          if (length(ind_next)) ind_next <- ind_next[1L]
+        } #rof
+      } #esle
+    } #esle (non-Surv)
+
+    list(inds_obs1 = ind_obs1, ind_next = ind_next)
+  }
+
+  indForefront <- purrr::compact(list(x = forefrontIndF(group = "x"), y = if (twoGroup) forefrontIndF(group = "y")))
 
   # set some coefficient names:
   # coefficient names (now that we have settled the profiling flag)
@@ -518,11 +603,16 @@ objFunFactory <- function(x, y = NULL,
           if (isOpt) {
             # access observations for specified group
             obs <- if (group == "y") y else x
-            # add scale parameter at the end of parameter vector
             k <- if (distribution == 'weibull') res0[[2L]] else 1L
-            # XXX Surv: we currently ignore censored observations! Was mean((obs-res0[[1L]])^k))^(1/k)
-            scale0 <- (1/W1[[group]] * mean(if (isSurv) (obs[,1L][cens$ind[[group]]$obs]-res0[[1L]])^k else (obs-res0[[1L]])^k))^(1/k)
-            res0 <- c(res0, if (distribution == 'exponential') 1/scale0 else scale0)
+            # add scale parameter at the end of parameter vector
+            scale0 <- if (isSurv) {
+              # XXX Surv: only right-censored observations currently implemented!
+              stopifnot(attr(obs, which = "type", exact = TRUE) == 'right') #currently only right-censoring is implemented!
+              (1/W1[[group]] * mean((obs[,1L]-res0[[1L]])^k) * length(obs)/(length(obs) - cens$n[[group]][["right"]]))^(1/k)
+            } else {
+              (1/W1[[group]] * mean((obs-res0[[1L]])^k))^(1/k)
+            }
+            res0 <- append(res0, values = if (distribution == 'exponential') 1/scale0 else scale0)
           } else {
             # extract only remaining parameters
             res0 <- res0[extractParOptInd[[group]]]
@@ -544,7 +634,6 @@ objFunFactory <- function(x, y = NULL,
 
   # optimization arguments -----
 
-
   # get optimization start values and upper limits based on observations from a single group
   # for `twoPhase=TRUE` there will be more parameters
   # with profiling no scale parameter is returned (as it is not optimized)
@@ -554,72 +643,72 @@ objFunFactory <- function(x, y = NULL,
     DELAY_MIN <- 1e-9
 
     # Surv: quick fix, use only event times as numeric vector that are observed or right censored
-    # XXX improve here?, e.g., use flatten_surv from lme4cens?!
-    if (inherits(obs, what = "Surv")){
+    # XXX improve here?, e.g., use flatten_surv from lme4cens?! # could use cens-list here
+    if (isSurv) {
       obs <- obs[, 1L, drop=TRUE][obs[, "status", drop = TRUE] <= 1]
     }
 
-    parV <- switch (EXPR = distribution,
-                    # min(obs) = obs[1L]
-                    exponential = {
-                      parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
-                                  mean(obs - obs[[1L]] + 2/length(obs))**-1L )
+    parV <- switch(EXPR = distribution,
+                   # min(obs) = obs[1L]
+                   exponential = {
+                     parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
+                                 mean(obs - obs[[1L]] + 2/length(obs))**-1L )
 
-                      # two extra parameters when exponential with *two* phases
-                      if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]])
+                     # two extra parameters when exponential with *two* phases
+                     if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]])
 
-                      #parV0 <- rlang::set_names(parV0, nm = oNames)
-                      # transform start-parameters for optfun-parametrization
-                      parV0 <- transformPars1(parV0, inverse = FALSE)
+                     #parV0 <- rlang::set_names(parV0, nm = oNames)
+                     # transform start-parameters for optfun-parametrization
+                     parV0 <- transformPars1(parV0, inverse = FALSE)
 
-                      # drop scale if profiling
-                      if (profiled) {
-                        stopifnot(! twoPhase) #XXX not implemented, yet!
-                        parV0 <- parV0[1L] # drop "rate1"
-                      }
-                      parV0
-                    },
-                    weibull = {
-                      # start values from 'Weibull plot'
-                      #+using the empirical distribution function
-                      ## in MASS::fitdistr they simplify:
-                      # lx <- log(x)
-                      # m <- mean(lx)
-                      # v <- var(lx)
-                      # shape <- 1.2/sqrt(v)
-                      # scale <- exp(m + 0.572/shape)
-                      # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
-                      # and then ordinate is log(1/(1-F)) = -log(1-F) on log-scale
-                      start_y <- log(-log(1-stats::ppoints(obs, a=.3)))
-                      # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
-                      # weighted version with more weight in the middle:
-                      # w <- seq_along(obs); w <- w * (max(w)+1-w) #or use plogis-weights to downweight the early obs
-                      # lm.wfit(x = cbind(1, log(obs)), y = start_y, w = plogis(-2:(length(obs)-3)))$coefficients
-                      start_shape <- stats::cor(log(obs), start_y) * stats::sd(start_y) / stats::sd(log(obs))
-                      start_scale <- exp(mean(log(obs)) - mean(start_y) / start_shape) # scale from intercept
+                     # drop scale if profiling
+                     if (profiled) {
+                       stopifnot(! twoPhase) #XXX not implemented, yet!
+                       parV0 <- parV0[1L] # drop "rate1"
+                     }
+                     parV0
+                   },
+                   weibull = {
+                     # start values from 'Weibull plot'
+                     #+using the empirical distribution function
+                     ## in MASS::fitdistr they simplify:
+                     # lx <- log(x)
+                     # m <- mean(lx)
+                     # v <- var(lx)
+                     # shape <- 1.2/sqrt(v)
+                     # scale <- exp(m + 0.572/shape)
+                     # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
+                     # and then ordinate is log(1/(1-F)) = -log(1-F) on log-scale
+                     start_y <- log(-log(1-stats::ppoints(obs, a=.3)))
+                     # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
+                     # weighted version with more weight in the middle:
+                     # w <- seq_along(obs); w <- w * (max(w)+1-w) #or use plogis-weights to downweight the early obs
+                     # lm.wfit(x = cbind(1, log(obs)), y = start_y, w = plogis(-2:(length(obs)-3)))$coefficients
+                     start_shape <- stats::cor(log(obs), start_y) * stats::sd(start_y) / stats::sd(log(obs))
+                     start_scale <- exp(mean(log(obs)) - mean(start_y) / start_shape) # scale from intercept
 
 
-                      parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/(length(obs)+3)),
-                                  start_shape,
-                                  start_scale )
+                     parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/(length(obs)+3)),
+                                 start_shape,
+                                 start_scale )
 
-                      # support 2-phase with additional start parameters
-                      if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[-1L])
+                     # support 2-phase with additional start parameters
+                     if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[-1L])
 
-                      #parV0 <- rlang::set_names(parV0, nm = oNames)
-                      # transform start-parameters for optfun-parametrization
-                      parV0 <- transformPars1(parV0, inverse = FALSE)
+                     #parV0 <- rlang::set_names(parV0, nm = oNames)
+                     # transform start-parameters for optfun-parametrization
+                     parV0 <- transformPars1(parV0, inverse = FALSE)
 
-                      # drop scale if profiling
-                      if (profiled) {
-                        stopifnot(! twoPhase) #XXX not implemented, yet!
-                        parV0 <- parV0[c(1L, 2L)] # drop "scale1"
-                      }
-                      parV0
+                     # drop scale if profiling
+                     if (profiled) {
+                       stopifnot(! twoPhase) #XXX not implemented, yet!
+                       parV0 <- parV0[c(1L, 2L)] # drop "scale1"
+                     }
+                     parV0
 
-                    },
-                    # default:
-                    stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
+                   },
+                   # default:
+                   stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
     )
 
     list(
@@ -732,8 +821,6 @@ objFunFactory <- function(x, y = NULL,
   )
 
 
-
-
   # objective function ----
 
   # calculate the log-likelihood, either naive, weighted or in corrected form.
@@ -757,120 +844,154 @@ objFunFactory <- function(x, y = NULL,
 
     if (criterion) {
       # criterion = log-likelihood
-      if (isSurv) {
-        #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
-        switch (attr(obs, which = "type", exact = TRUE),
-                right = {
-                  sum(rlang::exec(densFun, !!! c(list(x=obs[,1L][cens$ind[[group]]$obs], log=TRUE), pars.gr)),
-                      log(1-rlang::exec(cdfFun, !!! c(list(q=obs[,1L][cens$ind[[group]]$right]), pars.gr))) )
-                },
-                stop("This type of censoring is not supported!", call. = FALSE)
-        )
-      } else { #numeric, non-Surv
-        sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
-      }
-    } else {
-      # calculate the objective function which depends on
-      #+ method
-      #+ profiled
+      return(
+        if (isSurv) {
+          #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
+          switch (attr(obs, which = "type", exact = TRUE),
+                  right = {
+                    sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
+                        rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) )
+                  },
+                  stop("This type of censoring is not supported!", call. = FALSE)
+          )
+        } else {
+          # numeric response, non-Surv
+          sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+        }
+      )
+    } #fi criterion
 
-      n <- length(obs)
-      # shape parameter (candidate)
-      k <- if (distribution == 'weibull') pars.gr[[2L]] else 1L
 
-      switch(method,
-             # MLEc =,
-             MLEn = {
-               if (profiled && distribution == 'weibull') {
+    # !criterion
+    # calculate the objective function which depends on
+    #+ method
+    #+ profiled
+    n <- length(obs)
+    # shape parameter (candidate)
+    k <- if (distribution == 'weibull') pars.gr[[2L]] else 1L
 
-                 if (isSurv) {
-                   switch(attr(obs, which = "type", exact = TRUE),
-                          right = {
-                            obs_c <- obs[,1L][cens$ind[[group]]$obs] - pars.gr[[1L]]
+    switch(EXPR = method,
+           MLEn = {
+             if (profiled && distribution == 'weibull') {
+               if (isSurv) {
+                 switch(attr(obs, which = "type", exact = TRUE),
+                        right = {
+                          obs_c <- obs[,1L][cens$ind[[group]]$obs] - pars.gr[[1L]]
 
-                            # objective function to maximize:
-                            # we use 1st derivative to profile out scale parameter, but otherwise, use log-likelihood function directly
-                            (n - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) +
-                              # contribution of right censorings
-                              sum(log(1-rlang::exec(cdfFun, !!! c(list(q=obs[,1L][cens$ind[[group]]$right]), pars.gr)))) +
-                              -penalize_shape * log(k+1)
-                          },
-                          stop("This type of censoring is not supported!", call. = FALSE)
-                   )
-                 } else { # numeric, non-Surv
-                   obs_c <- obs - pars.gr[[1L]]
-                   #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
+                          # objective function to maximize:
+                          # we use 1st derivative to profile out scale parameter, but otherwise, use log-likelihood function directly
+                          (n - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) +
+                            # contribution of right censorings
+                            sum(rlang::exec(cdfFun, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                                # optional penalty term for large values of shape
+                                -penalize_shape * log(k+1) )
 
-                   # objective function to maximize:
-                   # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
-                   # 2nd & 3rd summand could also be: -log(mean(obs_c**k)) + log(k)
-                   n * ((k-1) * mean(log(obs_c)) - log(sum(obs_c**k)) + log(n*k) - 1) - penalize_shape * log(k+1)
-
-                   # alternative:
-                   #indirect way: ! profiled_llik_directly
-                   #consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
-                   #   - (1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 -
-                   #     # 1st factor is inverse of harmonic mean
-                   #     (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 -
-                   #     # optional penalization term
-                   #     penalize_shape*log(k+1)
-                 }
-
+                        },
+                        stop("This type of censoring is not supported!", call. = FALSE)
+                 )
                } else {
-                 # log-likelihood with all parameters
-                 if (isSurv) {
-                   switch (attr(obs, which = "type", exact = TRUE),
-                           right = {
-                             sum(rlang::exec(densFun, !!! c(list(x=obs[,1L][cens$ind[[group]]$obs], log=TRUE), pars.gr)),
-                                 log(1-rlang::exec(cdfFun, !!! c(list(q=obs[,1L][cens$ind[[group]]$right]), pars.gr))) )
-                           },
-                           stop("This type of censoring is not supported!", call. = FALSE)
-                   )
-                 } else { #numeric, non-Surv
-                   sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr))) - penalize_shape * log(k+1)
-                 } #esle
-               }
-             },
-             MLEw = {
-               stopifnot(profiled, ! isSurv)
+                 # numeric response, non-Surv
+                 obs_c <- obs - pars.gr[[1L]]
+                 #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
 
-               obs_c <- obs - pars.gr[[1L]]
+                 # objective function to maximize:
+                 # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
+                 # 2nd & 3rd summand could also be: - log(sum(obs_c**k)) + log(n*k)
+                 n * ((k-1) * mean(log(obs_c)) -log(mean(obs_c**k)) + log(k) - 1) - penalize_shape * log(k+1)
 
-               # z is an estimate for the ordered ((x_(i) - a)/gamma)^k ~ Exp(1)
-               z <- -log(1-stats::ppoints(n=n, a=.3)) ## = median rank estimates for -log(1-F_i)
-
-               # last term: approximation for -log(GM_n Z) = - AM_n(logZ)
-               W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n))
-               W3 <- if (k==1) {
-                 W1[[group]] * mean(1/z)
-               } else {
-                 W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+                 # alternative:
+                 #indirect way: ! profiled_llik_directly
+                 #consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
+                 #   - (1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 -
+                 #     # 1st factor is inverse of harmonic mean
+                 #     (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 -
+                 #     # optional penalization term
+                 #     penalize_shape*log(k+1)
                }
 
-               if (verbose > 1L){
-                 cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
-                          "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
-               }
+             } else {
+               # log-likelihood with all parameters (scale is not profiled out)
+               if (isSurv) {
+                 switch (attr(obs, which = "type", exact = TRUE),
+                         right = {
+                           sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
+                               rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                               # optional penalty term for high shape parameter
+                               - penalize_shape * log(k+1))
+                         },
+                         stop("This type of censoring is not supported!", call. = FALSE)
+                 )
+               } else { #numeric, non-Surv
+                 sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr))) - penalize_shape * log(k+1)
+               } #esle
+             }
+           },
 
-               # objective function to maximize
-               - (W2/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 -
-                 # 1st factor is inverse of harmonic mean
-                 (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - W3)**2 -
-                 # optional penalization term
-                 penalize_shape * log(k+1)
+           # weighted MLE
+           MLEw = {
+             stopifnot(profiled, ! isSurv)
 
-             },
-             MLEc = {
-               stopifnot( n >= 2L, ! isSurv )
-               # objective function to maximize
-               log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(1L, 2L)]), pars.gr)))) +
-                 sum(rlang::exec(densFun, !!! c(list(x=obs[-1L], log=TRUE), pars.gr))) -
-                 # optional penalization term
-                 penalize_shape * log(k+1)
-             },
+             obs_c <- obs - pars.gr[[1L]]
 
-             stop("This method is not handled here!", call. = FALSE))
-    }
+             # z is an estimate for the ordered ((x_(i) - a)/gamma)^k ~ Exp(1)
+             z <- -log(1-stats::ppoints(n, a=.3)) ## = median rank estimates for -log(1-F_i)
+
+             # last term: approximation for -log(GM_n Z) = - AM_n(logZ)
+             W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n))
+             W3 <- if (k==1) {
+               W1[[group]] * mean(1/z)
+             } else {
+               W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+             }
+
+             if (verbose > 1L){
+               cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
+                        "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
+             }
+
+             # objective function to maximize
+             - (W2/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 -
+               # 1st factor is inverse of harmonic mean
+               (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - W3)**2 -
+               # optional penalization term
+               penalize_shape * log(k+1)
+
+           },
+
+           # corrected MLE
+           # calculate objective function to maximize
+           MLEc = {
+             stopifnot(n >= 2L)
+             # contribution of first observation is corrected for: we take first two different values
+             ind12 <- indForefront[[group]]
+             if (isSurv) {
+               switch (attr(obs, which = "type", exact = TRUE),
+                       right = {
+                         # we need at least two observed event times
+                         stopifnot( length(cens$ind[[group]]$obs) >= 2L )
+
+                         # first event-time needs correction
+                         sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]), pars.gr)))),
+                             # remaining observed event times
+                             rlang::exec(densFun, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
+                             # right-censored observations do not need correction
+                             #+(as they are tail probabilities that do not peak so drastically as densities do)
+                             rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                             # optional penalization term
+                             -penalize_shape * log(k+1) )
+                       },
+                       stop("This type of censoring is not supported!", call. = FALSE)
+               )
+             } else {
+               # numeric response, non-Surv
+               sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))),
+                   rlang::exec(densFun, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr)),
+                   # optional penalization term
+                   -penalize_shape * log(k+1))
+             }
+           },
+           stop("This method is not handled here!", call. = FALSE)
+    )
   }
 
   # log spacings:
@@ -913,7 +1034,7 @@ objFunFactory <- function(x, y = NULL,
       stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
                      if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
       # use CDF of right-censored outcome variable for all observed event times
-      h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens$surv[ind_evKM]) + (1L - kmFitrcens$surv[ind_evKM]),
+      h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens$surv[ind_evKM]) + (1 - kmFitrcens$surv[ind_evKM]),
                                          # n.event is not always integer for Surv-objects of type = interval/left. Truncating off (what rep.int does internally) should always work, though.
                                          times = kmFit$n.event[ind_evKM])
       # censored observations get interpolated values
@@ -939,13 +1060,13 @@ objFunFactory <- function(x, y = NULL,
       h
 
     } else {
-
+      # numeric response, non-Surv
       h <- diff( c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L) )
 
       # ties: we check difference of obs directly (not cumDiffs)
       #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
       ind_t <- which(diff(obs) == 0L)
-      if ( length(ind_t) ){
+      if (length(ind_t)) {
         stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
         # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
         h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
@@ -999,7 +1120,7 @@ objFunFactory <- function(x, y = NULL,
   } #fn objFun
 
   # attach analytical solution for MLE
-  if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' && ! inherits(x, what = "Surv") ){
+  if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' && ! isSurv ){
     attr(objFun, which = "opt") <- local({
       par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
       list(par_orig = par_analytic,
@@ -1196,6 +1317,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 
   objFun <- objFunFactory(x = x, y = y, method = method, profiled = profiled, distribution = distribution,
                           twoPhase = twoPhase, bind = bind, ties = ties, verbose = verbose)
+  if (is.null(objFun)) return(invisible(NULL))
   objFunEnv <- rlang::fn_env(objFun)
 
   # optimise objective function
@@ -1325,7 +1447,6 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
                    n.censor = kmFit0$n.censor,
                    surv = kmFit0$surv,
                    evrate = 1 - surv)
-
 
 
   # add estimated delay model

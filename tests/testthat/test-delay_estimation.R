@@ -329,7 +329,7 @@ test_that("Fit delayed Exponentials", {
           9.76594, 9.80527, 9.907327, 10.357, 10.371,
           10.596, 10.623, 11.1074, 11.575, 11.849, 16.38)
 
-  fd_exp <- delay_model(exp_d9, distribution = "expon", profiled = FALSE)
+  fd_exp <- delay_model(exp_d9, distribution = "expon", method = "MPSE", profiled = FALSE)
   coef_exp <- coef(fd_exp)
 
   expect_type(fd_exp$data, type = 'double')
@@ -358,13 +358,23 @@ test_that("Fit delayed Exponentials", {
   # (add a little safety margin as buffer)
   expect_gte(fd_exp_updW$criterion + 1e-05, expected = fd_exp$criterion)
 
+  # duplicated data
+  # same data set but with two duplicated smallest observations
+  exp_d9dup <- append(exp_d9, rep.int(exp_d9[[1L]], times = 2L), after = 0L)
+  fd_exp_dup <- delay_model(exp_d9dup, distribution = "expon", method = "MPSE", profiled = FALSE)
+  expect_identical(fd_exp_dup$optimizer$convergence, expected = 0L)
+  expect_gt(coef(fd_exp_dup)["delay1"], expected = coef_exp["delay1"]) # delay estimate is closer to first observation
+  expect_gt(coef(fd_exp_dup)["rate1"], expected = coef_exp["rate1"]) # rate estimate is also steeper.
+
   # MPSE fit with profiled=TRUE
   fd_exp_P <- delay_model(exp_d9, distribution = "expon", profiled = TRUE)
-  expect_equal(coef(fd_exp_P), coef_exp, tolerance = .01) # similar coefficients
+  expect_equal(fd_exp_P$criterion, expected = fd_exp$criterion, tolerance = .01) # similar criterion
+  expect_equal(coef(fd_exp_P), coef_exp, tolerance = .02) # similar coefficients
   expect_named(fd_exp_P$optimizer$parOpt, expected = "delay1_tr")
 
-  # another data set
-  exp_d5 <- c(5.05133760899019, 5.21641483083995, 5.4131497041096, 5.62188922194764,
+  # another data set, with duplicates at the beginning
+  exp_d5 <- c(5.05133760899019, 5.05133760899019, 5.05133760899019, # three duplicates
+              5.21641483083995, 5.4131497041096, 5.62188922194764,
               5.75496241915971, 5.98260715969298, 6.18675520061515, 7.41160508326157,
               9.36626494375473, 10.5935673083787, 10.8441290040006)
   fd_exp1_mpseNP <- delay_model(exp_d5, method = "MPSE", profiled = FALSE)
@@ -373,7 +383,7 @@ test_that("Fit delayed Exponentials", {
   expect_identical(fd_exp1_mpseP$optimizer$convergence, expected = 0L)
   expect_named(fd_exp1_mpseNP$optimizer$parOpt, expected = c("delay1_tr", "rate1_tr"))
   expect_named(fd_exp1_mpseP$optimizer$parOpt, expected = "delay1_tr")
-  expect_equal(coef(fd_exp1_mpseP), expected = coef(fd_exp1_mpseNP), tolerance = .01)
+  expect_equal(coef(fd_exp1_mpseP), expected = coef(fd_exp1_mpseNP), tolerance = .02)
 
 
   # MLE fits -----------------------------------------------------------
@@ -422,10 +432,16 @@ test_that("Fit delayed Exponentials", {
   expect_true(all(coef(fd_exp_MLEn_NP) >  coef_exp))
   expect_equal(coef(fd_exp_MLEn_NP)[['rate1']], expected = (mean(exp_d9) - min(exp_d9))**-1)
 
-
   # MLEc
   fd_exp_MLEc_NP <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc')
   fd_exp_MLEc_P <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc', profiled = TRUE)
+  # MLEc on duplicated data
+  fd_exp_MLEc_dupNP <- delay_model(exp_d9dup, distribution = 'expon', method = 'MLEc')
+  expect_named(coef(fd_exp_MLEc_dupNP), expected = c("delay1", "rate1"))
+  fd_exp_MLEc_d5_NP <- delay_model(exp_d5, distribution = "expon", method = "MLEc")
+  expect_named(coef(fd_exp_MLEc_d5_NP), expected = c("delay1", "rate1"))
+  # coefficients are roughly equal
+  expect_equal(coef(fd_exp_MLEc_d5_NP), expected = coef(fd_exp1_mpseNP), tolerance = .1)
 
   expect_type(fd_exp_MLEc_NP$data, type = 'double')
   expect_identical(length(fd_exp_MLEc_NP$data), expected = length(exp_d9))
@@ -447,6 +463,7 @@ test_that("Fit delayed Exponentials", {
   expect_true(all(fd_exp_MLEc_P$optimizer$counts < fd_exp_MLEc_NP$optimizer$counts))
   # quite similar coefficients
   expect_equal(coef(fd_exp_MLEc_P), expected = coef(fd_exp_MLEc_NP), tolerance = .01)
+
 
   # MLEw
   fd_exp_MLEw <- delay_model(exp_d9, distribution = "expon", method = "MLEw")
@@ -646,7 +663,12 @@ test_that("Fit delayed exponentials with censoring", {
 
 
   # single group ------------------------------------------------------------
-  ticr1 <- sort(survival::Surv(1.5 + rpois(17, lambda = 4.8), event = sample(c(0,1,1,1), size = 17, replace = TRUE)))
+  ticr1 <- local({
+    set.seed(20230324)
+    n <- 97L
+    sort(survival::Surv(time =  1.5 + rpois(n, lambda = 9.8),
+                               event = sample(c(0,1,1,1,1), size = n, replace = TRUE)))
+  })
 
   fmCR1_mpse <- delay_model(x = ticr1, distribution = "exponential")
   #plot(fmCR1_mpse)
@@ -654,15 +676,24 @@ test_that("Fit delayed exponentials with censoring", {
   #plot(fmCR1_mlen)
   fmCR1_mlenp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEn", profiled = TRUE)
   #plot(fmCR1_mlenp)
+  fmCR1_mlec <- delay_model(x = ticr1, distribution = "exponential", method = "MLEc", profiled = FALSE)
+  #plot(fmCR1_mlec)
+  fmCR1_mlecp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEc", profiled = TRUE)
+  #plot(fmCR1_mlecp)
 
   expect_named(fmCR1_mpse, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
                                         "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
   expect_named(fmCR1_mpse$cens, expected = c("isSurv", "n", "ind"))
   expect_true(fmCR1_mpse$cens$isSurv)
 
-  # XXX
+  expect_named(fmCR1_mlec, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
+                                        "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+  expect_named(fmCR1_mlec$cens, expected = c("isSurv", "n", "ind"))
+  expect_true(fmCR1_mlec$cens$isSurv)
+
   # parameters do not change much when profiling
-  expect_equal(coef(fmCR1_mlenp), expected = coef(fmCR1_mlen), tolerance = 1e-3)
+  expect_equal(coef(fmCR1_mlenp), expected = coef(fmCR1_mlen), tolerance = 1e-4)
+  expect_equal(coef(fmCR1_mlecp), expected = coef(fmCR1_mlec), tolerance = 1e-2)
 
   fmCR1w_mpse <- delay_model(x = ticr1, distribution = "w")
   #plot(fmCR1w_mpse)
@@ -670,10 +701,11 @@ test_that("Fit delayed exponentials with censoring", {
   #plot(fmCR1w_mlen)
   fmCR1w_mlenp <- delay_model(x = ticr1, distribution = "w", method = "MLEn", profiled = TRUE)
   #plot(fmCR1w_mlenp)
+  fmCR1w_mlec <- delay_model(x = ticr1, distribution = "w", method = "MLEc", profiled = FALSE)
 
-  # XXX
-  # parameters do not change much when profiling
+  # parameters do not change much when profiling (in particular, if enough data is available)
   expect_equal(coef(fmCR1w_mlenp), expected = coef(fmCR1w_mlen), tolerance = 1e-3)
+  expect_equal(fmCR1w_mlenp$criterion, expected = fmCR1w_mlen$criterion, tolerance = 1e-4)
 
 
   # two group handling ------------------------------------------------------
