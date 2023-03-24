@@ -374,9 +374,10 @@ objFunFactory <- function(x, y = NULL,
   # parameter handling ----
 
   # MLEw's W1 as median (for later reference to get scale parameter)
-  W1 <- if (method == 'MLEw')
-    c(x=(1-1/(9*length(x)))^3, y = if (! is.null(y)) (1-1/(9*length(y)))^3 else 1) else
-      c(x=1, y=1)
+  W1 <- if (method == 'MLEw') {
+    c(x = (1 - 1 / (9 * length(x)))^3, #if (isSurv) (length(x) - cens$n$x[["any"]]) else
+      y = if (! is.null(y)) (1 - 1 / (9 * length(y)))^3 else 1) #if (isSurv) (length(y) - cens$n$y[["any"]]) else
+  } else c(x=1, y=1)
 
   stopifnot( ! twoPhase ) #XXX not implemented yet!!
 
@@ -937,37 +938,73 @@ objFunFactory <- function(x, y = NULL,
 
            # weighted MLE
            MLEw = {
-             stopifnot(profiled, ! isSurv)
+             stopifnot(profiled)
 
-             obs_c <- obs - pars.gr[[1L]]
+             if (isSurv) {
+               switch(EXPR = attr(obs, which = "type", exact = TRUE),
+                      right = {
+                        # nbr of observed
+                        n_ev <- length(cens$ind[[group]]$obs)
+                        obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
 
-             # z is an estimate for the ordered ((x_(i) - a)/gamma)^k ~ Exp(1)
-             z <- -log(1-stats::ppoints(n, a=.3)) ## = median rank estimates for -log(1-F_i)
+                        # z is an estimate for the ordered ((x_(i) - a)/gamma)^k ~ Exp(1)
+                        z <- -log(1-stats::ppoints(n_ev, a=.3)) ## = median rank estimates for -log(1-F_i)
 
-             # last term: approximation for -log(GM_n Z) = - AM_n(logZ)
-             W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n))
-             W3 <- if (k==1) {
-               W1[[group]] * mean(1/z)
+                        # last term: approximation for -log(GM_n Z) = - AM_n(logZ)
+                        #XXX does W1 need to be adopted (it uses length(x))? (length(x) - cens$n$x[["any"]])
+                        W2 <- sum(z * log(z)) / (n_ev * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n_ev))
+                        W3 <- if (k==1) {
+                          W1[[group]] * mean(1/z)
+                        } else {
+                          W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+                        }
+
+                        if (verbose > 1L) {
+                          cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
+                                   "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
+                        }
+
+                        # objective function to maximize
+                        - (W2/k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k)/sum(obs_evc**k))**2 -
+                          # 1st factor is inverse of harmonic mean
+                          (mean(1/obs_evc) * sum(obs_evc**k)/sum(obs_evc**(k-1)) - W3)**2 +
+                          # contribution of right-censored obs
+                          rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
+                          # optional penalization term
+                          -penalize_shape * log(k+1)
+                      },
+                      stop("This type of survival is not supported here!", call. = FALSE))
+
              } else {
-               W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+               obs_c <- obs - pars.gr[[1L]]
+
+               # z is an estimate for the ordered ((x_(i) - a)/gamma)^k ~ Exp(1)
+               z <- -log(1-stats::ppoints(n, a=.3)) ## = median rank estimates for -log(1-F_i)
+
+               # last term: approximation for -log(GM_n Z) = - AM_n(logZ)
+               W2 <- sum(z * log(z)) / (n * W1[[group]]) - log(log(2) - 0.1316 * (1 - 1/n))
+               W3 <- if (k==1) {
+                 W1[[group]] * mean(1/z)
+               } else {
+                 W1[[group]] * mean(z^(-1/k)) / mean(z^((k-1)/k))
+               }
+
+               if (verbose > 1L) {
+                 cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
+                          "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
+               }
+
+               # objective function to maximize
+               - (W2/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 -
+                 # 1st factor is inverse of harmonic mean
+                 (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - W3)**2 -
+                 # optional penalization term
+                 penalize_shape * log(k+1)
              }
-
-             if (verbose > 1L){
-               cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
-                        "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
-             }
-
-             # objective function to maximize
-             - (W2/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 -
-               # 1st factor is inverse of harmonic mean
-               (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - W3)**2 -
-               # optional penalization term
-               penalize_shape * log(k+1)
-
            },
 
            # corrected MLE
-           # calculate objective function to maximize
+           # objective function to maximize
            MLEc = {
              stopifnot(n >= 2L)
              # contribution of first observation is corrected for: we take first two different values

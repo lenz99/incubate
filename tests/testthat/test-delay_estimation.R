@@ -680,6 +680,9 @@ test_that("Fit delayed exponentials with censoring", {
   #plot(fmCR1_mlec)
   fmCR1_mlecp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEc", profiled = TRUE)
   #plot(fmCR1_mlecp)
+  fmCR1_mlewp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEw", profiled = TRUE)
+  #plot(fmCR1_mlewp)
+
 
   expect_named(fmCR1_mpse, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
                                         "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
@@ -691,9 +694,15 @@ test_that("Fit delayed exponentials with censoring", {
   expect_named(fmCR1_mlec$cens, expected = c("isSurv", "n", "ind"))
   expect_true(fmCR1_mlec$cens$isSurv)
 
+  expect_named(fmCR1_mlewp, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
+                                        "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+  expect_named(fmCR1_mlewp$cens, expected = c("isSurv", "n", "ind"))
+  expect_true(fmCR1_mlewp$cens$isSurv)
+
   # parameters do not change much when profiling
   expect_equal(coef(fmCR1_mlenp), expected = coef(fmCR1_mlen), tolerance = 1e-4)
   expect_equal(coef(fmCR1_mlecp), expected = coef(fmCR1_mlec), tolerance = 1e-2)
+  expect_equal(coef(fmCR1_mlewp), expected = coef(fmCR1_mlec), tolerance = 1e-1)
 
   fmCR1w_mpse <- delay_model(x = ticr1, distribution = "w")
   #plot(fmCR1w_mpse)
@@ -702,10 +711,24 @@ test_that("Fit delayed exponentials with censoring", {
   fmCR1w_mlenp <- delay_model(x = ticr1, distribution = "w", method = "MLEn", profiled = TRUE)
   #plot(fmCR1w_mlenp)
   fmCR1w_mlec <- delay_model(x = ticr1, distribution = "w", method = "MLEc", profiled = FALSE)
-
+  #plot(fmCR1w_mlec)
+  fmCR1w_mlecp <- delay_model(x = ticr1, distribution = "w", method = "MLEc", profiled = TRUE)
+  #plot(fmCR1w_mlecp)
+  fmCR1w_mlewp <- delay_model(x = ticr1, distribution = "w", method = "MLEw", profiled = TRUE)
+  #plot(fmCR1w_mlewp)
   # parameters do not change much when profiling (in particular, if enough data is available)
   expect_equal(coef(fmCR1w_mlenp), expected = coef(fmCR1w_mlen), tolerance = 1e-3)
   expect_equal(fmCR1w_mlenp$criterion, expected = fmCR1w_mlen$criterion, tolerance = 1e-4)
+
+  expect_named(fmCR1w_mlewp, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
+                                         "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+  expect_named(fmCR1w_mlewp$cens, expected = c("isSurv", "n", "ind"))
+  expect_true(fmCR1w_mlewp$cens$isSurv)
+
+  # similar criterion value
+  expect_equal(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion, tolerance = .1)
+  # roughly similar parameter estimates
+  expect_equal(coef(fmCR1w_mlewp), coef(fmCR1w_mpse), tolerance = .25)
 
 
   # two group handling ------------------------------------------------------
