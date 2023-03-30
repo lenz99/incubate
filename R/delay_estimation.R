@@ -974,7 +974,7 @@ objFunFactory <- function(x, y = NULL,
                           stopifnot( length(kmSurvProb) == n_ev )
 
                           # Benard-style median-rank estimation (avoid 0 and 1)
-                          a <- .3175 # due to Filliben, The probability plot .. (1975)
+                          a <- .3 # a=.3 due to Fothergill (1990) #a=.3175 due to Filliben, The probability plot .. (1975)
 
                           -log(1-((1-kmSurvProb) * n_ev - a) / (n_ev + 1 - 2*a))
                         })
@@ -1007,19 +1007,20 @@ objFunFactory <- function(x, y = NULL,
                obs_c <- obs - pars.gr[[1L]]
 
                # using Benard's estimate for median rank for F_i as (i - a) / (N + 1 - 2*i)
+               #+a=.3 is recommended by Fothergill (1990) ***
                #+a=.3175 due to Filliben, "The probability plot.." (1975)
                #+but with exact values for 1st and last (=nth) entry instead (see "A reliable algorithm..", Jacquelin, 1993)
                # We use z_i = -log(1-F_i) = log(1/(1-F_i)) = ((x_(i) - a)/gamma)^k ~ Exp(1)
                # W1 = mean(z_i) follows a gamma(n, 1/n) distribution
                # We need: n >= 2
                #XXX ties are ignored here: we always get n different z-values. What is the effect? Is this good?
-               #+Cousineau's approach is to use simulation results (and not the observed data and its derived F_i)
-               #+So Cousineau's weights W1-W3 are chosen irrespective of the sample at hand.
-               z <- -log(c(.5**(1/n), 1-stats::ppoints(n, a=.3175)[1L+seq_len(n-2L)], 1-.5**(1/n)))
+               #+Cousineau's approach is to use MC-simulation results (he does not use the observed data to derive F_i)
+               #+So, Cousineau chooses weights W1-W3 irrespective of the concrete sample at hand.
+               z <- -log(c(.5**(1/n), 1-stats::ppoints(n, a=.3)[1L+seq_len(n-2L)], 1-.5**(1/n)))
 
-               # first term denominator was: (n * W1[[group]])  [vs sum(z)]
+               # first term denominator was: (n * W1[[group]])  [vs sum(z) ***]
                #+but this is already using the median for the denominator in isolation (which does not seem right)
-               # last term: approximation for -log(GM_n Z) = - AM_n(logZ)
+               # last term: approximation for -log(GM_n Z) = - AM_n(logZ) ***
                W2 <- sum(z * log(z)) / sum(z) - log(log(2) - 0.1316 * (1 - 1/n))
                W3 <- if (k==1) {
                  W1[[group]] * mean(1/z)

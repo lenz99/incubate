@@ -887,25 +887,27 @@ test_that("Fit delayed Weibull", {
 
 
   # Cousineau's numerical example, taken from Weibull with delay = 300, shape k = 2 and scale = 100
-  x <- c(310, 342, 353, 365, 383, 393, 403, 412, 451, 456)
+  cousEx <- c(310, 342, 353, 365, 383, 393, 403, 412, 451, 456)
   densFun_wb <- incubate:::getDist(distribution = "weib", type = "density")
 
-  fd_wbc_mlen <- delay_model(x = x, distribution = "weib", method = "MLEn")
+  fd_wbc_mlen <- delay_model(x = cousEx, distribution = "weib", method = "MLEn")
   expect_equal(coef(fd_wbc_mlen), expected = c(delay1 = 274.8, shape1 = 2.80, scale1 = 126.0), tolerance = .001)
-  fd_wbc_mlenp <- delay_model(x = x, distribution = "weib", method = "MLEn", profile = TRUE)
-  expect_equal(coef(fd_wbc_mlenp), expected = c(delay1=280.9, shape1=2.62, scale1=119.0), tolerance = .05)
-  # our implementation finds a smaller objective value (which we minimize)
-  expect_lte(fd_wbc_mlenp$optimizer$valOpt, fd_wbc_mlenp$objFun(c(delay1=280.9, shape1=log(2.62))))
-  # but log-likelihood is in fact quite similar (actually, Cousineau's solution is slightly worse)
-  expect_equal(fd_wbc_mlenp$criterion, fd_wbc_mlenp$objFun(pars = c(delay1 = 280.9, shape1=2.62, scale1=119.0), criterion = TRUE), tolerance = .01)
-  expect_equal(fd_wbc_mlenp$criterion, -sum(densFun_wb(x, delay1 = 280.9, shape1=2.62, scale1=119.0, log = TRUE)), tolerance = .001)
-  fd_wbc_mlewp <- delay_model(x = x, distribution = "weib", method = "MLEw", profile = TRUE)
+  #Cousineau has log-lik value (to be max), our criterion is neg. log-likelihood (to be min.)
+  expect_equal(-fd_wbc_mlen$criterion, expected = -51.89, tolerance = .001)
+  fd_wbc_mlenp <- delay_model(x = cousEx, distribution = "weib", method = "MLEn", profile = TRUE)
+  # profiling yields same result
+  expect_equal(coef(fd_wbc_mlenp), expected = coef(fd_wbc_mlen), tolerance = .001)
+  # Cousineau reports delay=280.9, shape=2.62, scale=119.0 as result from indirect optimization
+  expect_lte(fd_wbc_mlen$criterion, expected = fd_wbc_mlen$objFun(pars = c(delay1=280.9, shape1=2.62, scale1=119.0), criterion = T))
+  # criterion is really neg. log likelihood
+  expect_equal(fd_wbc_mlen$criterion, -sum(densFun_wb(cousEx, delay1 = 280.9, shape1=2.62, scale1=119.0, log = TRUE)), tolerance = .001)
+  fd_wbc_mlewp <- delay_model(x = cousEx, distribution = "weib", method = "MLEw", profile = TRUE)
   expect_true(fd_wbc_mlewp$optimizer$profiled)
-  expect_equal(coef(fd_wbc_mlewp), c(delay1=283.7, shape1=2.29, scale1=116.0), tolerance = .05)
-  # our implementation finds a smaller value of the objective function
+  expect_equal(coef(fd_wbc_mlewp), expected = c(delay1=283.7, shape1=2.29, scale1=116.0), tolerance = .05)
+  # our implementation finds a smaller value of the objective function (to be minimized)
   expect_lte(fd_wbc_mlewp$optimizer$valOpt, fd_wbc_mlewp$objFun(c(delay1=283.7, shape1=log(2.29))))
   # but log-likelihood is in fact quite similar (actually, Cousineau's solution is slightly better)
-  expect_equal(fd_wbc_mlewp$criterion, -sum(densFun_wb(x, delay1=283.7, shape1=2.29, scale1=116.0, log = TRUE)), tolerance = .01)
+  expect_equal(fd_wbc_mlewp$criterion, fd_wbc_mlewp$objFun(pars = c(delay1=283.7, shape1=2.29, scale1=116.0), criterion = TRUE), tolerance = .01)
 
 
   # two groups -----
@@ -951,13 +953,11 @@ test_that("Fit delayed Weibull", {
   # MLEw with two groups
   fd_wb2_MLEw_P <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEw", profile = TRUE)
   expect_named(coef(fd_wb2_MLEw_P), expected = names(coef(fd_wb2)))
-  # the common fit has worse MLE-fit than from the two individual fits
-  expect_lte(fd_wb2_MLEw_P$criterion, expected = fd_wb2_MLEw_P$objFun(pars = c(coef(fd_maxFl_MLEw), coef(fd_poll_MLEw)), criterion = TRUE))
-  # .. but not too much worse
+  # MLE-criterion is very similar.
   expect_equal(fd_wb2_MLEw_P$criterion, expected = fd_wb2_MLEw_P$objFun(pars = c(coef(fd_maxFl_MLEw), coef(fd_poll_MLEw)), criterion = TRUE), tolerance = .02)
-  # coefficients are not too far off?
-  #expect_equal(coef(fd_wb2_MLEw_P, group = "x"), expected = coef(fd_maxFl_MLEw), tolerance = .05) ## fails!!
-  expect_equal(coef(fd_wb2_MLEw_P, group = "y"), expected = coef(fd_poll_MLEw), tolerance = .14)
+  # coefficients are not too far off?!
+  expect_equal(coef(fd_wb2_MLEw_P, group = "x"), expected = coef(fd_maxFl_MLEw), tolerance = .001)
+  expect_equal(coef(fd_wb2_MLEw_P, group = "y"), expected = coef(fd_poll_MLEw), tolerance = .001)
 
 
   # two groups with binding
