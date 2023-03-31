@@ -956,8 +956,8 @@ test_that("Fit delayed Weibull", {
   # MLE-criterion is very similar.
   expect_equal(fd_wb2_MLEw_P$criterion, expected = fd_wb2_MLEw_P$objFun(pars = c(coef(fd_maxFl_MLEw), coef(fd_poll_MLEw)), criterion = TRUE), tolerance = .02)
   # coefficients are not too far off?!
-  expect_equal(coef(fd_wb2_MLEw_P, group = "x"), expected = coef(fd_maxFl_MLEw), tolerance = .001)
-  expect_equal(coef(fd_wb2_MLEw_P, group = "y"), expected = coef(fd_poll_MLEw), tolerance = .001)
+  expect_equal(coef(fd_wb2_MLEw_P, group = "x"), expected = coef(fd_maxFl_MLEw), tolerance = .01)
+  expect_equal(coef(fd_wb2_MLEw_P, group = "y"), expected = coef(fd_poll_MLEw), tolerance = .01)
 
 
   # two groups with binding

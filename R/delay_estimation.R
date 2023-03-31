@@ -284,7 +284,8 @@ objFunFactory <- function(x, y = NULL,
   stopifnot( length(kmFit$surv) == length(kmFitrcens$surv) )
 
   indForefront <- local({
-    # little helper function to get the indices for the first two smallest observed values (non-censorings) in a sorted vector of observations
+    # little helper function to get the indices for the first two smallest observed values (non-censorings)
+    #+in a sorted vector of observations
     #@param .x sorted numeric/Surv vector
     forefrontIndF <- function(group = c("x", "y")) {
       obs <- if (group == "y") y else x
@@ -375,30 +376,148 @@ objFunFactory <- function(x, y = NULL,
 
   # parameter handling ----
 
-  # MLEw's W1 is gamma-distributed with parameters shape=n and scale=1/n.
-  # We estimate W1 as median (W1 is also used to get scale parameter during un-profiling)
-  # We count only observed events, e.g., nObs = length(x) - cens$n$x[["any"]]
-  W1 <- if (method == 'MLEw') {
+  weights <- if (method != "MLEw") list(W1 = c(x=1, y=1)) else {
     local({
-      # little helper function to calculate W1-weight
+
+      # Little helper to get the so-called z-values z_i := -log(1-F_i) = log(1/(1-F_i)) which define the weights W1-W3
+      # Median rank is a general way to estimate F_i (using a binomial model)
+      # Benard's approximation estimates F_i as (i - a) / (N + 1 - 2*i) for some a
+      #+a=.3 is recommended by Fothergill (1990) ***
+      #+a=.3175 due to Filliben, "The probability plot.." (1975)
+      # And exact values for 1st and last (=nth) entry instead (see "A reliable algorithm..", Jacquelin, 1993)
+      # For Weibull, we have z_i = ((x_(i) - a)/gamma)^k ~ Exp(1).
+      # Cousineau's approach is to use MC-simulation results, drawing from Exp(1). He does not use the observed data to derive F_i.
+      # He chooses weights W1-W3 irrespective of the concrete sample at hand.
+      zF <- function(group = "x", mr = c("exact", "benard"), a = 0.3, propagateTies = FALSE) {
+        mr <- match.arg(mr)
+        nObs <- nObs0 <- if (group == "y") length(y) else length(x)
+
+        if (! isSurv) {
+
+          if (propagateTies) {
+            obs <- if (group == "y") y else x
+            ind_doz <- which(diff(obs) == 0)
+            nObs <- nObs - length(ind_doz)
+          }
+
+          z0 <- if (nObs < 2) {
+            .5
+          } else if (mr == "exact" && nObs < 887) { #use exact median rank values if not too many observations
+            stats::qbeta(p=.5, shape1 = seq_len(nObs), shape2 = rev(seq_len(nObs)))
+          } else { # Benard-style approximation for long observation vectors
+            # 1st and last entry are still exact median rank values
+            z_n <- .5**(1/nObs)
+            c(1-z_n, stats::ppoints(n, a=a)[1L+seq_len(nObs-2L)], z_n)
+          }
+
+          if (propagateTies && length(ind_doz)) {
+            ind_rept <- rep_len(1, length.out = length(z0))
+            iupd <- ind_doz[1L]
+            idoz <- 1L
+
+            while (idoz <= length(ind_doz)) {
+              tie_cnt <- 1
+              # count ties in group
+              while(idoz + tie_cnt <= length(ind_doz) && ind_doz[idoz+tie_cnt] == ind_doz[idoz + tie_cnt-1] + 1) {
+                tie_cnt <- tie_cnt + 1
+              }
+              # update tie count (in rep-times)
+              ind_rept[iupd] <- ind_rept[iupd] + tie_cnt
+              # update indices
+              idoz <- idoz + tie_cnt - 1 # to end of tie group
+              if (idoz < length(ind_doz)) {
+                iupd <- iupd + ind_doz[idoz+1]-ind_doz[idoz]-1 # move iupd for next update
+              }
+              # move on
+              idoz <- idoz + 1
+            }
+
+            z0 <- rep.int(z0, times = ind_rept)
+            stopifnot(length(z0) == nObs0)
+          } #fi
+
+          return(-log(1-z0))
+        }#fi ! isSurv
+
+        stopifnot( isSurv )
+
+        switch(EXPR = attr(x, which = "type", exact = TRUE),
+               right = {
+                 # nbr of events observed
+                 n_ev <- nObs - cens$n[[group]][["right"]]
+
+                 # Cousineau estimates the weights from Monte-Carlo simulation study (MCSS) irrespective of the concrete sample
+                 # But here we have censorings which also effect F_i and we hence chose to estimate F_i from the concrete sample with its censoring scheme
+                 # Estimate F_i via Kaplan-Meier (copes with censorings) with Benard-style median rank estimation to avoid 0 and 1
+                 # z is an estimate for the ordered z_i = -log(1-F_i) = ((x_(i) - a)/gamma)^k ~ Exp(1)
+                 # unique event times (in all available groups)
+                 ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here [but 0 is 0 also for interval!?])
+                 # get the right subset of indices for specified group (when having two groups)
+                 if (twoGroup) {
+                   # Cave: works only for two groups (x or y) as I only use the strata[[1L]] as cutpoint
+                   ind_evKM <- if (group == "x") ind_evKM[ind_evKM <= kmFit$strata[[1L]]] else ind_evKM[ind_evKM > kmFit$strata[[1L]]]
+                 }
+                 # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
+                 # floor(n.event + n.censor) = n
+                 stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
+                                if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
+
+                 # estimated survival probabilities for event times, replicated
+                 # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
+                 kmSurvProb <- rep.int(kmFit$surv[ind_evKM], times = kmFit$n.event[ind_evKM])
+                 stopifnot( length(kmSurvProb) == n_ev )
+
+                 # Benard-style median-rank estimation (avoid 0 and 1)
+                 #a <- .3175  # due to Filliben, The probability plot .. (1975)
+                 a <- .3     # due to Fothergill (1990)
+
+                 -log(1-((1-kmSurvProb) * n_ev - a) / (n_ev + 1 - 2*a))
+               },
+               stop("This type of censoring is not handled here!", call. = FALSE)
+        )
+      } #fn zF
+
+      z_x <- zF(group = "x", propagateTies = TRUE)
+      z_y <- if (twoGroup) zF(group = "y", propagateTies = TRUE)
+
+      # little helper function to calculate W1-weight (as function of n)
+      # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n and we estimate W1 as median of it.
+      # W1 is also used to get scale parameter during un-profiling.
+      # We count all events because it is used to get scale parameter (and in this formula we already correct for censorings),
+      #+e.g., nObs = length(x), even when there is cens$n$x[["any"]]
       w1F <- function(nObs) {
         stopifnot( is.numeric(nObs), length(nObs) == 1L )
         nObs <- max(1L, nObs)
+
         # return W1
         if (nObs <= 5) {
           # Cousineau's simulation results in "Nearly unbiased estimators.." (2009), Table2, column J_1 n=1..5
           c(0.693, 0.839, 0.891, 0.918, 0.934)[[nObs]]
         }
         else {
-          # approximation for median of gamma(n, 1/n) via Wilson-Hilferty transformation (<https://en.wikipedia.org/wiki/Gamma_distribution>)
+          # approximation for median of gamma(n, 1/n)
+          #+using Wilson-Hilferty transformation (see <https://en.wikipedia.org/wiki/Gamma_distribution>)
           (1 - 1 / (9 * nObs))^3
         }
       }
 
-      c(x = w1F(length(x) - cens$n$x[["any"]]),
-        y = if (! is.null(y)) w1F(length(y) - cens$n$y[["any"]]) else 1)
+      # W1 weights: use full length even when
+      W1_x <- w1F(length(x)) ## - cens$n$x[["any"]]),
+      W1_y <- if (twoGroup) w1F(length(y)) else 1 #length(y) - cens$n$y[["any"]])
+
+      # # first term denominator was: (n * W1[[group]])  [vs sum(z) ***]
+      # #+but this is already using the median for the denominator in isolation (which does not seem right)
+      # last term -log(..) is approximation for -log(GM_n Z) = - AM_n(logZ) ***
+      w2F <- function(z) sum(z * log(z)) / sum(z) - log(log(2) - 0.1316 * (1 - 1/length(z)))
+
+      # return list of weights
+      list(W1 = c(x = W1_x, y = W1_y),
+           W2 = c(x = w2F(z_x), y = if (twoGroup) w2F(z_y)),
+           W3 = purrr::compact(list(x = function(k) W1_x * if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
+                                    y = if (twoGroup) function(k) W1_y * if (k==1) mean(1/z_y) else sum(1/z_y^(1/k)) / sum(z_y^((k-1)/k)))))
     })
-  } else c(x=1, y=1)
+  } #esle
+
 
   stopifnot( ! twoPhase ) #XXX not implemented yet!!
 
@@ -411,7 +530,7 @@ objFunFactory <- function(x, y = NULL,
   } else {
     # two group!
     #XXX exponential && profiled: indices are not correct for two groups, yet!!
-    #XXX continue here!! (this would allow to run simul_test.R!)
+    #XXX continue here!! (this would allow to run simul_test.R!) #YYY already done?!
     if (is.null(bind)) {
       if (distribution == 'exponential') {
         if (profiled) list(x = c(1L), y = c(2L)) else list(x = c(1L, 2L), y = c(3L, 4L))
@@ -633,14 +752,16 @@ objFunFactory <- function(x, y = NULL,
             # access observations for specified group
             obs <- if (group == "y") y else x
             k <- if (distribution == 'weibull') res0[[2L]] else 1L
-            # add scale parameter at the end of parameter vector
+            # calculate scale parameter
             scale0 <- if (isSurv) {
               # XXX Surv: only right-censored observations currently implemented!
               stopifnot(attr(obs, which = "type", exact = TRUE) == 'right')
-              (1/W1[[group]] * mean((obs[,1L]-res0[[1L]])^k) * length(obs)/(length(obs) - cens$n[[group]][["right"]]))^(1/k)
+              # we do not devide by n, but by n_ev, hence censorings increase the scale estimate
+              (mean((obs[,1L]-res0[[1L]])^k) * length(obs)/(length(obs) - cens$n[[group]][["right"]]) / weights$W1[[group]])^(1/k)
             } else {
-              (1/W1[[group]] * mean((obs-res0[[1L]])^k))^(1/k)
+              (mean((obs-res0[[1L]])^k) / weights$W1[[group]] )^(1/k)
             }
+            # add scale/rate parameter at the end of parameter vector
             res0 <- append(res0, values = if (distribution == 'exponential') 1/scale0 else scale0)
           } else {
             # extract only remaining parameters
@@ -927,7 +1048,7 @@ objFunFactory <- function(x, y = NULL,
                  # objective function to maximize:
                  # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
                  # 2nd & 3rd summand could also be: - log(sum(obs_c**k)) + log(n*k)
-                 n * ((k-1) * mean(log(obs_c)) -log(mean(obs_c**k)) + log(k) - 1) - penalize_shape * log(k+1)
+                 n * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) - penalize_shape * log(k+1)
 
                  # alternative:
                  #indirect way: ! profiled_llik_directly
@@ -965,54 +1086,17 @@ objFunFactory <- function(x, y = NULL,
              if (isSurv) {
                switch(EXPR = attr(obs, which = "type", exact = TRUE),
                       right = {
-                        # nbr of observed
-                        n_ev <- n - cens$n[[group]][["any"]]
                         obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
 
-                        # Cousineau estimates the weights from Monte-Carlo simulation study (MCSS) irrespective of the concrete sample
-                        # But here we have censorings which also effect F_i and we hence chose to estimate F_i from the concrete sample with its censoring scheme
-                        # Estimate F_i via Kaplan-Meier (copes with censorings) with Benard-style median rank estimation to avoid 0 and 1
-                        # z is an estimate for the ordered z_i = -log(1-F_i) = ((x_(i) - a)/gamma)^k ~ Exp(1)
-                        z <- local({
-                          # unique event times
-                          ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here [but 0 is 0 also for interval!?])
-                          # get the right subset of indices for specified group (when having two groups)
-                          if (twoGroup) {
-                            # Cave: works only for two groups (x or y) as I only use the strata[[1L]] as cutpoint
-                            ind_evKM <- if (group == "x") ind_evKM[ind_evKM <= kmFit$strata[[1L]]] else ind_evKM[ind_evKM > kmFit$strata[[1L]]]
-                          }
-                          # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
-                          # floor(n.event + n.censor) = n
-                          stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
-                                         if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
-
-                          # estimated survival probabilities for event times, replicated
-                          # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
-                          kmSurvProb <- rep.int(kmFit$surv[ind_evKM], times = kmFit$n.event[ind_evKM])
-                          stopifnot( length(kmSurvProb) == n_ev )
-
-                          # Benard-style median-rank estimation (avoid 0 and 1)
-                          a <- .3 # a=.3 due to Fothergill (1990) #a=.3175 due to Filliben, The probability plot .. (1975)
-
-                          -log(1-((1-kmSurvProb) * n_ev - a) / (n_ev + 1 - 2*a))
-                        })
-                        # last term: approximation for -log(GM_n Z) = - AM_n(logZ)
-                        W2 <- sum(z * log(z)) / sum(z) - log(log(2) - 0.1316 * (1 - 1/n_ev))
-                        W3 <- if (k==1) {
-                          W1[[group]] * mean(1/z)
-                        } else {
-                          W1[[group]] * sum(1/z^(1/k)) / sum(z^((k-1)/k))
-                        }
-
                         if (verbose > 1L) {
-                          cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
+                          cat(glue("Weights: W2 = {weights$W2[[group]]} and W3 = {weights$W2[[group]](k)} for {group}.",
                                    "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
                         }
 
                         # objective function to maximize
-                        - (W2/k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k)/sum(obs_evc**k))**2 -
+                        - (weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k)/sum(obs_evc**k))**2 -
                           # 1st factor is inverse of harmonic mean
-                          (mean(1/obs_evc) * sum(obs_evc**k)/sum(obs_evc**(k-1)) - W3)**2 +
+                          (mean(1/obs_evc) * sum(obs_evc**k)/sum(obs_evc**(k-1)) - weights$W3[[group]](k))**2 +
                           # contribution of right-censored obs
                           rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
                           # optional penalization term
@@ -1024,37 +1108,15 @@ objFunFactory <- function(x, y = NULL,
                # numeric response, non-Surv
                obs_c <- obs - pars.gr[[1L]]
 
-               # using Benard's estimate for median rank for F_i as (i - a) / (N + 1 - 2*i)
-               #+a=.3 is recommended by Fothergill (1990) ***
-               #+a=.3175 due to Filliben, "The probability plot.." (1975)
-               #+but with exact values for 1st and last (=nth) entry instead (see "A reliable algorithm..", Jacquelin, 1993)
-               # We use z_i = -log(1-F_i) = log(1/(1-F_i)) = ((x_(i) - a)/gamma)^k ~ Exp(1)
-               # W1 = mean(z_i) follows a gamma(n, 1/n) distribution
-               # We need: n >= 2
-               #XXX ties are ignored here: we always get n different z-values. What is the effect? Is this good?
-               #+Cousineau's approach is to use MC-simulation results (he does not use the observed data to derive F_i)
-               #+So, Cousineau chooses weights W1-W3 irrespective of the concrete sample at hand.
-               z <- -log(c(.5**(1/n), 1-stats::ppoints(n, a=.3)[1L+seq_len(n-2L)], 1-.5**(1/n)))
-
-               # first term denominator was: (n * W1[[group]])  [vs sum(z) ***]
-               #+but this is already using the median for the denominator in isolation (which does not seem right)
-               # last term: approximation for -log(GM_n Z) = - AM_n(logZ) ***
-               W2 <- sum(z * log(z)) / sum(z) - log(log(2) - 0.1316 * (1 - 1/n))
-               W3 <- if (k==1) {
-                 W1[[group]] * mean(1/z)
-               } else {
-                 W1[[group]] * sum(1/z^(1/k)) / sum(z^((k-1)/k))
-               }
-
                if (verbose > 1L) {
-                 cat(glue("Weights: W2 = {W2} and W3 = {W3} for {group}.",
+                 cat(glue("Weights: W2 = {weights$W2[[group]]} and W3 = {weights$W3[[group]](k)} for {group}. ",
                           "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
                }
 
                # objective function to maximize
-               - (W2/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 -
+               - (weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 -
                  # 1st factor is inverse of harmonic mean
-                 (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - W3)**2 -
+                 (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 -
                  # optional penalization term
                  penalize_shape * log(k+1)
              }
