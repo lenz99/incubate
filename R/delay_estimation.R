@@ -230,38 +230,39 @@ objFunFactory <- function(x, y = NULL,
   rm("profiled0")
 
 
-  # little helper function to count the censored observed by type (right, left, interval)
-  censDescF <- function(.x, what = c("n", "ind")) {
-    what <- match.arg(what)
-    if (!isSurv) return(list(n = c(right = 0L, left = 0L, interval = 0L, any = 0L),
-                             ind = list(right = integer(0), left = integer(0), interval = integer(0), obs = seq_along(.x)))[[what]])
-    switch(what,
-           n = {
-             nvctr <- switch(attr(.x, which = "type", exact = TRUE),
-                             right = c(sum(.x[, "status"] == 0), 0, 0),
-                             left = c(0, sum(.x[, "status"] == 0), 0),
-                             interval = tabulate(.x[, "status"]+1L, nbins = 4)[-2L],
-                             stop("This type of censoring is not supported!", call. = FALSE) )
+  cens <- local({
+    # little helper function to count the censored observed by type (right, left, interval)
+    censDescF <- function(.x, what = c("n", "ind")) {
+      what <- match.arg(what)
+      if (!isSurv) return(list(n = c(right = 0L, left = 0L, interval = 0L, any = 0L),
+                               ind = list(right = integer(0), left = integer(0), interval = integer(0), obs = seq_along(.x)))[[what]])
+      switch(what,
+             n = {
+               nvctr <- switch(attr(.x, which = "type", exact = TRUE),
+                               right = c(sum(.x[, "status"] == 0), 0, 0),
+                               left = c(0, sum(.x[, "status"] == 0), 0),
+                               interval = tabulate(.x[, "status"]+1L, nbins = 4)[-2L],
+                               stop("This type of censoring is not supported!", call. = FALSE) )
 
-             rlang::set_names(append(nvctr, sum(nvctr)), nm = c("right", "left", "interval", "any"))
-           },
-           ind = {
-             switch(attr(.x, which = "type", exact = TRUE),
-                    right = list(right = which(.x[, "status"] == 0), left = integer(0L), interval = integer(0L), obs = which(.x[, "status"] == 1)),
-                    left = list(right = integer(0L), left = which(.x[, "status"] == 0), interval = integer(0L), obs = which(.x[, "status"] == 1)),
-                    interval = list(right = which(.x[, "status"] == 0), left = which(.x[, "status"] == 2), interval = which(.x[, "status"] == 3),
-                                    obs = which(.x[, "status"] == 1)),
-                    stop("This type of censoring is not supported!", call. = FALSE) )
-           },
-           stop("This request ", sQuote(what, q = FALSE), " is not supported here!", call. = FALSE)
+               rlang::set_names(append(nvctr, sum(nvctr)), nm = c("right", "left", "interval", "any"))
+             },
+             ind = {
+               switch(attr(.x, which = "type", exact = TRUE),
+                      right = list(right = which(.x[, "status"] == 0), left = integer(0L), interval = integer(0L), obs = which(.x[, "status"] == 1)),
+                      left = list(right = integer(0L), left = which(.x[, "status"] == 0), interval = integer(0L), obs = which(.x[, "status"] == 1)),
+                      interval = list(right = which(.x[, "status"] == 0), left = which(.x[, "status"] == 2), interval = which(.x[, "status"] == 3),
+                                      obs = which(.x[, "status"] == 1)),
+                      stop("This type of censoring is not supported!", call. = FALSE) )
+             },
+             stop("This request ", sQuote(what, q = FALSE), " is not supported here!", call. = FALSE)
+      )
+    }
+
+    list(isSurv = isSurv,
+         n = purrr::compact(list(x=censDescF(x, what = "n"), y = if (twoGroup) censDescF(y, what = "n"))),
+         ind = purrr::compact(list(x=censDescF(x, what = "ind"), y = if (twoGroup) censDescF(y, what = "ind")))
     )
-  }
-
-  cens <- list(isSurv = isSurv,
-               n = purrr::compact(list(x=censDescF(x, what = "n"), y = if (twoGroup) censDescF(y, what = "n"))),
-               ind = purrr::compact(list(x=censDescF(x, what = "ind"), y = if (twoGroup) censDescF(y, what = "ind")))
-  )
-
+  })
 
   # KM fit
   survDat <- tibble(time = if (isSurv) c(x, y) else Surv(c(x,y)),
@@ -282,66 +283,67 @@ objFunFactory <- function(x, y = NULL,
   # kmFit and kmFitrcens have same number of rows
   stopifnot( length(kmFit$surv) == length(kmFitrcens$surv) )
 
-  # little helper function to get the indices for the first two smallest observed values (non-censorings) in a sorted vector of observations
-  #@param .x sorted numeric/Surv vector
-  forefrontIndF <- function(group = c("x", "y")) {
-    group <- match.arg(group)
-    obs <- if (group == "y") y else x
+  indForefront <- local({
+    # little helper function to get the indices for the first two smallest observed values (non-censorings) in a sorted vector of observations
+    #@param .x sorted numeric/Surv vector
+    forefrontIndF <- function(group = c("x", "y")) {
+      obs <- if (group == "y") y else x
 
-    ind_obs1 <- ind_next <- integer()
+      ind_obs1 <- ind_next <- integer()
 
-    if (isSurv) {
-      cind_gr <- cens$ind[[group]]
-      cindo_gr <- cens$ind[[group]]$obs
-      # Surv-response
-      stopifnot(length(cindo_gr) >= 2L)
+      if (isSurv) {
+        cind_gr <- cens$ind[[group]]
+        cindo_gr <- cens$ind[[group]]$obs
+        # Surv-response
+        stopifnot(length(cindo_gr) >= 2L)
 
-      # check for easy case: no tie at first two observed event times
-      if (obs[cindo_gr[2L], 1L] > obs[cindo_gr[1L], 1L] + TOL_NUM) {
-        ind_obs1 <- cindo_gr[1L]
-        ind_next <- cindo_gr[2L]
-      } else {
-        # walk down the observed event times
-        i1 <- 2L
-        while (obs[cindo_gr[i1], 1L] == obs[cindo_gr[1L], 1L]) {
-          i1 <- i1 + 1L
+        # check for easy case: no tie at first two observed event times
+        if (obs[cindo_gr[2L], 1L] > obs[cindo_gr[1L], 1L] + TOL_NUM) {
+          ind_obs1 <- cindo_gr[1L]
+          ind_next <- cindo_gr[2L]
+        } else {
+          # walk down the observed event times
+          i1 <- 2L
+          while (obs[cindo_gr[i1], 1L] == obs[cindo_gr[1L], 1L]) {
+            i1 <- i1 + 1L
+          }
+          ind_obs1 <- cindo_gr[seq_len(i1-1L)]
+          if (length(cindo_gr) >= i1) ind_next <- cindo_gr[i1]
         }
-        ind_obs1 <- cindo_gr[seq_len(i1-1L)]
-        if (length(cindo_gr) >= i1) ind_next <- cindo_gr[i1]
-      }
 
-    } else {
-      # numeric response, non-Surv
-      stopifnot( length(obs) >= 2L )
-      # check for easy case: no tie at beginning
-      if (obs[[2L]] > obs[[1L]] + TOL_NUM) {
-        ind_obs1 <- 1L
-        ind_next <- 2L
       } else {
-        # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
-        for (l in sort(c(5, 10, 50, 100, 500, 1000, length(obs)))) {
-          if (l > length(obs)) break
-          obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
-          #which.max(obs_r > 1) # 1st index of 2nd obs
-          firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
-          # check that there are two distinct values
-          if (any(is.na(firstTwoRanks))) {
-            if (l < length(obs)) next
-            if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
-            #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
-          } #fi
+        # numeric response, non-Surv
+        stopifnot( length(obs) >= 2L )
+        # check for easy case: no tie at beginning
+        if (obs[[2L]] > obs[[1L]] + TOL_NUM) {
+          ind_obs1 <- 1L
+          ind_next <- 2L
+        } else {
+          # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
+          for (l in sort(c(5, 10, 50, 100, 500, 1000, length(obs)))) {
+            if (l > length(obs)) break
+            obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
+            #which.max(obs_r > 1) # 1st index of 2nd obs
+            firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
+            # check that there are two distinct values
+            if (any(is.na(firstTwoRanks))) {
+              if (l < length(obs)) next
+              if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
+              #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
+            } #fi
 
-          ind_obs1 <- which(obs_r == firstTwoRanks[1L])
-          ind_next <- which(obs_r == firstTwoRanks[2L])
-          if (length(ind_next)) ind_next <- ind_next[1L]
-        } #rof
-      } #esle
-    } #esle (non-Surv)
+            ind_obs1 <- which(obs_r == firstTwoRanks[1L])
+            ind_next <- which(obs_r == firstTwoRanks[2L])
+            if (length(ind_next)) ind_next <- ind_next[1L]
+          } #rof
+        } #esle
+      } #esle (non-Surv)
 
-    list(inds_obs1 = ind_obs1, ind_next = ind_next)
-  }
+      list(inds_obs1 = ind_obs1, ind_next = ind_next)
+    }
 
-  indForefront <- purrr::compact(list(x = forefrontIndF(group = "x"), y = if (twoGroup) forefrontIndF(group = "y")))
+    purrr::compact(list(x = forefrontIndF(group = "x"), y = if (twoGroup) forefrontIndF(group = "y")))
+  })
 
   # set some coefficient names:
   # coefficient names (now that we have settled the profiling flag)
@@ -375,11 +377,27 @@ objFunFactory <- function(x, y = NULL,
 
   # MLEw's W1 is gamma-distributed with parameters shape=n and scale=1/n.
   # We estimate W1 as median (W1 is also used to get scale parameter during un-profiling)
-  #XXX does W1 need to be adopted (it uses length(x))? (length(x) - cens$n$x[["any"]])
+  # We count only observed events, e.g., nObs = length(x) - cens$n$x[["any"]]
   W1 <- if (method == 'MLEw') {
-    # approximation for median via Wilson-Hilferty transformation (<https://en.wikipedia.org/wiki/Gamma_distribution>)
-    c(x = (1 - 1 / ( 9 * if (isSurv) max(1L, length(x) - cens$n$x[["any"]]) else length(x) ))^3,
-      y = if (! is.null(y)) (1 - 1 / ( 9 * if (isSurv) max(1L, length(y) - cens$n$y[["any"]]) else length(y) ))^3 else 1)
+    local({
+      # little helper function to calculate W1-weight
+      w1F <- function(nObs) {
+        stopifnot( is.numeric(nObs), length(nObs) == 1L )
+        nObs <- max(1L, nObs)
+        # return W1
+        if (nObs <= 5) {
+          # Cousineau's simulation results in "Nearly unbiased estimators.." (2009), Table2, column J_1 n=1..5
+          c(0.693, 0.839, 0.891, 0.918, 0.934)[[nObs]]
+        }
+        else {
+          # approximation for median of gamma(n, 1/n) via Wilson-Hilferty transformation (<https://en.wikipedia.org/wiki/Gamma_distribution>)
+          (1 - 1 / (9 * nObs))^3
+        }
+      }
+
+      c(x = w1F(length(x) - cens$n$x[["any"]]),
+        y = if (! is.null(y)) w1F(length(y) - cens$n$y[["any"]]) else 1)
+    })
   } else c(x=1, y=1)
 
   stopifnot( ! twoPhase ) #XXX not implemented yet!!
