@@ -241,7 +241,7 @@ objFunFactory <- function(x, y = NULL,
                nvctr <- switch(attr(.x, which = "type", exact = TRUE),
                                right = c(sum(.x[, "status"] == 0), 0, 0),
                                left = c(0, sum(.x[, "status"] == 0), 0),
-                               interval = tabulate(.x[, "status"]+1L, nbins = 4)[-2L],
+                               interval = tabulate(.x[, "status"]+1L, nbins = 4L)[-2L],
                                stop("This type of censoring is not supported!", call. = FALSE) )
 
                rlang::set_names(append(nvctr, sum(nvctr)), nm = c("right", "left", "interval", "any"))
@@ -384,17 +384,23 @@ objFunFactory <- function(x, y = NULL,
       # Benard's approximation estimates F_i as (i - a) / (N + 1 - 2*i) for some a
       #+a=.3 is recommended by Fothergill (1990) ***
       #+a=.3175 due to Filliben, "The probability plot.." (1975)
-      # And exact values for 1st and last (=nth) entry instead (see "A reliable algorithm..", Jacquelin, 1993)
+      # Exact values for 1st and last (=nth) entry are known (see "A reliable algorithm..", Jacquelin, 1993)
       # For Weibull, we have z_i = ((x_(i) - a)/gamma)^k ~ Exp(1).
-      # Cousineau's approach is to use MC-simulation results, drawing from Exp(1). He does not use the observed data to derive F_i.
-      # He chooses weights W1-W3 irrespective of the concrete sample at hand.
-      zF <- function(group = "x", mr = c("exact", "benard"), a = 0.3, propagateTies = FALSE) {
-        mr <- match.arg(mr)
-        nObs <- nObs0 <- if (group == "y") length(y) else length(x)
+      # Cousineau uses MC-simulation, drawing from Exp(1). He does not use the observed data to derive F_i.
+      # He chooses weights W1-W3 as median of their sampling distribution in MC irrespective of the concrete sample.
+      # @param group Estimate z's for which group
+      # @param method How to estimate the z's. mr = median rank method to estimate F_i
+      # @param propagateTies logical. Should ties in the observations lead to ties in the z's as well?
+      # @return numeric vector of ordered z's, same length as number of observed event time values in group
+      zF <- function(group = "x", method = c("mr_exact", "mr_benard"), a = 0.3, propagateTies = FALSE) {
+        method <- match.arg(method)
+        nObs <- if (group == "y") length(y) else length(x)
 
         if (! isSurv) {
+          # numeric response, non-Surv
 
           if (propagateTies) {
+            nObs0 <- nObs # save original length just to double-check
             obs <- if (group == "y") y else x
             ind_doz <- which(diff(obs) == 0)
             nObs <- nObs - length(ind_doz)
@@ -402,7 +408,7 @@ objFunFactory <- function(x, y = NULL,
 
           z0 <- if (nObs < 2) {
             .5
-          } else if (mr == "exact" && nObs < 887) { #use exact median rank values if not too many observations
+          } else if (method == "mr_exact" && nObs < 89L) { #use exact median rank values if not too many observations
             stats::qbeta(p=.5, shape1 = seq_len(nObs), shape2 = rev(seq_len(nObs)))
           } else { # Benard-style approximation for long observation vectors
             # 1st and last entry are still exact median rank values
@@ -411,7 +417,8 @@ objFunFactory <- function(x, y = NULL,
           }
 
           if (propagateTies && length(ind_doz)) {
-            ind_rept <- rep_len(1, length.out = length(z0))
+            ind_rept <- rep_len(1L, length.out = length(z0))
+            # index to update ind_rept
             iupd <- ind_doz[1L]
             idoz <- 1L
 
@@ -421,7 +428,7 @@ objFunFactory <- function(x, y = NULL,
               while(idoz + tie_cnt <= length(ind_doz) && ind_doz[idoz+tie_cnt] == ind_doz[idoz + tie_cnt-1] + 1) {
                 tie_cnt <- tie_cnt + 1
               }
-              # update tie count (in rep-times)
+              # update tie count (for rep-times)
               ind_rept[iupd] <- ind_rept[iupd] + tie_cnt
               # update indices
               idoz <- idoz + tie_cnt - 1 # to end of tie group
@@ -430,7 +437,7 @@ objFunFactory <- function(x, y = NULL,
               }
               # move on
               idoz <- idoz + 1
-            }
+            }# elihw
 
             z0 <- rep.int(z0, times = ind_rept)
             stopifnot(length(z0) == nObs0)
@@ -440,7 +447,6 @@ objFunFactory <- function(x, y = NULL,
         }#fi ! isSurv
 
         stopifnot( isSurv )
-
         switch(EXPR = attr(x, which = "type", exact = TRUE),
                right = {
                  # nbr of events observed
@@ -460,7 +466,7 @@ objFunFactory <- function(x, y = NULL,
                  # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
                  # floor(n.event + n.censor) = n
                  stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
-                                if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
+                                if (twoGroup) kmFit$n.censor[(if (group == "x") 1 else -1) * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
 
                  # estimated survival probabilities for event times, replicated
                  # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
@@ -468,9 +474,6 @@ objFunFactory <- function(x, y = NULL,
                  stopifnot( length(kmSurvProb) == n_ev )
 
                  # Benard-style median-rank estimation (avoid 0 and 1)
-                 #a <- .3175  # due to Filliben, The probability plot .. (1975)
-                 a <- .3     # due to Fothergill (1990)
-
                  -log(1-((1-kmSurvProb) * n_ev - a) / (n_ev + 1 - 2*a))
                },
                stop("This type of censoring is not handled here!", call. = FALSE)
@@ -480,41 +483,97 @@ objFunFactory <- function(x, y = NULL,
       z_x <- zF(group = "x", propagateTies = TRUE)
       z_y <- if (twoGroup) zF(group = "y", propagateTies = TRUE)
 
+      # how to calculate the weights W1-W3?
+      method_w1 <- if (isSurv) "sample" else "sdist_median" #"hybrid"
+      method_w2 <- if (isSurv) "sample" else "sdist_median" #"hybrid"
       # little helper function to calculate W1-weight (as function of n)
       # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n and we estimate W1 as median of it.
       # W1 is also used to get scale parameter during un-profiling.
       # We count all events because it is used to get scale parameter (and in this formula we already correct for censorings),
       #+e.g., nObs = length(x), even when there is cens$n$x[["any"]]
-      w1F <- function(nObs) {
-        stopifnot( is.numeric(nObs), length(nObs) == 1L )
-        nObs <- max(1L, nObs)
+      w1F <- function(nObs, z, method = c("sample", "sdist_median")) {
+        method <- match.arg(method)
 
-        # return W1
-        if (nObs <= 5) {
-          # Cousineau's simulation results in "Nearly unbiased estimators.." (2009), Table2, column J_1 n=1..5
-          c(0.693, 0.839, 0.891, 0.918, 0.934)[[nObs]]
-        }
-        else {
-          # approximation for median of gamma(n, 1/n)
-          #+using Wilson-Hilferty transformation (see <https://en.wikipedia.org/wiki/Gamma_distribution>)
-          (1 - 1 / (9 * nObs))^3
-        }
+        # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n
+        #+we estimate W1 as median of it.
+        #+Using MC-simulation
+        #+cf. Cousineau's simulation results for median of W1's sampling distribution
+        #+"Nearly unbiased estimators.." (2009), Table 2, column J_1
+        w1Vals <- c(log(2), 0.8391, 0.8914, 0.9181, 0.9341, 0.9452, 0.9527, 0.9586,
+                    0.9632, 0.967, 0.9699, 0.9726, 0.9746, 0.9764, 0.9778, 0.9793)
+
+        switch(EXPR = method,
+               sample = {
+                 if (missing(z) || ! is.numeric(z) || length(z) == 0L){
+                   stop("Please provide the vector of z's to estimate W1!", call. = FALSE)
+                 }
+                 mean(z)
+               },
+               sdist_median = {
+                 if (missing(nObs) || !is.numeric(nObs) || length(nObs) != 1L ) {
+                   stop("Please provide the number of observations!", call. = FALSE)
+                 }
+                 nObs <- max(1L, nObs)
+
+                 # return W1
+                 if (nObs <= length(w1Vals)) { w1Vals[[nObs]] } else {
+                   # approximation for median of gamma(n, 1/n)
+                   #+using Wilson-Hilferty transformation (see <https://en.wikipedia.org/wiki/Gamma_distribution>)
+                   (1 - 1 / (9 * nObs))^3
+                 }
+               },
+               stop("This method for estimating W1 is not handled here!", call. = FALSE)
+        )
       }
 
       # W1 weights: use full length even when
-      W1_x <- w1F(length(x)) ## - cens$n$x[["any"]]),
-      W1_y <- if (twoGroup) w1F(length(y)) else 1 #length(y) - cens$n$y[["any"]])
+      W1_x <- w1F(nObs = length(x), z = z_x, method = method_w1) #or # nObs = length(x) - cens$n$x[["any"]]),
+      W1_y <- if (twoGroup) w1F(nObs = length(y), z = z_y, method = method_w1) else 1 #length(y) - cens$n$y[["any"]])
 
-      # # first term denominator was: (n * W1[[group]])  [vs sum(z) ***]
-      # #+but this is already using the median for the denominator in isolation (which does not seem right)
-      # last term -log(..) is approximation for -log(GM_n Z) = - AM_n(logZ) ***
-      w2F <- function(z) sum(z * log(z)) / sum(z) - log(log(2) - 0.1316 * (1 - 1/length(z)))
+
+      w2F <- function(z, method = c("sample", "sdist_median", "hybrid")) {
+        method <- match.arg(method)
+        nz <- length(z)
+
+        # MC-simulation on W2 for n=1..16 (based on 2**23 repeats)
+        # cf. Cousineau's simulation results for median of W2's sampling distribution
+        #+"Nearly unbiased estimators.." (2009), Table 3, column J_2
+        w2Vals <- c(0, 0.2743, 0.5172, 0.6381, 0.7099, 0.7578, 0.792, 0.8176, 0.8373,
+                    0.8529, 0.8664, 0.8772, 0.8864, 0.8945, 0.9015, 0.9075)
+        # approximation via asymptotic regression model SSasymp on log(n):
+        # We hence model: W2 = 1 + (R0 - 1) * n**(-r)
+        R0 <- -0.44193638
+        nr <- -exp(-0.00624712316)
+
+        switch(EXPR = method,
+               sample = {
+                 sum(z * log(z)) / sum(z) - mean(log(z))
+               },
+               sdist_median = {
+                 if (nz <= length(w2Vals)) { w2Vals[[length(z)]] } else {
+                   # med approx
+                   1 + (R0 - 1) * nz**nr
+                 }
+               },
+               hybrid = {
+                 # mix MC-simulation result for median and sample estimate
+                 W2_med <- if (nz <= length(w2Vals)) { w2Vals[[length(z)]] } else {
+                   # med approx
+                   1 + (R0 - 1) * nz**nr
+                 }
+
+                 # mean betw med-approx and sample estimate
+                 ( W2_med + sum(z * log(z)) / sum(z) - mean(log(z))) / 2L
+               },
+               stop("This method for W2-estimation is not handled here!", call. = FALSE)
+        )
+      }
 
       # return list of weights
       list(W1 = c(x = W1_x, y = W1_y),
-           W2 = c(x = w2F(z_x), y = if (twoGroup) w2F(z_y)),
-           W3 = purrr::compact(list(x = function(k) W1_x * if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
-                                    y = if (twoGroup) function(k) W1_y * if (k==1) mean(1/z_y) else sum(1/z_y^(1/k)) / sum(z_y^((k-1)/k)))))
+           W2 = c(x = w2F(z = z_x, method = method_w2), y = if (twoGroup) w2F(z = z_y, method = method_w2)),
+           W3 = purrr::compact(list(x = function(k) W1_x * if (log(k) < -5) 1 else if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
+                                    y = if (twoGroup) function(k) W1_y * if (log(k) < -5) 1 else if (k==1) mean(1/z_y) else sum(1/z_y^(1/k)) / sum(z_y^((k-1)/k)))))
     })
   } #esle
 
@@ -987,7 +1046,11 @@ objFunFactory <- function(x, y = NULL,
 
 
     # for Weibull, do we want to penalize high shape values in MLE?
-    penalize_shape <- distribution == 'weibull' && FALSE #currently turned off (could become an option)
+    pen_shape <- distribution == 'weibull' && method == "MLEw" && FALSE #to turn off (could become an option)
+    pen_shape_shift <- 7 #shift parameter of softplus penalty
+    pen_shape_steep <- 1 #steepness of softplus penality
+
+    penF <- function(k) pen_shape * log(1 + exp(pen_shape_steep * (k - pen_shape_shift))/pen_shape_steep) / sqrt(n)
 
     densFun <- getDist(distribution, type = "density")
     cdfFun <- getDist(distribution, type = "cdf")
@@ -1035,7 +1098,7 @@ objFunFactory <- function(x, y = NULL,
                             # contribution of right censorings
                             sum(rlang::exec(cdfFun, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
                                 # optional penalty term for large values of shape
-                                -penalize_shape * log(k+1) )
+                                -penF(k))
 
                         },
                         stop("This type of censoring is not supported!", call. = FALSE)
@@ -1048,7 +1111,7 @@ objFunFactory <- function(x, y = NULL,
                  # objective function to maximize:
                  # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
                  # 2nd & 3rd summand could also be: - log(sum(obs_c**k)) + log(n*k)
-                 n * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) - penalize_shape * log(k+1)
+                 n * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) - penF(k)
 
                  # alternative:
                  #indirect way: ! profiled_llik_directly
@@ -1069,12 +1132,13 @@ objFunFactory <- function(x, y = NULL,
                            sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
                                rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
                                # optional penalty term for high shape parameter
-                               - penalize_shape * log(k+1))
+                               -penF(k))
                          },
                          stop("This type of censoring is not supported!", call. = FALSE)
                  )
                } else { #numeric, non-Surv
-                 sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr))) - penalize_shape * log(k+1)
+                 sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)),
+                     -penF(k))
                } #esle
              }
            },
@@ -1094,13 +1158,13 @@ objFunFactory <- function(x, y = NULL,
                         }
 
                         # objective function to maximize
-                        - (weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k)/sum(obs_evc**k))**2 -
+                        - (weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k)/sum(obs_evc**k))**2 +
                           # 1st factor is inverse of harmonic mean
-                          (mean(1/obs_evc) * sum(obs_evc**k)/sum(obs_evc**(k-1)) - weights$W3[[group]](k))**2 +
+                          -(mean(1/obs_evc) * sum(obs_evc**k)/sum(obs_evc**(k-1)) - weights$W3[[group]](k))**2 +
                           # contribution of right-censored obs
                           rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
-                          # optional penalization term
-                          -penalize_shape * log(k+1)
+                          # optional penalization term for big shape
+                          -penF(k)
                       },
                       stop("This type of survival is not supported here!", call. = FALSE))
 
@@ -1109,16 +1173,16 @@ objFunFactory <- function(x, y = NULL,
                obs_c <- obs - pars.gr[[1L]]
 
                if (verbose > 1L) {
-                 cat(glue("Weights: W2 = {weights$W2[[group]]} and W3 = {weights$W3[[group]](k)} for {group}. ",
+                 cat(glue("Weights: W1 = {weights$W1[[group]]}, W2 = {weights$W2[[group]]} and W3 = {weights$W3[[group]](k)} for {group}. ",
                           "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
                }
 
                # objective function to maximize
-               - (weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 -
+               -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
                  # 1st factor is inverse of harmonic mean
-                 (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 -
+                 -(mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 +
                  # optional penalization term
-                 penalize_shape * log(k+1)
+                 -penF(k)
              }
            },
 
@@ -1142,7 +1206,7 @@ objFunFactory <- function(x, y = NULL,
                              #+(as they are tail probabilities that do not peak so drastically as densities do)
                              rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
                              # optional penalization term
-                             -penalize_shape * log(k+1) )
+                             -penF(k))
                        },
                        stop("This type of censoring is not supported!", call. = FALSE)
                )
@@ -1151,12 +1215,13 @@ objFunFactory <- function(x, y = NULL,
                sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))),
                    rlang::exec(densFun, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr)),
                    # optional penalization term
-                   -penalize_shape * log(k+1))
+                   -penF(k))
              }
            },
            stop("This method is not handled here!", call. = FALSE)
     )
   }
+
 
   # log spacings:
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
@@ -1247,7 +1312,7 @@ objFunFactory <- function(x, y = NULL,
 
 
   # Objective function like negative mean log-spacings for MPSE or negative log-likelihood for MSE0
-  # Estimate parameters by minimizing this function.
+  # Parameters are estimated by minimizing this function.
   # param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
   # param `criterion` a logical flag. If requested, give the original criterion to minimize. Then, the parameters are on original scale
   # param `aggregated` a logical flag. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.

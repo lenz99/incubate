@@ -770,6 +770,8 @@ test_that("Fit delayed exponentials with censoring", {
 
 test_that("Fit delayed Weibull", {
 
+  densFun_wb <- incubate:::getDist(distribution = "weib", type = "density")
+
   # single group ----
 
   # susquehanna is an example dataset within incubate
@@ -781,11 +783,11 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .005)
 
   # MLE-based fits to susquehanna --
-  fd_maxFl_MLEn_NP <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
-  coef_maxFl_MLEn <- coef(fd_maxFl_MLEn_NP)
-  expect_false(fd_maxFl_MLEn_NP$optimizer$profiled)
-  expect_identical(purrr::chuck(fd_maxFl_MLEn_NP, "optimizer", "convergence"), expected = 0L)
-  expect_named(fd_maxFl_MLEn_NP$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
+  fd_maxFl_MLEn <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
+  coef_maxFl_MLEn <- coef(fd_maxFl_MLEn)
+  expect_false(fd_maxFl_MLEn$optimizer$profiled)
+  expect_identical(purrr::chuck(fd_maxFl_MLEn, "optimizer", "convergence"), expected = 0L)
+  expect_named(fd_maxFl_MLEn$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_gte(coef_maxFl_MLEn[["delay1"]], coef_maxFl[["delay1"]])
   expect_lte(coef_maxFl_MLEn[["scale1"]], coef_maxFl[["scale1"]])
 
@@ -795,7 +797,7 @@ test_that("Fit delayed Weibull", {
                          scale1=runif(7, max=5)),
                .f = ~ {
                  xc <- susquehanna - ..1
-                 expect_equal(fd_maxFl_MLEn_NP$objFun(c(delay1=..1, shape1=..2, scale1=..3), criterion = TRUE),
+                 expect_equal(fd_maxFl_MLEn$objFun(c(delay1=..1, shape1=..2, scale1=..3), criterion = TRUE),
                               expected = -length(susquehanna) * (log(..2) - ..2 * log(..3) + (..2 - 1L) * mean(log(xc)) - mean(xc**..2)/..3**..2))
                })
 
@@ -804,7 +806,7 @@ test_that("Fit delayed Weibull", {
   expect_identical(fd_maxFl_MLEn_P$optimizer$convergence, expected = 0L)
   expect_named(coef(fd_maxFl_MLEn_P), expected = c("delay1", "shape1", "scale1"))
   expect_equal(coef(fd_maxFl_MLEn_P), expected = coef_maxFl_MLEn, tolerance = .001)
-  expect_equal(fd_maxFl_MLEn_P$objFun(pars = fd_maxFl_MLEn_P$par, criterion = TRUE), fd_maxFl_MLEn_NP$criterion, tolerance = .001)
+  expect_equal(fd_maxFl_MLEn_P$objFun(pars = fd_maxFl_MLEn_P$par, criterion = TRUE), fd_maxFl_MLEn$criterion, tolerance = .001)
 
   # MLEn profiling by hand, using the indirect criterion of min(f')
   llProfObjFun_ind <- function(theta){
@@ -820,18 +822,20 @@ test_that("Fit delayed Weibull", {
   expect_equal(llProfObjFun_ind(coef(fd_maxFl_MLEn_P)[1:2]), expected = 0, tolerance = .01)
 
   # manual optimization, using the indirect objective function
-  opt_maxFl_MLEn_Pman <- optim(par = c(a=0.255, k=1.8), #c(a=0.165, k=exp(1.3847)), #c(a=0.25, k=1.5),
-                               fn = llProfObjFun_ind, method = "L-BFGS-B",
-                      lower = c(0, 1 + 1.49e-8), upper = c(min(susquehanna)-1.49e-8, +Inf))
+  opt_maxFl_MLEn_Pman <- stats::optim(par = c(a=0.255, k=1.8), #c(a=0.165, k=exp(1.3847)), #c(a=0.25, k=1.5),
+                                      fn = llProfObjFun_ind, method = "L-BFGS-B",
+                                      lower = c(0, 1 + 1.49e-8), upper = c(min(susquehanna)-1.49e-8, +Inf))
   coef_maxFl_MLEnp_man <- purrr::set_names(c(opt_maxFl_MLEn_Pman$par, mean((susquehanna-opt_maxFl_MLEn_Pman$par["a"])^opt_maxFl_MLEn_Pman$par["k"])^(1/opt_maxFl_MLEn_Pman$par["k"])),
                                   nm = c("delay1", "shape1", "scale1"))
   # estimates are only **roughly** equal
   expect_equal(coef_maxFl_MLEnp_man, coef(fd_maxFl_MLEn_P), tolerance = .25)
 
+  # MLEw
   fd_maxFl_MLEw <- delay_model(x = susquehanna, distribution = "weib", method = "MLEw")
   expect_identical(fd_maxFl_MLEw$optimizer$convergence, expected = 0L)
   expect_named(coef(fd_maxFl_MLEw), expected = c("delay1", "shape1", "scale1"))
-  expect_gte(fd_maxFl_MLEw$criterion, fd_maxFl_MLEn_NP$criterion) #MLEn directly optimizes the criterion
+  expect_gte(fd_maxFl_MLEw$criterion, fd_maxFl_MLEn$criterion) #MLEn directly optimizes the criterion
+  #expect_equal(coef(fd_maxFl_MLEw), expected = coef_maxFl, tolerance = .1)
 
   #llProfObjFun(coef_maxFl_MLEnp_man[1:2])
   #llProfObjFun(coef(fd_maxFl_MLEnp)[1:2])
@@ -880,6 +884,7 @@ test_that("Fit delayed Weibull", {
   # profiled MLEn allows for shape estimates k below 1
   expect_lt(coef_poll_MLEnp[["shape1"]], expected = 1)
 
+  # MLEw
   fd_poll_MLEw <- delay_model(pollution, distribution = "weibu", method = "MLEw", profile = TRUE)
   expect_true(fd_poll_MLEw$optimizer$profiled)
   expect_identical(fd_poll_MLEw$optimizer$convergence, expected = 0L)
@@ -888,26 +893,30 @@ test_that("Fit delayed Weibull", {
 
   # Cousineau's numerical example, taken from Weibull with delay = 300, shape k = 2 and scale = 100
   cousEx <- c(310, 342, 353, 365, 383, 393, 403, 412, 451, 456)
-  densFun_wb <- incubate:::getDist(distribution = "weib", type = "density")
+  cousPar_mlen <- c(delay1=274.8, shape1=2.8, scale1=126)
+  cousPar_mlew <- c(delay1=283.7, shape1=2.29, scale1=116.0)
 
   fd_wbc_mlen <- delay_model(x = cousEx, distribution = "weib", method = "MLEn")
-  expect_equal(coef(fd_wbc_mlen), expected = c(delay1 = 274.8, shape1 = 2.80, scale1 = 126.0), tolerance = .001)
+  expect_equal(coef(fd_wbc_mlen), expected = cousPar_mlen, tolerance = .001)
   #Cousineau has log-lik value (to be max), our criterion is neg. log-likelihood (to be min.)
   expect_equal(-fd_wbc_mlen$criterion, expected = -51.89, tolerance = .001)
   fd_wbc_mlenp <- delay_model(x = cousEx, distribution = "weib", method = "MLEn", profile = TRUE)
   # profiling yields same result
   expect_equal(coef(fd_wbc_mlenp), expected = coef(fd_wbc_mlen), tolerance = .001)
   # Cousineau reports delay=280.9, shape=2.62, scale=119.0 as result from indirect optimization
-  expect_lte(fd_wbc_mlen$criterion, expected = fd_wbc_mlen$objFun(pars = c(delay1=280.9, shape1=2.62, scale1=119.0), criterion = T))
+  expect_lte(fd_wbc_mlen$criterion, expected = fd_wbc_mlen$objFun(pars = c(delay1=280.9, shape1=2.62, scale1=119.0), criterion = TRUE))
   # criterion is really neg. log likelihood
   expect_equal(fd_wbc_mlen$criterion, -sum(densFun_wb(cousEx, delay1 = 280.9, shape1=2.62, scale1=119.0, log = TRUE)), tolerance = .001)
-  fd_wbc_mlewp <- delay_model(x = cousEx, distribution = "weib", method = "MLEw", profile = TRUE)
-  expect_true(fd_wbc_mlewp$optimizer$profiled)
-  expect_equal(coef(fd_wbc_mlewp), expected = c(delay1=283.7, shape1=2.29, scale1=116.0), tolerance = .05)
+  # MLEw
+  fd_wbc_mlew <- delay_model(x = cousEx, distribution = "weib", method = "MLEw", profile = TRUE)
+  expect_true(fd_wbc_mlew$optimizer$profiled)
+  expect_equal(coef(fd_wbc_mlew), expected = cousPar_mlew, tolerance = .09)
+  # similar criterion value
+  expect_equal(fd_wbc_mlew$criterion, expected = fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = .005)
   # our implementation finds a smaller value of the objective function (to be minimized)
-  expect_lte(fd_wbc_mlewp$optimizer$valOpt, fd_wbc_mlewp$objFun(c(delay1=283.7, shape1=log(2.29))))
+  expect_lte(fd_wbc_mlew$optimizer$valOpt, fd_wbc_mlew$objFun(c(delay1=283.7, shape1=log(2.29))))
   # but log-likelihood is in fact quite similar (actually, Cousineau's solution is slightly better)
-  expect_equal(fd_wbc_mlewp$criterion, fd_wbc_mlewp$objFun(pars = c(delay1=283.7, shape1=2.29, scale1=116.0), criterion = TRUE), tolerance = .01)
+  expect_equal(fd_wbc_mlew$criterion, fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = .01)
 
 
   # two groups -----
@@ -951,13 +960,13 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef(fd_wb2_MLEc_P), expected = coef(fd_wb2_MLEc_NP), tolerance = .01)
 
   # MLEw with two groups
-  fd_wb2_MLEw_P <- incubate::delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEw", profile = TRUE)
-  expect_named(coef(fd_wb2_MLEw_P), expected = names(coef(fd_wb2)))
+  fd_wb2_MLEw <- delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEw", profile = TRUE)
+  expect_named(coef(fd_wb2_MLEw), expected = names(coef(fd_wb2)))
   # MLE-criterion is very similar.
-  expect_equal(fd_wb2_MLEw_P$criterion, expected = fd_wb2_MLEw_P$objFun(pars = c(coef(fd_maxFl_MLEw), coef(fd_poll_MLEw)), criterion = TRUE), tolerance = .02)
+  expect_equal(fd_wb2_MLEw$criterion, expected = fd_wb2_MLEw$objFun(pars = c(coef(fd_maxFl_MLEw), coef(fd_poll_MLEw)), criterion = TRUE), tolerance = .02)
   # coefficients are not too far off?!
-  expect_equal(coef(fd_wb2_MLEw_P, group = "x"), expected = coef(fd_maxFl_MLEw), tolerance = .01)
-  expect_equal(coef(fd_wb2_MLEw_P, group = "y"), expected = coef(fd_poll_MLEw), tolerance = .01)
+  expect_equal(coef(fd_wb2_MLEw, group = "x"), expected = coef(fd_maxFl_MLEw), tolerance = .25)
+  expect_equal(coef(fd_wb2_MLEw, group = "y"), expected = coef(fd_poll_MLEw), tolerance = .2)
 
 
   # two groups with binding
