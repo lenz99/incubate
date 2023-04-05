@@ -62,8 +62,8 @@ if (myWorkers > 1L) {
 
 
 # distribution of W1 is Gamma with shape n and scale 1/n
-nObs <- c(1:20, 25, 50, 75, 100, 200, 500, 750, 1000, 1500, 2000)
-shape_W3 <- c(0.05, 0.1, 0.25, 0.5, .75, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6)
+nObs <- c(1:20, 25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500)
+shape_W3 <- c(0.01, 0.05, 0.1, 0.25, 0.5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7)
 
 aggFun <- stats::median
 stopifnot( "na.rm" %in% names(formals(aggFun)) )
