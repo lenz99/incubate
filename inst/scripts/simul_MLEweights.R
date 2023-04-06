@@ -5,6 +5,8 @@
 
 # init -----
 
+message("Start script at ", toString(Sys.time()))
+
 library("readr")
 library("tibble")
 library("tidyr")
@@ -53,6 +55,7 @@ myMCNrep <- readr::parse_number(cmdArgs[["mcnrep"]])
 stopifnot( is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L )
 
 
+
 # set up simulation setting -----
 
 if (mySeed > 0L) set.seed(mySeed)
@@ -65,8 +68,8 @@ if (myWorkers > 1L) {
 nObs <- c(1:20, 25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500)
 shape_W3 <- c(0.01, 0.05, 0.1, 0.25, 0.5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7)
 
-aggFun <- stats::median
-stopifnot( "na.rm" %in% names(formals(aggFun)) )
+aggFun <- stats::median; isMedian <- TRUE
+stopifnot( is.function(aggFun), "na.rm" %in% formalArgs(aggFun) )
 
 # simulation W1 ------------------------
 
@@ -94,15 +97,28 @@ W2_mc[[1L]] <- 0
 
 # simulation of W3 --------------------------------------------------------
 
+#currently, W3 is using simulation on log-transform, aggregates and then backtransform via exp.
+#+this works for median but for instance not for mean!
+stopifnot(isMedian)
+
 W3_mc_df <- tidyr::expand_grid(nObs = nObs,
                                shape = shape_W3) %>%
   dplyr::mutate(W3 = furrr::future_map2_dbl(.x = nObs, .y = shape,
-                                            .f = ~exp(median(replicate(n = myMCNrep,
-                                                                       expr = {
-                                                                         z <- rexp(n=.x)
-                                                                         # W1_mc[as.character(.x)] * sum(z**(-1/.y))/sum(z**((.y-1)/.y)) # direct scale
-                                                                         log(W1_mc[as.character(.x)]) + logSumExp(lx = -1/.y * log(z)) - logSumExp(lx = (.y-1)/.y * log(z))
-                                                                       }), na.rm = TRUE)), .options = furrr_options(seed = TRUE)))
+                                            .f = ~ exp(aggFun(replicate(n = myMCNrep,
+                                                                        expr = {
+                                                                          z <- rexp(n=.x)
+                                                                          res <- NA_real_
+                                                                          # W1_mc[as.character(.x)] * sum(z**(-1/.y))/sum(z**((.y-1)/.y)) # on original (=non-log) scale
+                                                                          try(
+                                                                            expr = res <- log(W1_mc[as.character(.x)]) +
+                                                                              matrixStats::logSumExp(lx = -1/.y * log(z)) -
+                                                                              matrixStats::logSumExp(lx = (.y-1)/.y * log(z)),
+                                                                            silent = TRUE
+                                                                          )
+                                                                          res
+                                                                        }),
+                                                              na.rm = TRUE)),
+                                            .options = furrr_options(seed = TRUE)))
 
 
 
@@ -120,3 +136,12 @@ res_mc <- list(
 )
 
 saveRDS(res_mc, file = "MLEweights.rds")
+
+
+# exit --------------------------------------------------------------------
+
+# tear-down
+future::plan(future::sequential())
+
+message("~~ Fine ~~")
+message("Finished script at ", toString(Sys.time()))
