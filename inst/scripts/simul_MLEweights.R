@@ -73,18 +73,21 @@ stopifnot( is.function(aggFun), "na.rm" %in% formalArgs(aggFun) )
 
 # simulation W1 ------------------------
 
+message("Start with W1")
+
 W1_mc <- furrr::future_map_dbl(.x = nObs,
                                .f = ~ aggFun(rgamma(n=myMCNrep, shape = .x, scale = 1/.x)),
                                .options = furrr_options(seed = TRUE)) %>%
   purrr::set_names(nm = nObs)
 if ( abs(W1_mc[[1]] - log(2)) > 1e-3 ) {
-  warning("For n=1 W1 deviates a lot from the true value ln(2)!", call. = FALSE)
+  warning("For n=1, W1 deviates more than 1e-3 from the true value ln(2)!", call. = FALSE)
 }
 W1_mc[[1L]] <- log(2)
 
 
 # simulation of W2 -----------------------------------------
 
+message("Start with W2")
 W2_mc <- furrr::future_map_dbl(.x = nObs, .f = ~ aggFun(replicate(n = myMCNrep,
                                                                  expr = {
                                                                    z <- rexp(n=.x)
@@ -97,6 +100,7 @@ W2_mc[[1L]] <- 0
 
 # simulation of W3 --------------------------------------------------------
 
+message("Start with W3")
 #currently, W3 is using simulation on log-transform, aggregates and then backtransform via exp.
 #+this works for median but for instance not for mean!
 stopifnot(isMedian)
