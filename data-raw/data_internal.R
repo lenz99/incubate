@@ -1,11 +1,13 @@
 #!/usr/bin/env Rscript
 # mkuhn, 2023-04-05
+# internal data for the incubate package
+#
 # simulate median weights W1, W2 and W3 for the weighed MLE approach (Cousineau, 2009)
 ####
 
 # init -----
 
-message("Start script at ", toString(Sys.time()))
+message("Start script for internal data at ", toString(Sys.time()))
 
 library("usethis")
 library("readr")
@@ -34,17 +36,15 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('Run Monte-Carlo simulations to estimate the median weights W1, W2 and W3 for weighted maximum likelihood approach (MLEw).\n')
   cat('See as reference Cousineau, 2009.\n')
   cat('  --help\t print this help\n')
-  cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent.\n')
   cat('  --workers=\t number of parallel computations using `future.callr`. The only level of parallelization is for the different numbers of observations (and scale for W3).\n')
   cat('  --mcnrep=\t size of Monte-Carlo study: number of replications which are then aggregated.\n')
+  cat('  --resultsDir=\t directory where to save the result files (when not internal) Defaults to the directory where Rscript is executed.\n')
+  cat('  --internal/-i\t save as internal package data. Then `resultsDir` is irrelevant.\n')
+  cat('  --overwrite/-f\t Set `overwrite=TRUE` when saving data.\n')
   quit(save = 'no')
 }
 
-myResultsDir <- cmdArgs[["resultsDir"]]
-stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
-           # check read & write permission (first octal information)
-           (file.mode(myResultsDir) %>% as.character() %>% substr(1,1) %>% as.octmode() & 6) == '6')
 
 mySeed <- cmdArgs[["seed"]]
 stopifnot( is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L )
@@ -55,6 +55,12 @@ stopifnot( is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L )
 myMCNrep <- readr::parse_number(cmdArgs[["mcnrep"]])
 stopifnot( is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L )
 
+myResultsDir <- cmdArgs[["resultsDir"]]
+stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
+           # check read & write permission (first octal information)
+           (file.mode(myResultsDir) %>% as.character() %>% substr(1,1) %>% as.octmode() & 6) == '6')
+myInternal <- isTRUE(any(c("internal", "i") %in% tolower(names(cmdArgs))))
+myOverwrite <- isTRUE(any(c("overwrite", "ow", "f") %in% tolower(names(cmdArgs))))
 
 
 # set up simulation setting -----
@@ -137,11 +143,25 @@ MLEw_weights <- list(
   ),
   W3 = W3_mc_df,
   MCSS_setting = list(seed = mySeed,
+                      aggFun = aggFun,
                       mcnrep = myMCNrep)
 )
 
-#saveRDS(res_mc, file = "MLEweights.rds")
-usethis::use_data(MLEw_weights, internal = TRUE, overwrite = FALSE)
+if (myInternal) {
+  if (!inherits(try(expr = usethis::proj_get(), silent = TRUE), what = "try-error")) {
+    message("Save weights for MLEw as internal package data.")
+    usethis::use_data(MLEw_weights, internal = TRUE, overwrite = myOverwrite)
+  } else warning("Unable to save internal package data because there is no active package project! Please run from within a package project..")
+} else {
+  message("Save weights for MLEw as RDS file.")
+  rdsFile <- file.path(myResultsDir, "MLEw_weights.rds")
+  if (file.exists(rdsFile) && ! myOverwrite) {
+    warning("File ", rdsFile, "already exists! You would need to set overwrite-flag.")
+  } else {
+    saveRDS(MLEw_weights, file = rdsFile)
+  }
+}
+
 
 # exit --------------------------------------------------------------------
 
