@@ -95,6 +95,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
          },
 
          AD =, ad =, anderson = {
+           stop("Anderson-Darling GOF-test is currently not supported!", call. = FALSE)
            # EDF-based GOF-test
            # Anderson-Darling (AD) test statistic
            # cf Stephens, Tests based on EDF Statistics p.101, (4.2)
@@ -113,14 +114,16 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
              testStat_ad(datr = transform(delayFit), n = nObs)
            }
 
-           p_val <- if ( delayFit$distribution == 'exponential' ){
+           p_val <- if (delayFit$distribution == 'exponential') {
              # modification for Exponential (cf Stephens, Table 4.14, p.138)
              # the correction factor approaches 1 from above.
              # We keep the number of N as all observations, independent of the number of parameters estimated in the null-model.
              # QQQ Should we increase N by the number of parameters p estimated less 2 ( p -2 because 2 parameters are estimated in standard delayed exponential)
              A2_mod <- A2 * pmax.int(1L, 1L + 5.4 / nObs - 11 / nObs**2L)
 
-             .ad_pval[['exponential']](A2_mod)
+             # .ad_pval was defined in data-raw/ad_pval.R. Has been moved to scratch/test_GOF_ad_pval.R
+             ##.ad_pval[['exponential']](A2_mod)
+             NA_real_ # dummy return value
 
            } else {
              stopifnot( delayFit$distribution == 'weibull' )
@@ -128,10 +131,12 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
              # P-value for Weibull based on Lockhart, 1994 (Table 1)
              # interpolation model on logits using critical value and inverse of shape parameter
              params_ntr <- coef.incubate_fit(delayFit, transformed = FALSE)
-             .ad_pval[['weibull']](A2, params_ntr[grepl('shape', names(params_ntr), fixed = TRUE)])
+             # .ad_pval was defined in data-raw/ad_pval.R. Has been moved to scratch/test_GOF_ad_pval.R
+             ##.ad_pval[['weibull']](A2, params_ntr[grepl('shape', names(params_ntr), fixed = TRUE)])
+             NA_real_ # dummy return value
            }
 
-           if (twoGroup){
+           if (twoGroup) {
              A2 <- paste(signif(A2, 4), collapse = ' and ')
              # use Liptak to bring both P-values of AD-tests per group together
              p_val <- stats::pnorm(sum(sqrt(nObs) * stats::qnorm(p_val)) / sqrt(sum(nObs)))
