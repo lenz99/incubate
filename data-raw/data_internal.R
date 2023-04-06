@@ -139,8 +139,8 @@ MLEw_weights <- list(
   W12 = dplyr::inner_join(
     x = tibble::enframe(W1_mc, name = "nObs", value = "W1"),
     y = tibble::enframe(W2_mc, name = "nObs", value = "W2"),
-    by = join_by(nObs)
-  ),
+    by = join_by(nObs) ) %>%
+    dplyr::mutate(nObs = as.numeric(nObs)),
   W3 = W3_mc_df,
   MCSS_setting = list(seed = mySeed,
                       aggFun = aggFun,
