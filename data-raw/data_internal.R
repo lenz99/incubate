@@ -7,6 +7,7 @@
 
 message("Start script at ", toString(Sys.time()))
 
+library("usethis")
 library("readr")
 library("tibble")
 library("tidyr")
@@ -128,7 +129,7 @@ W3_mc_df <- tidyr::expand_grid(nObs = nObs,
 
 # save results ------------------------------------------------------------
 
-res_mc <- list(
+MLEw_weights <- list(
   W12 = dplyr::inner_join(
     x = tibble::enframe(W1_mc, name = "nObs", value = "W1"),
     y = tibble::enframe(W2_mc, name = "nObs", value = "W2"),
@@ -139,8 +140,8 @@ res_mc <- list(
                       mcnrep = myMCNrep)
 )
 
-saveRDS(res_mc, file = "MLEweights.rds")
-
+#saveRDS(res_mc, file = "MLEweights.rds")
+usethis::use_data(MLEw_weights, internal = TRUE, overwrite = FALSE)
 
 # exit --------------------------------------------------------------------
 
