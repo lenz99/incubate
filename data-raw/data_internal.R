@@ -9,6 +9,7 @@
 
 message("Start script for internal data at ", toString(Sys.time()))
 
+library("rlang")
 library("usethis")
 library("readr")
 library("tibble")
@@ -72,7 +73,7 @@ if (myWorkers > 1L) {
 
 
 # distribution of W1 is Gamma with shape n and scale 1/n
-nObs <- c(1:20, 25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500)
+nObs <- c(1:25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 10000)
 shape_W3 <- c(0.01, 0.05, 0.1, 0.25, 0.5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7)
 
 aggFun <- stats::median; isMedian <- TRUE
@@ -87,7 +88,7 @@ W1_mc <- furrr::future_map_dbl(.x = nObs,
                                .options = furrr_options(seed = TRUE)) %>%
   purrr::set_names(nm = nObs)
 if ( abs(W1_mc[[1]] - log(2)) > 1e-3 ) {
-  warning("For n=1, W1 deviates more than 1e-3 from the true value ln(2)!", call. = FALSE)
+  warning("For n=1, W1 deviates more than 1e-3 from the true value ln(2)! (We use ln(2) instead, anyhow.)", call. = FALSE)
 }
 W1_mc[[1L]] <- log(2)
 
@@ -112,7 +113,7 @@ message("Start with W3")
 #+this works for median but for instance not for mean!
 stopifnot(isMedian)
 
-W3_mc_df <- tidyr::expand_grid(nObs = nObs,
+W3_mc_df <- tidyr::expand_grid(nObs = as.integer(nObs),
                                shape = shape_W3) %>%
   dplyr::mutate(W3 = furrr::future_map2_dbl(.x = nObs, .y = shape,
                                             .f = ~ exp(aggFun(replicate(n = myMCNrep,
@@ -132,20 +133,104 @@ W3_mc_df <- tidyr::expand_grid(nObs = nObs,
                                             .options = furrr_options(seed = TRUE)))
 
 
+W12 <- dplyr::inner_join(
+  x = tibble::enframe(W1_mc, name = "nObs", value = "W1"),
+  y = tibble::enframe(W2_mc, name = "nObs", value = "W2"),
+  by = join_by(nObs) ) %>%
+  dplyr::mutate(nObs = as.integer(nObs))
+
+
+# approximations ----------------------------------------------------------
+
+if (rlang::is_interactive()) {
+  library("ggplot2")
+  library("patchwork")
+
+  W12 <- W12 %>%
+    dplyr::mutate(lnObs = log(nObs),
+                  # approximation for median of gamma(n, 1/n)
+                  #+using Wilson-Hilferty transformation (see <https://en.wikipedia.org/wiki/Gamma_distribution>)
+                  W1pred = (1 - 1 / (9 * nObs))^3,
+                  W1diff = W1 - W1pred)
+
+  ggplot(W12, mapping = aes(x = nObs, y = W1)) +
+    geom_point() +
+    scale_x_log10() +
+    labs(title = "W1 as median") +
+    geom_line(mapping = aes(y = W1pred), col = "blue")  |
+
+    ggplot(W12, mapping = aes(x = nObs, y = W1diff)) +
+    geom_point() + geom_line() +
+    scale_x_log10() +
+    labs(title = "Deviation")
+
+  # (0,0) point is taken out
+  # SSasymp on log(nObs):
+  # W2 = 1 + (R0 - 1) * n**-r
+  fm_W2_A <- nls(W2 ~ SSasymp(input = lnObs, Asym = 1, R0, lrc), start = list(R0 = 0, lrc = -.02), data = W12, subset = -1)
+  fm_W2_A
+
+  W12 <- W12 %>%
+    dplyr::mutate(W2pred = c(NA_real_, predict(fm_W2_A)),
+                  W2diff = W2 - W2pred)
+
+  W2_R0 <- coef(fm_W2_A)[["R0"]]
+  W2_nr <- -exp(coef(fm_W2_A)[["lrc"]])
+
+  ggplot(W12, mapping = aes(x = nObs, y = W2)) +
+    geom_point() +
+    scale_x_log10() +
+    labs(title = "W2 as median", subtitle = "Point (0,0) does not follow the pattern") +
+    ylim(0, NA) +
+    geom_line(mapping = aes(y = W2pred), col = "blue") +
+    # approximating function (same as predict)
+    geom_function(fun = ~ 1 + (W2_R0 - 1) * .x**W2_nr, col = "red") |
+
+    ggplot(W12, mapping = aes(x = nObs, y = W2diff)) +
+    geom_point() + geom_line() +
+    scale_x_log10()
+
+  W3 <- W3_mc_df %>% dplyr::mutate(lnObs = log(nObs),
+                             shapeF = factor(shape))
+
+  W3_smallShape <- W3 %>% filter(shape < 1) %>% droplevels()
+  W3_bigShape <- W3 %>% filter(shape >= 1) %>% droplevels()
+
+  ggplot(W3_bigShape, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
+    geom_point() + geom_line() +
+    scale_x_log10() +
+    scale_y_log10() |
+
+    ggplot(W3_smallShape, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
+    geom_point() + geom_line() +
+    scale_x_log10() +
+    scale_y_log10()
+
+  fm_W3_A <- nls(W3 ~ SSasymp(input = lnObs, Asym, R0 = 1, lrc), start = list(Asym = 10, lrc = 0),
+                 data = W3_bigShape, subset = shapeF == "1.25")
+  summary(fm_W3_A)
+
+  fm_W3_B <- nls(W3 ~ SSasymp(input = lnObs, Asym[shapeF], R0 = 1, lrc[shapeF]),
+                 start = list(Asym = c(15, 5, 3, rep.int(2.3815, 12)), lrc = rep.int(-1.32, 15)),
+                 data = W3_bigShape)
+
+  fm_W3_C <- lm(log(W3) ~ nObs + (lnObs + sqrt(lnObs) + log(lnObs+1)) * shapeF, data = W3_bigShape)
+  summary(fm_W3_C)
+  drop1(fm_W3_C, test = "F")
+}
 
 # save results ------------------------------------------------------------
 
 MLEw_weights <- list(
-  W12 = dplyr::inner_join(
-    x = tibble::enframe(W1_mc, name = "nObs", value = "W1"),
-    y = tibble::enframe(W2_mc, name = "nObs", value = "W2"),
-    by = join_by(nObs) ) %>%
-    dplyr::mutate(nObs = as.numeric(nObs)),
+  W12 = W12,
   W3 = W3_mc_df,
   MCSS_setting = list(seed = mySeed,
                       aggFun = aggFun,
                       mcnrep = myMCNrep)
 )
+
+
+
 
 if (myInternal) {
   if (!inherits(try(expr = usethis::proj_get(), silent = TRUE), what = "try-error")) {
