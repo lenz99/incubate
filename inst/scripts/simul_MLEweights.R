@@ -13,8 +13,8 @@ library("rlang")
 library("usethis")
 library("readr")
 library("tibble")
-library("tidyr")
-library("dplyr")
+library("tidyr", warn.conflicts = FALSE)
+library("dplyr", warn.conflicts = FALSE)
 library("purrr")
 library("future")
 library("future.callr")
@@ -41,7 +41,6 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('  --workers=\t number of parallel computations using `future.callr`. The only level of parallelization is for the different numbers of observations (and scale for W3).\n')
   cat('  --mcnrep=\t size of Monte-Carlo study: number of replications which are then aggregated.\n')
   cat('  --resultsDir=\t directory where to save the result files (when not internal) Defaults to the directory where Rscript is executed.\n')
-  cat('  --internal/-i\t save as internal package data. Then `resultsDir` is irrelevant.\n')
   cat('  --overwrite/-f\tSet `overwrite=TRUE` when saving data.\n')
   quit(save = 'no')
 }
@@ -60,13 +59,13 @@ myResultsDir <- cmdArgs[["resultsDir"]]
 stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
            # check read & write permission (first octal information)
            (file.mode(myResultsDir) %>% as.character() %>% substr(1,1) %>% as.octmode() & 6) == '6')
-myInternal <- isTRUE(any(c("internal", "i") %in% tolower(names(cmdArgs))))
 myOverwrite <- isTRUE(any(c("overwrite", "ow", "f") %in% tolower(names(cmdArgs)))) #XXX does not work with -f
 
-# check file conflicts for save early
-if (myInternal && inherits(try(expr = usethis::proj_get(), silent = TRUE), what = "try-error")) {
-  stop("Saving as internal data works here only when within a project path!")
-  q(save = "no", status = 1)
+
+# fail early
+rdsFile <- file.path(myResultsDir, "MLEw_weights.rds")
+if (file.exists(rdsFile) && ! myOverwrite) {
+  stop("File ", rdsFile, "already exists! You would need to set overwrite-flag.")
 }
 
 
@@ -544,19 +543,17 @@ message("Start to save results!")
 
 
 
-if (myInternal) {
-  if (!inherits(try(expr = usethis::proj_get(), silent = TRUE), what = "try-error")) {
-    message("Save weights for MLEw as internal package data.")
-    usethis::use_data(.MLEw_weights, internal = TRUE, overwrite = myOverwrite)
-  } else warning("Unable to save internal package data because there is no active package project! Please run from within a package project..")
+# if (myInternal) {
+#   if (!inherits(try(expr = usethis::proj_get(), silent = TRUE), what = "try-error")) {
+#     message("Save weights for MLEw as internal package data.")
+#     usethis::use_data(.MLEw_weights, internal = TRUE, overwrite = myOverwrite)
+#   } else warning("Unable to save internal package data because there is no active package project! Please run from within a package project..")
+# } else {
+message("Save weights for MLEw as RDS file ", rdsFile)
+if (file.exists(rdsFile) && ! myOverwrite) {
+  warning("File ", rdsFile, "already exists! You would need to set overwrite-flag.")
 } else {
-  message("Save weights for MLEw as RDS file.")
-  rdsFile <- file.path(myResultsDir, "MLEw_weights.rds")
-  if (file.exists(rdsFile) && ! myOverwrite) {
-    warning("File ", rdsFile, "already exists! You would need to set overwrite-flag.")
-  } else {
-    saveRDS(.MLEw_weights, file = rdsFile)
-  }
+  saveRDS(.MLEw_weights, file = rdsFile)
 }
 
 
@@ -564,6 +561,11 @@ if (myInternal) {
 
 # tear-down
 future::plan(future::sequential())
+
+# output the latest warnings:
+message("+++\nThese are warnings from the script:\n+++\n")
+warnings()
+
 
 message("~~ Fine ~~")
 message("Finished script at ", toString(Sys.time()))
