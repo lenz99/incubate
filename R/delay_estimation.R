@@ -486,6 +486,8 @@ objFunFactory <- function(x, y = NULL,
       # how to calculate the weights W1-W3?
       method_w1 <- if (isSurv) "sample" else "sdist_median" #"hybrid"
       method_w2 <- if (isSurv) "sample" else "sdist_median" #"hybrid"
+      method_w3 <- if (isSurv) "sample" else "sdist_median" #"hybrid"
+
       # little helper function to calculate W1-weight (as function of n)
       # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n and we estimate W1 as median of it.
       # W1 is also used to get scale parameter during un-profiling.
@@ -567,15 +569,43 @@ objFunFactory <- function(x, y = NULL,
                },
                stop("This method for W2-estimation is not handled here!", call. = FALSE)
         )
-      }
+      } #nf w2F
+
+      w3FF <- function(group = "x", method = c("sample", "sdist_median", "hybrid")) {
+        method <- match.arg(method)
+
+        if (!twoGroup || group != "y") {
+          obs <- x
+          z <- z_x
+          W1 <- W1_x
+          } else {
+            obs <- y
+            z <- z_y
+            W1 <- W1_y
+          }
+        nObs <- length(obs)
+
+        # fn of shape k
+        function(k) {
+          # catch all for n = 1
+          if (nObs < 2L) return(1)
+
+          switch(EXPR = method,
+                 sample = W1 * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)),
+                 stop("This method for W3 function is not handled here!", call. = FALSE)
+          )
+        }
+      } #nf w3FF
 
       # return list of weights
       list(W1 = c(x = W1_x, y = W1_y),
-           W2 = c(x = w2F(z = z_x, method = method_w2), y = if (twoGroup) w2F(z = z_y, method = method_w2)),
-           W3 = purrr::compact(list(x = function(k) W1_x * if (log(k) < -5) 1 else if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
-                                    y = if (twoGroup) function(k) W1_y * if (log(k) < -5) 1 else if (k==1) mean(1/z_y) else sum(1/z_y^(1/k)) / sum(z_y^((k-1)/k)))))
+           W2 = c(x = w2F(z = z_x, method = method_w2),
+                  y = if (twoGroup) w2F(z = z_y, method = method_w2)),
+           #function(k) W1_x * if (log(k) < -5) 1 else if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
+           W3 = purrr::compact(list(x = w3FF(group = "x", method = method_w3),
+                                    y = if (twoGroup) w3FF(group = "y", method = method_w3))))
     })
-  } #esle
+  } #esle weights
 
 
   stopifnot( ! twoPhase ) #XXX not implemented yet!!
