@@ -15,7 +15,7 @@ library("readr")
 library("tibble")
 library("tidyr", warn.conflicts = FALSE)
 library("dplyr", warn.conflicts = FALSE)
-library("purrr")
+library("purrr", warn.conflicts = FALSE)
 library("future")
 library("future.callr")
 library("furrr")
@@ -30,7 +30,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
                                 defaults = list(resultsDir = getwd(), seed=as.integer(TODAY),
-                                                workers=future::availableCores(methods = "system", omit = 5), mcnrep="1001"))
+                                                workers=min(97L, future::availableCores(methods = "system", omit = 5)), mcnrep="1001"))
 
 
 if (any(c('help', 'h') %in% names(cmdArgs))){
@@ -39,9 +39,9 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
   cat('  --help\t print this help\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent.\n')
   cat('  --workers=\t number of parallel computations using `future.callr`. The only level of parallelization is for the different numbers of observations (and scale for W3).\n')
-  cat('  --mcnrep=\t size of Monte-Carlo study: number of replications which are then aggregated.\n')
+  cat('  --mcnrep=\t size of Monte-Carlo study: number of replications which are then aggregated. Default value is 1001.\n')
   cat('  --resultsDir=\t directory where to save the result files (when not internal) Defaults to the directory where Rscript is executed.\n')
-  cat('  --overwrite\tSet `overwrite=TRUE` when saving data.\n')
+  cat('  --overwrite\t overwrite data file when already existing?\n')
   quit(save = 'no')
 }
 
@@ -50,7 +50,7 @@ mySeed <- cmdArgs[["seed"]]
 stopifnot( is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L )
 
 myWorkers <- cmdArgs[["workers"]]
-stopifnot( is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L )
+stopifnot( is.numeric(myWorkers), length(myWorkers) == 1L, is.finite(myWorkers), myWorkers >= 1L )
 
 myMCNrep <- readr::parse_number(cmdArgs[["mcnrep"]])
 stopifnot( is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L )
@@ -169,7 +169,7 @@ if (file.exists(rdsFile) && ! myOverwrite) {
 future::plan(future::sequential())
 
 # output the latest warnings:
-message("+++\nThese are warnings from the script:\n+++\n")
+message("\n\n+++\nThese are warnings from the script:\n+++\n")
 warnings()
 
 
