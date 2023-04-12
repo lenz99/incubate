@@ -3,18 +3,36 @@
 # the MLE-weights are established through simulation, see inst/scripts/simul_MLEweights.R
 ###
 
+# init --------------------------------------------------------------------
+
 library("usethis")
-
-.MLEw_weights <- readRDS("inst/scripts/MLEw_weights.rds")
-
-stopifnot( is.list(.MLEw_weights), is.data.frame(.MLEw_weights$W3) )
-
-
-
+library("dplyr")
 library("ggplot2")
 library("patchwork")
 library("nlsr")
 library("gslnls")
+
+
+#.MLEw_weights <- readRDS("MLEw_weights.rds")
+load("MLEw_weights.RData")
+
+stopifnot( is.list(.MLEw_mcs), is.list(.MLEw_approx),
+           identical(names(.MLEw_mcs), c("W12","W3", "setting")), is.data.frame(.MLEw_mcs$W3),
+           identical(names(.MLEw_approx), c("coef", "fun")) )
+
+# save as internal data ---------------------------------------------------
+
+usethis::use_data(.MLEw_mcs, .MLEw_approx, internal = TRUE, overwrite = TRUE)
+
+
+message("~~Fine~~")
+
+q(save = "no")
+
+
+
+# Following code was used for exploration how to best approximate W1, W2 and W3
+#+it's essence is not captured in simul_MLEweights.R and the approximation functions are already stored in .MLEw_weights
 
 
 # approximate W12 ----------------------------------------------------------
@@ -23,7 +41,7 @@ library("gslnls")
 stopifnot(rlang::is_interactive())
 
 
-W12 <- .MLEw_weights$W12 %>%
+W12 <- .MLEw_mcs$W12 %>%
   dplyr::mutate(lnObs = log(nObs),
                 # approximation for median of gamma(n, 1/n)
                 #+using Wilson-Hilferty transformation (see <https://en.wikipedia.org/wiki/Gamma_distribution>)
@@ -92,17 +110,14 @@ ggplot(W12, mapping = aes(x = nObs, y = W2)) +
 
 
 
+
 # approximation W3 --------------------------------------------------------
 
-
-W3 <- .MLEw_weights$W3 %>%
+W3 <- .MLEw_mcs$W3 %>%
+  dplyr::filter(nObs > 1) %>%
   dplyr::mutate(lnObs = log(nObs),
-                shapeF = factor(shape))
-
-W3XS <- W3 %>% filter(shape <= .25) %>% droplevels()
-W3S <- W3 %>% filter(between(shape, .251, .75)) %>% droplevels()
-W3M <- W3 %>% filter(between(shape, .751, 1))
-W3L <- W3 %>% filter(shape > 1) %>% droplevels()
+                shapeF = factor(shape),
+                lshape = log(shape))
 
 # facet per n, ##W3 %>% dplyr::filter(between(nObs, 2, 13))
 ggplot(W3 %>% filter(nObs > 1), mapping = aes(x = shape, y = W3, col = ordered(nObs))) +
@@ -116,127 +131,90 @@ ggplot(W3 %>% filter(nObs >= 1000), mapping = aes(x = shape, y = W3, col = order
   scale_x_log10() +
   scale_y_log10()
 
+
 # facet per shape
-ggplot(W3L, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
-  geom_point() + geom_line() |
-  #scale_x_log10() |
-  #scale_y_log10() |
+local({
+  W3XS <- W3 %>% filter(shape <= .25) %>% droplevels()
+  W3S <- W3 %>% filter(between(shape, .251, .75)) %>% droplevels()
+  W3M <- W3 %>% filter(between(shape, .751, 1))
+  W3L <- W3 %>% filter(shape > 1) %>% droplevels()
 
-  ggplot(W3M, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
-  geom_point() + geom_line() |
-  #scale_x_log10() |
-  #scale_y_log10() |
+  ggplot(W3L, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
+    geom_point() + geom_line() |
+    #scale_x_log10() |
+    #scale_y_log10() |
 
-  ggplot(W3S, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
-  geom_point() + geom_line() |
+    ggplot(W3M, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
+    geom_point() + geom_line() |
+    #scale_x_log10() |
+    #scale_y_log10() |
+
+    ggplot(W3S, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
+    geom_point() + geom_line() |
+    #scale_x_log10()
+    #scale_y_log10()
+
+    ggplot(W3XS, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
+    geom_point() + geom_line()
   #scale_x_log10()
   #scale_y_log10()
-
-  ggplot(W3XS, mapping = aes(x = nObs, y = W3, col = ordered(shape))) +
-  geom_point() + geom_line()
-#scale_x_log10()
-#scale_y_log10()
-
-# logistic fit as function of shape k
-W3logi2 <- W3 %>%
-  dplyr::filter(nObs > 1) %>%
-  dplyr::mutate(lshape = log(shape))
-
-# problematic: small nObs OR shape=1
-W3logi10 <- W3logi2 %>%
-  dplyr::filter(nObs >= 10)
+})
 
 
-# 5-parametric logistic model
-fm_W3_A <- gsl_nls(W3 ~ D0 + D1 * nObs + D2 * lnObs + (A0 + A1 * nObs - D0 - D1 * nObs - D2 * lnObs) / (1 + exp((B0 + B1 * nObs + B2 * lnObs - lshape) / (C0 + C1 * lnObs)))**(E0 + E1 * nObs + E2 * lnObs),
-                   start = list(A0 = 0, A1 = 1, B0 = 0.5, B1 = 0, B2 = 0, C0 = -1, C1 = 0, D0 = 0, D1 = 0, D2 = 0, E0 = 1, E1 = 0, E2 = 0),
-                   data = W3logi2) #, subset = nObs >= 10)
-summary(fm_W3_A)
-
-fm_W3_B <- gsl_nls(W3 ~ D0 + D1 * nObs + D2 * lnObs + (A0 + A1 * nObs - D0 - D1 * nObs - D2 * lnObs) / (1 + exp((B0 + B1 * nObs + B2 * lnObs - lshape) / (C0 + C1 * lnObs)))**(E0 + E1 * nObs + E2 * lnObs),
-                   start = list(A0 = 0, A1 = 1, B0 = 0.5, B1 = 0, B2 = 0, C0 = -1, C1 = 0, D0 = 0, D1 = 0, D2 = 0, E0 = 1, E1 = 0, E2 = 0),
-                   data = W3logi10)
-summary(fm_W3_B)
-
-# Gompertz model
-fm_W3_C <- gsl_nls(W3 ~ D0 + D1 * nObs + D2 * lnObs + (A0 + A1 * nObs - D0 - D1 * nObs - D2 * lnObs) * exp(-b2 * exp(-b3*shape)), data = W3logi2,
-                   start = list(A0 = 0, A1 = 1, D0 = 0, D1 = 0, D2 = 0, b2 = .1, b3 = .1),
-                   control = gsl_nls_control(maxiter = 101))
-summary(fm_W3_C)
-
-# generalized logistic function (Richard's curve)
-fm_W3_D <- gsl_nls(W3 ~ A0 + A1 * nObs + (K0 + K1 * lnObs - A0 - A1 * nObs) / (1 + (Q0 + Q1 * lnObs) * exp(-(B1 * lnObs) * lshape))**(1/(nu0 + nu1 * lnObs)),
-                   data = W3logi2, #jac = TRUE,
-                   start = list(A0 = 1, A1 = 2, K0 = 1, K1 = 0,
-                                Q0 = .001, Q1 = 0.001, B1 = 1, nu0 = .1, nu1 = .1), #2, nu1 = 0),
-                   control = gsl_nls_control(maxiter = 1010))
-summary(fm_W3_D)
-
-W3logi2 <- W3logi2 %>%
-  mutate(W3pred = predict(fm_W3_D),
-         W3resid = W3 - W3pred)
-W3logi10 <- W3logi10 %>%
-  mutate(W3pred = predict(fm_W3_D),
-         W3resid = W3 - W3pred)
-
-ggplot(data = W3logi2, mapping = aes(x = shape, y = W3, col = ordered(nObs))) +
-  geom_point() + geom_line() +
-  geom_line(mapping = aes(y = W3pred, group = nObs), col = "darkred") +
-  scale_x_log10() +
-  coord_cartesian(ylim = c(0, 15)) +
-  facet_wrap(facets = cut_number(W3logi2$nObs, n = 4), scales = "free_y") +
-  guides(col = "none")
-
-# relative deviation
-ggplot(data = W3logi2, mapping = aes(x = shape, y = W3resid / W3, col = ordered(nObs))) +
-  geom_point() + geom_hline(yintercept = 0, col = "darkgrey", linetype = "dashed") +
-  scale_y_continuous(labels = scales::label_percent())
-
-W3logi2 %>%
-  dplyr::arrange(desc(abs(W3resid/W3)))
-
-
-fm_W3_E1 <- gsl_nls(W3 ~ A + (K - A) / (1 + Q * exp(-B * lshape))**(1/nu),
-                    data = W3logi2, subset = nObs == 1500, #jac = TRUE,
-                    start = list(A = 2500, K = 1, Q = .005, B = 8, nu = 1.5),
-                    control = gsl_nls_control(maxiter = 1010))
-summary(fm_W3_E1)
-
-nObs_vctr <- W3logi2 %>% distinct(nObs) %>% pull(nObs) #c(2:20, 25, 50, 75)
-nObs_vctr <- nObs_vctr[1:30]
+ITER_MAX <- 1010
+nObs_vctr <- W3 %>% distinct(nObs) %>% pull(nObs) #c(2:20, 25, 50, 75)
+nObs_vctr <- nObs_vctr[1:19] #30]
+# generalized logistic function (Richards)
 fm_W3_indiv <- purrr::map(.x = nObs_vctr,
                           .f = ~gsl_nls(W3 ~ A + (K - A) / (1 + Q * exp(-B * lshape))**(1/nu),
-                                        data = W3logi2, subset = nObs == .x, #jac = TRUE,
-                                        start = list(A = 2*.x, K = 1, Q = .05, B = log(.x+1), nu = log(.x+1)/3),
-                                        control = gsl_nls_control(maxiter = 1010)))
+                                        data = W3, subset = nObs == .x, #jac = TRUE,
+                                        start = list(A = 2*.x, K = 1, Q = .15 - .015 * log(.x), B = log(.x+1), nu = log(.x+1)/3),
+                                        control = gsl_nls_control(maxiter = ITER_MAX)))
 
-coef_lowN <- purrr::map(fm_W3_indiv, .f = coef) %>%
+# check convergence for each model
+stopifnot( all(purrr::map_lgl(fm_W3_indiv, .f = list("convInfo", "isConv"))) )
+stopifnot( all(purrr::map_dbl(fm_W3_indiv, .f = list("convInfo", "nEval", "f")) < ITER_MAX) )
+
+# gather coefficients of individual generalized logistic functions per n
+coef_richards <- purrr::map(fm_W3_indiv, .f = coef) %>%
   purrr::list_transpose(simplify = TRUE) %>%
   append(values = list(nObs=nObs_vctr), after = 0) %>%
-  as.data.frame()
+  append(values = list(resStdDev = purrr::map_dbl(fm_W3_indiv, .f = sigma))) %>%
+  as_tibble()
 
-opar <- par(mfrow = c(2, 3))
-plot(x = nObs_vctr, y = map_dbl(fm_W3_indiv, .f = sigma), main = "Residual std. deviation")
-iwalk(coef_lowN[-1], .f = ~plot(x = nObs_vctr, y = .x, main = paste("parameter", .y)))
+
+ggplot(coef_richards, mapping = aes(x = nObs, y = resStdDev)) + geom_point() +
+  labs(title = "Residual std. deviation")
+
+opar <- par(mfrow = c(2,3))
+purrr::iwalk(coef_richards[-1L], .f = ~plot(x = nObs_vctr, y = .x, main = paste("parameter", .y)))
 par(opar)
+
 
 # modeling parameter dependence on nObs
 
 # A -- upper asymptote
-fm_coef_A <- lm(A ~ nObs, data = coef_lowN)
+fm_coef_A <- lm(A ~ nObs, data = coef_richards)
 summary(fm_coef_A)
 ggplot(broom::augment(fm_coef_A), mapping = aes(x = nObs, y = A)) +
-  geom_point() +
+  geom_point(size = .5, alpha = .2) +
   geom_point(mapping = aes(y = .fitted), col = "darkred") +
-  geom_abline(data = tibble::enframe(purrr::set_names(coef(fm_coef_A), nm = c("intercept", "slope"))) %>%
+  geom_abline(data = coef(fm_coef_A) %>%
+                purrr::set_names(nm = c("intercept", "slope")) %>%
+                tibble::enframe() %>%
                 tidyr::pivot_wider(),
-              mapping = aes(intercept = intercept, slope = slope), col = "grey", linetype = "dashed")
+              mapping = aes(intercept = intercept, slope = slope), col = "grey", linetype = "solid", na.rm = TRUE) +
+  coord_trans(y = "log10", expand = F) |
+
+ggplot(broom::augment(fm_coef_A), mapping = aes(x = nObs, y = .resid)) +
+  geom_point(col = "darkred") +
+  geom_hline(yintercept = 0, col = "grey", linetype = "dashed")
 
 # K -- lower asymptote
-fm_coef_K1 <- lm(K ~ log(nObs), data = coef_lowN)
+fm_coef_K1 <- lm(K ~ log(nObs), data = coef_richards)
 summary(fm_coef_K1)
 plot(fm_coef_K1)
-fm_coef_K2 <- lm(K ~ poly(log(nObs),2), data = coef_lowN)
+fm_coef_K2 <- lm(K ~ poly(log(nObs),2), data = coef_richards)
 summary(fm_coef_K2)
 plot(fm_coef_K2)
 
@@ -253,10 +231,10 @@ ggplot(broom::augment(fm_coef_K2) %>% bind_cols(nObs = nObs_vctr),
   geom_point(mapping = aes(y = .fitted), col = "darkred", size = .33) + geom_line(mapping = aes(y = .fitted), col = "darkred")
 
 # Q -- related to Y(0)
-fm_coef_Q1 <- lm(Q ~ log(nObs), data = coef_lowN)
+fm_coef_Q1 <- lm(Q ~ log(nObs), data = coef_richards)
 summary(fm_coef_Q1)
 
-fm_coef_Q2 <- lm(Q ~ poly(log(nObs),2), data = coef_lowN)
+fm_coef_Q2 <- lm(Q ~ poly(log(nObs),2), data = coef_richards)
 summary(fm_coef_Q2)
 
 ggplot(broom::augment(fm_coef_Q1), mapping = aes(x = `log(nObs)`, y = Q)) +
@@ -270,15 +248,16 @@ ggplot(broom::augment(fm_coef_Q1), mapping = aes(x = `log(nObs)`, y = Q)) +
 ggplot(broom::augment(fm_coef_Q2) %>% bind_cols(nObs = nObs_vctr),
        mapping = aes(x = nObs, y = Q)) +
   geom_point() +
-  geom_point(mapping = aes(y = .fitted), col = "darkred", size = .33) + geom_line(mapping = aes(y = .fitted), col = "darkred")
+  geom_point(mapping = aes(y = .fitted), col = "darkred", size = .33) + geom_line(mapping = aes(y = .fitted), col = "darkred") +
+  scale_x_log10()
 
 
 # B -- growth rate
-fm_coef_B1 <- lm(B ~ log(nObs), data = coef_lowN)
+fm_coef_B1 <- lm(B ~ log(nObs), data = coef_richards)
 summary(fm_coef_B1)
 plot(fm_coef_B1)
 
-fm_coef_B2 <- lm(B ~ poly(log(nObs),2), data = coef_lowN)
+fm_coef_B2 <- lm(B ~ poly(log(nObs),2), data = coef_richards)
 summary(fm_coef_B2)
 plot(fm_coef_B2)
 
@@ -289,9 +268,9 @@ ggplot(broom::augment(fm_coef_B1), mapping = aes(x = `log(nObs)`, y = B)) +
                 tidyr::pivot_wider(),
               mapping = aes(intercept = intercept, slope = slope), col = "grey", linetype = "dashed")
 
-# nu -- maximal growth near which asymptote
 
-fm_coef_nu1 <- lm(nu ~ log(nObs), data = coef_lowN)
+# nu -- maximal growth near which asymptote
+fm_coef_nu1 <- lm(nu ~ log(nObs), data = coef_richards)
 summary(fm_coef_nu1)
 plot(fm_coef_nu1)
 
@@ -301,6 +280,71 @@ ggplot(broom::augment(fm_coef_nu1), mapping = aes(x = `log(nObs)`, y = nu)) +
   geom_abline(data = tibble::enframe(purrr::set_names(coef(fm_coef_nu1), nm = c("intercept", "slope"))) %>%
                 tidyr::pivot_wider(),
               mapping = aes(intercept = intercept, slope = slope), col = "grey", linetype = "dashed")
+
+
+
+# logistic fit as function of shape k
+W3logi2 <- W3 %>%
+  dplyr::filter(nObs > 20)
+
+
+# 5-parametric logistic model
+fm_W3_A <- gsl_nls(W3 ~ D0 + D1 * nObs + D2 * lnObs + (A0 + A1 * nObs - D0 - D1 * nObs - D2 * lnObs) / (1 + exp((B0 + B1 * nObs + B2 * lnObs - lshape) / (C0 + C1 * lnObs)))**(E0 + E1 * nObs + E2 * lnObs),
+                   start = list(A0 = 0, A1 = 1, B0 = 0.5, B1 = 0, B2 = 0, C0 = -1, C1 = 0, D0 = 0, D1 = 0, D2 = 0, E0 = 1, E1 = 0, E2 = 0),
+                   data = W3logi2) #, subset = nObs >= 10)
+summary(fm_W3_A)
+
+# Gompertz model
+fm_W3_C <- gsl_nls(W3 ~ D0 + D1 * nObs + D2 * lnObs + (A0 + A1 * nObs - D0 - D1 * nObs - D2 * lnObs) * exp(-b2 * exp(-b3*shape)),
+                   start = list(A0 = 0, A1 = 1, D0 = 0, D1 = 0, D2 = 0, b2 = .1, b3 = .1),
+                   data = W3logi2,
+                   control = gsl_nls_control(maxiter = 101))
+summary(fm_W3_C)
+
+# generalized logistic function (Richards' curve)
+fm_W3_D <- gsl_nls(W3 ~ A0 + A1 * nObs + (K0 + K1 * lnObs - A0 - A1 * nObs) / (1 + (Q0 + Q1 * lnObs) * exp(-(B1 * lnObs) * lshape))**(1/(nu0 + nu1 * lnObs)),
+                   data = W3logi2, #jac = TRUE,
+                   start = list(A0 = 1, A1 = 2, K0 = 1, K1 = 0,
+                                Q0 = .001, Q1 = 0.001, B1 = 1, nu0 = .1, nu1 = .1), #2, nu1 = 0),
+                   control = gsl_nls_control(maxiter = 1010))
+summary(fm_W3_D)
+
+
+W3logi2 <- W3logi2 %>%
+  mutate(W3pred = predict(fm_W3_D),
+         W3resid = W3 - W3pred)
+
+ggplot(data = W3logi2, mapping = aes(x = shape, y = W3, col = ordered(nObs))) +
+  geom_point() + geom_line() +
+  geom_line(mapping = aes(y = W3pred, group = nObs), col = "darkred") +
+  scale_x_log10() +
+  #coord_cartesian(ylim = c(0, 5)) +
+  facet_wrap(facets = cut_number(W3logi2$nObs, n = 4), scales = "free_y") +
+  guides(col = "none")
+
+# relative deviation
+ggplot(data = W3logi2, mapping = aes(x = shape, y = W3resid / W3, col = ordered(nObs))) +
+  geom_point() + geom_hline(yintercept = 0, col = "darkgrey", linetype = "dashed") +
+  scale_y_continuous(labels = scales::label_percent())
+
+# top bad configurations
+W3logi2 %>%
+  dplyr::arrange(desc(abs(W3resid/W3)))
+
+
+
+W3i <- W3logi2 %>% filter(nObs == 25)
+fm_W3_E1 <- gsl_nls(W3 ~ A + (K - A) / (1 + Q * exp(-B * lshape))**(1/nu),
+                    data = W3i, #jac = TRUE,
+                    start = list(A = 2500, K = 1, Q = .005, B = 8, nu = 1.5),
+                    control = gsl_nls_control(maxiter = 1010))
+summary(fm_W3_E1)
+W3i <- W3i %>% mutate(W3pred = predict(fm_W3_E1),
+                      W3resid = W3 - W3pred)
+ggplot(W3i, aes(x = shape, y = W3)) +
+  geom_point() + geom_line() +
+  geom_point(aes(y = W3pred), col = "darkred", size = .5) +
+  scale_x_log10()
 
 
 
@@ -403,15 +447,4 @@ ggplot(W3S, mapping = aes(x = W3, y = W3 - W3predA, col = ordered(shape))) +
   scale_x_log10() +
   geom_hline(yintercept = 0, col = "grey", linetype = "dashed")
 
-
-
-# XXX add approximations to MLEw_weights list
-
-
-# save as internal data ---------------------------------------------------
-
-usethis::use_data(.MLEw_weights, internal = TRUE, overwrite = myOverwrite)
-
-
-message("~~Fine~~")
 

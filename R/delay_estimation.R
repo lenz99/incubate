@@ -493,16 +493,13 @@ objFunFactory <- function(x, y = NULL,
       # W1 is also used to get scale parameter during un-profiling.
       # We count all events because it is used to get scale parameter (and in this formula we already correct for censorings),
       #+e.g., nObs = length(x), even when there is cens$n$x[["any"]]
-      w1F <- function(nObs, z, method = c("sample", "sdist_median")) {
+      w1F <- function(nObs, z, method = c("sample", "sdist_median", "hybrid")) {
         method <- match.arg(method)
 
         # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n
-        #+we estimate W1 as median of it.
-        #+Using MC-simulation
+        #+we estimate W1 as median of it. Using a MC-simulation
         #+cf. Cousineau's simulation results for median of W1's sampling distribution
         #+"Nearly unbiased estimators.." (2009), Table 2, column J_1
-        w1Vals <- c(log(2), 0.8391, 0.8914, 0.9181, 0.9341, 0.9452, 0.9527, 0.9586,
-                    0.9632, 0.967, 0.9699, 0.9726, 0.9746, 0.9764, 0.9778, 0.9793)
 
         switch(EXPR = method,
                sample = {
@@ -512,17 +509,11 @@ objFunFactory <- function(x, y = NULL,
                  mean(z)
                },
                sdist_median = {
-                 if (missing(nObs) || !is.numeric(nObs) || length(nObs) != 1L ) {
-                   stop("Please provide the number of observations!", call. = FALSE)
-                 }
-                 nObs <- max(1L, nObs)
-
-                 # return W1
-                 if (nObs <= length(w1Vals)) { w1Vals[[nObs]] } else {
-                   # approximation for median of gamma(n, 1/n)
-                   #+using Wilson-Hilferty transformation (see <https://en.wikipedia.org/wiki/Gamma_distribution>)
-                   (1 - 1 / (9 * nObs))^3
-                 }
+                 # use W1-function
+                 .MLEw_approx$fun$w1F(nObs)
+               },
+               hybrid = {
+                 (.MLEw_approx$fun$w1F(nObs) + mean(z)) / 2L
                },
                stop("This method for estimating W1 is not handled here!", call. = FALSE)
         )
@@ -537,39 +528,27 @@ objFunFactory <- function(x, y = NULL,
         method <- match.arg(method)
         nz <- length(z)
 
-        # MC-simulation on W2 for n=1..16 (based on 2**23 repeats)
+        # MC-simulation on W2 for n=1..16
         # cf. Cousineau's simulation results for median of W2's sampling distribution
         #+"Nearly unbiased estimators.." (2009), Table 3, column J_2
-        w2Vals <- c(0, 0.2743, 0.5172, 0.6381, 0.7099, 0.7578, 0.792, 0.8176, 0.8373,
-                    0.8529, 0.8664, 0.8772, 0.8864, 0.8945, 0.9015, 0.9075)
-        # approximation via asymptotic regression model SSasymp on log(n):
+        # W2-approximation via asymptotic regression model SSasymp on log(n):
         # We hence model: W2 = 1 + (R0 - 1) * n**(-r)
-        R0 <- -0.44193638
-        nr <- -exp(-0.00624712316)
 
         switch(EXPR = method,
                sample = {
                  sum(z * log(z)) / sum(z) - mean(log(z))
                },
                sdist_median = {
-                 if (nz <= length(w2Vals)) { w2Vals[[length(z)]] } else {
-                   # med approx
-                   1 + (R0 - 1) * nz**nr
-                 }
+                 .MLEw_approx$fun$w2F(nz)
                },
                hybrid = {
-                 # mix MC-simulation result for median and sample estimate
-                 W2_med <- if (nz <= length(w2Vals)) { w2Vals[[length(z)]] } else {
-                   # med approx
-                   1 + (R0 - 1) * nz**nr
-                 }
-
                  # mean betw med-approx and sample estimate
-                 ( W2_med + sum(z * log(z)) / sum(z) - mean(log(z))) / 2L
+                 ( .MLEw_approx$fun$w2F(nz) + sum(z * log(z)) / sum(z) - mean(log(z)) ) / 2L
                },
                stop("This method for W2-estimation is not handled here!", call. = FALSE)
         )
       } #nf w2F
+
 
       w3FF <- function(group = "x", method = c("sample", "sdist_median", "hybrid")) {
         method <- match.arg(method)
@@ -578,822 +557,823 @@ objFunFactory <- function(x, y = NULL,
           obs <- x
           z <- z_x
           W1 <- W1_x
-          } else {
-            obs <- y
-            z <- z_y
-            W1 <- W1_y
-          }
+        } else {
+          obs <- y
+          z <- z_y
+          W1 <- W1_y
+        }
         nObs <- length(obs)
 
+        # catch all for n = 1
+        if (nObs < 2L) return( function(k) 1)
+
         # fn of shape k
-        function(k) {
-          # catch all for n = 1
-          if (nObs < 2L) return(1)
+        switch(EXPR = method,
+               sdist_median = {
+                 .MLEw_approx$fun$w3FF(nObs)
+               },
+               sample = function(k) { W1 * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)) },
+               stop("This method for W3 approximation is not handled here!", call. = FALSE)
+        )
+    } #nf w3FF
 
-          switch(EXPR = method,
-                 sample = W1 * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)),
-                 stop("This method for W3 function is not handled here!", call. = FALSE)
-          )
-        }
-      } #nf w3FF
-
-      # return list of weights
-      list(W1 = c(x = W1_x, y = W1_y),
-           W2 = c(x = w2F(z = z_x, method = method_w2),
-                  y = if (twoGroup) w2F(z = z_y, method = method_w2)),
-           #function(k) W1_x * if (log(k) < -5) 1 else if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
-           W3 = purrr::compact(list(x = w3FF(group = "x", method = method_w3),
-                                    y = if (twoGroup) w3FF(group = "y", method = method_w3))))
+    # return list of weights
+    list(W1 = c(x = W1_x, y = W1_y),
+         W2 = c(x = w2F(z = z_x, method = method_w2),
+                y = if (twoGroup) w2F(z = z_y, method = method_w2)),
+         #function(k) W1_x * if (log(k) < -5) 1 else if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
+         W3 = purrr::compact(list(x = w3FF(group = "x", method = method_w3),
+                                  y = if (twoGroup) w3FF(group = "y", method = method_w3))))
     })
-  } #esle weights
+} #esle weights
 
 
-  stopifnot( ! twoPhase ) #XXX not implemented yet!!
+stopifnot( ! twoPhase ) #XXX not implemented yet!!
 
 
-  # provide indices for x and for y
-  # where to find the parameters per group in the parameter vector of the objective function
-  extractParOptInd <- if (! twoGroup) {
-    # single group!
-    list(x = seq_along(trNames)) ## Cave: trNames reacts to twoPhase-setting (which I've not thought through, yet)
+# provide indices for x and for y
+# where to find the parameters per group in the parameter vector of the objective function
+extractParOptInd <- if (! twoGroup) {
+  # single group!
+  list(x = seq_along(trNames)) ## Cave: trNames reacts to twoPhase-setting (which I've not thought through, yet)
+} else {
+  # two group!
+  #XXX exponential && profiled: indices are not correct for two groups, yet!!
+  #XXX continue here!! (this would allow to run simul_test.R!) #YYY already done?!
+  if (is.null(bind)) {
+    if (distribution == 'exponential') {
+      if (profiled) list(x = c(1L), y = c(2L)) else list(x = c(1L, 2L), y = c(3L, 4L))
+    } else {
+      #weibull:
+      if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else
+        list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
+    }
+  } else if (length(oNames) == length(bind)) {
+    # twoGroup, but all parameters are bound!
+    if (distribution == 'exponential') {
+      # profiled can actually be true (as each group leads to own scale/rate
+      #+but it will be averaged (see mergePars!!)
+      if (profiled) {
+        #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
+        list(x = c(1L), y = c(1L))
+      } else list(x = c(1L, 2L), y = c(1L, 2L))
+    } else {
+      #weibull:
+      if (profiled) {
+        #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
+        list(x = c(1L, 2L), y = c(1L, 2L))
+      } else list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
+    }
   } else {
-    # two group!
-    #XXX exponential && profiled: indices are not correct for two groups, yet!!
-    #XXX continue here!! (this would allow to run simul_test.R!) #YYY already done?!
-    if (is.null(bind)) {
-      if (distribution == 'exponential') {
-        if (profiled) list(x = c(1L), y = c(2L)) else list(x = c(1L, 2L), y = c(3L, 4L))
-      } else {
-        #weibull:
-        if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else
-          list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
-      }
-    } else if (length(oNames) == length(bind)) {
-      # twoGroup, but all parameters are bound!
-      if (distribution == 'exponential') {
+    # twoGroups & non-trivial bind
+
+    local({
+      # getDist with profiled=TRUE & transformed = FALSE removes the profile parameters (although it is original scale)
+      #+ as we need the original parameter names without those of profiling
+      oNamesFullProf <- if (!profiled) oNamesFull else
+        getDist(distribution = distribution, type = "param", twoPhase = twoPhase, bind = bind,
+                twoGroup = TRUE, profiled = TRUE, transformed = FALSE)
+
+      # locally, drop "rate1/scale1" from oNames when in profiling mode
+      # Cave: not robust! Think about (e.g.) twoPhase when profiling! (currently profiling is switched off when twoPhase)
+      if (profiled) oNames <- setdiff(oNames, c("rate1", "scale1")) # only *local* temporary change
+      nonbind <- setdiff(oNames, bind)
+      list(
+        x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFullProf), nm = c(bind, nonbind))[oNames]),
+        y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFullProf), nm = c(bind, nonbind))[oNames])
+      )
+    })
+  }
+}
+
+# provide indices for x and for y
+# where to find the parameters per group in the common parameter vector
+extractParInd <- if (!profiled) {
+  # = optimization indices when no profiling
+  extractParOptInd
+} else {
+  # profiled!
+  if (! twoGroup) {
+    # profiled single group!
+    list(x = seq_along(oNames)) ## Cave: oNames reacts to twoPhase-setting (which I've not thought through, yet)
+    #if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
+  } else {
+    # twoGroup && profiled
+    if (is.null(bind)){
+      if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else
+        # weibull
+        list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
+    } else {
+      if ( length(oNames) == length(bind)) {
         # profiled can actually be true (as each group leads to own scale/rate
         #+but it will be averaged (see mergePars!!)
-        if (profiled) {
-          #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
-          list(x = c(1L), y = c(1L))
-        } else list(x = c(1L, 2L), y = c(1L, 2L))
+        #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
+        if (distribution == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else
+          # weibull
+          list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
       } else {
-        #weibull:
-        if (profiled) {
-          #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
-          list(x = c(1L, 2L), y = c(1L, 2L))
-        } else list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
+        # twoGroup & non-trivial bind
+        local({
+          # we consider the parameter names on original scale, with profiled parameters also back in!
+          nonbind <- setdiff(oNames, bind)
+          list(
+            x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFull), nm = c(bind, nonbind))[oNames]),
+            y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFull), nm = c(bind, nonbind))[oNames])
+          )
+        })
       }
-    } else {
-      # twoGroups & non-trivial bind
-
-      local({
-        # getDist with profiled=TRUE & transformed = FALSE removes the profile parameters (although it is original scale)
-        #+ as we need the original parameter names without those of profiling
-        oNamesFullProf <- if (!profiled) oNamesFull else
-          getDist(distribution = distribution, type = "param", twoPhase = twoPhase, bind = bind,
-                  twoGroup = TRUE, profiled = TRUE, transformed = FALSE)
-
-        # locally, drop "rate1/scale1" from oNames when in profiling mode
-        # Cave: not robust! Think about (e.g.) twoPhase when profiling! (currently profiling is switched off when twoPhase)
-        if (profiled) oNames <- setdiff(oNames, c("rate1", "scale1")) # only *local* temporary change
-        nonbind <- setdiff(oNames, bind)
-        list(
-          x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFullProf), nm = c(bind, nonbind))[oNames]),
-          y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFullProf), nm = c(bind, nonbind))[oNames])
-        )
-      })
     }
   }
+} #esle !profiled
 
-  # provide indices for x and for y
-  # where to find the parameters per group in the common parameter vector
-  extractParInd <- if (!profiled) {
-    # = optimization indices when no profiling
-    extractParOptInd
-  } else {
-    # profiled!
-    if (! twoGroup) {
-      # profiled single group!
-      list(x = seq_along(oNames)) ## Cave: oNames reacts to twoPhase-setting (which I've not thought through, yet)
-      #if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
-    } else {
-      # twoGroup && profiled
-      if (is.null(bind)){
-        if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else
-          # weibull
-          list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
-      } else {
-        if ( length(oNames) == length(bind)) {
-          # profiled can actually be true (as each group leads to own scale/rate
-          #+but it will be averaged (see mergePars!!)
-          #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
-          if (distribution == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else
-            # weibull
-            list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
-        } else {
-          # twoGroup & non-trivial bind
-          local({
-            # we consider the parameter names on original scale, with profiled parameters also back in!
-            nonbind <- setdiff(oNames, bind)
-            list(
-              x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFull), nm = c(bind, nonbind))[oNames]),
-              y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFull), nm = c(bind, nonbind))[oNames])
-            )
-          })
-        }
-      }
-    }
-  } #esle !profiled
-
-  # parameter transformation matrices
-  paramTransf <- list(
-    M = switch(distribution,
-               exponential = matrix(c( 1, 0, 0, 0,
+# parameter transformation matrices
+paramTransf <- list(
+  M = switch(distribution,
+             exponential = matrix(c( 1, 0, 0, 0,
+                                     0, 1, 0, 0,
+                                     -1, 0, 1, 0,
+                                     0, 0, 0, 1), nrow = 4L, byrow = TRUE,
+                                  dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
+             weibull = matrix(c( 1, 0, 0, 0, 0, 0,
+                                 0, 1, 0, 0, 0, 0,
+                                 0, 0, 1, 0, 0, 0,
+                                 -1, 0, 0, 1, 0, 0,
+                                 0, 0, 0, 0, 1, 0,
+                                 0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
+                              dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
+             stop("Unknown distribution!", call. = FALSE)
+  ),
+  Minv = switch(distribution,
+                exponential = matrix(c(1, 0, 0, 0,
                                        0, 1, 0, 0,
-                                       -1, 0, 1, 0,
+                                       1, 0, 1, 0,
                                        0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                    dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
-               weibull = matrix(c( 1, 0, 0, 0, 0, 0,
+                                     dimnames = list(c("delay1", "rate1", "delay2", "rate2"))),
+                weibull = matrix(c(1, 0, 0, 0, 0, 0,
                                    0, 1, 0, 0, 0, 0,
                                    0, 0, 1, 0, 0, 0,
-                                   -1, 0, 0, 1, 0, 0,
+                                   1, 0, 0, 1, 0, 0,
                                    0, 0, 0, 0, 1, 0,
                                    0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
-               stop("Unknown distribution!", call. = FALSE)
-    ),
-    Minv = switch(distribution,
-                  exponential = matrix(c(1, 0, 0, 0,
-                                         0, 1, 0, 0,
-                                         1, 0, 1, 0,
-                                         0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                       dimnames = list(c("delay1", "rate1", "delay2", "rate2"))),
-                  weibull = matrix(c(1, 0, 0, 0, 0, 0,
-                                     0, 1, 0, 0, 0, 0,
-                                     0, 0, 1, 0, 0, 0,
-                                     1, 0, 0, 1, 0, 0,
-                                     0, 0, 0, 0, 1, 0,
-                                     0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                   dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"))),
-                  stop("Unknown distribution", call. = FALSE)
-    ),
-    F = list(exponential = c(identity, log, log, log),
-             weibull = c(identity, log, #log1p, #identity, #=shape1
-                         log, log, log, log))[[distribution]],
-    Finv = list(exponential = c(identity, exp, exp, exp),
-                weibull = c(identity, exp, #expm1, #identity, #=shape1
-                            exp, exp, exp, exp))[[distribution]]
+                                 dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"))),
+                stop("Unknown distribution", call. = FALSE)
+  ),
+  F = list(exponential = c(identity, log, log, log),
+           weibull = c(identity, log, #log1p, #identity, #=shape1
+                       log, log, log, log))[[distribution]],
+  Finv = list(exponential = c(identity, exp, exp, exp),
+              weibull = c(identity, exp, #expm1, #identity, #=shape1
+                          exp, exp, exp, exp))[[distribution]]
+)
+
+# transform parameter vector for a single group. Does not use parameter names.
+# transformed parameters are used within optimization. The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativitiy of original parameter)
+# @param parV1 parameter vector for a single group
+# @param inverse logical. If `inverse=TRUE` does inverse transformation, from optimization parameters back to original parameters
+# @return transformed parameter vector, unnamed!
+transformPars1 <- function(parV1, inverse = FALSE){
+
+  if (inverse) {
+    # b = Ainv %*% Finv(b')
+    as.numeric(paramTransf[["Minv"]][seq_along(parV1), seq_along(parV1)] %*%
+                 as.numeric(.mapply(FUN = function(f, x) f(x),
+                                    dots = list(paramTransf[["Finv"]][seq_along(parV1)], parV1),
+                                    MoreArgs = NULL)))
+  } else {
+    # b' = F(A %*% b)
+    as.numeric(.mapply(FUN = function(f, x) f(x),
+                       dots = list(paramTransf[["F"]][seq_along(parV1)],
+                                   as.numeric(paramTransf[["M"]][seq_along(parV1), seq_along(parV1)] %*% parV1)),
+                       MoreArgs = NULL))
+  }
+}# fn transformPars1
+
+# merge two parameter vectors
+# @param isOpt flag: are the parameters on optimization scale?
+# @return merged parameter vector
+mergePars <- function(parx, pary, isOpt){
+  exParInd <- if (isOpt) extractParOptInd else extractParInd
+  # aggregate parameters (via mean if isOpt or geometric mean if on original scale).
+  #+this is necessary for merging start vector for parameter-optimization
+  res <- as.vector(tapply(X = c(parx, pary),
+                          INDEX = unlist(exParInd),
+                          # arithmetic or geometric mean
+                          FUN = function(x) {
+                            stopifnot(length(x) <= 2L)
+                            if (length(x) <= 1L) x else
+                              if (isOpt) (x[[1L]] + x[[2L]])/2L else #mean(x)
+                                sqrt(x[[1L]] * x[[2L]]) #prod(x)**(1/length(x))
+                          },
+                          simplify = TRUE))
+  # .. only for delay1 we use minimum as aggregation function (in this case first entry in exParInd$x and exParInd$y is 1!)
+  if (exParInd$x[[1L]] + exParInd$y[[1L]] == 2){
+    res[[1L]] <- min(parx[[1L]], pary[[1L]])
+  }
+
+  res
+}
+
+# extract parameter vector for a specified group
+# if parameters are for optimization and transformation is requested, profiling is undone (if relevant)
+# @param group character. Extract parameters for the given group. If NULL, keep all parameters.
+# @param isOpt logical. Are the given parameters on optimization function scale?
+# @param named logical. Extract parameters as named vector?
+# @return parameter vector
+extractPars <- function(parV, group = NULL, isOpt = TRUE, transform = FALSE, named = FALSE){
+  if (is.null(parV)) return(NULL)
+  # result is on optimization scale?
+  resIsOpt <- xor(isOpt, transform)
+
+  # basically, ignore group= when single group: use always canonical "x" then
+  if (!twoGroup) group <- "x"
+
+  if (is.null(group)){
+    return(local({
+
+      # recursive calls for the individual groups
+      parx <- extractPars(parV, group = "x", isOpt = isOpt, transform = transform, named = FALSE)
+      pary <- extractPars(parV, group = "y", isOpt = isOpt, transform = transform, named = FALSE)
+
+      # merge the two parameter vectors back together (after a potential transformation)
+      res0 <- mergePars(parx = parx, pary = pary, isOpt = resIsOpt)
+      if (named){
+        res0 <- rlang::set_names(res0, nm = if (resIsOpt) trNamesFull else oNamesFull)
+      }
+      res0
+    }))
+  } #fi is.null(group)
+
+  # index vector for specified group
+  ind <- if (isOpt) extractParOptInd[[group]] else extractParInd[[group]]
+
+  if (is.null(ind)) return(NULL)
+
+  res <- if (!transform) {
+    parV[ind]
+  } else {
+    # do transform
+    local({
+      res0 <- transformPars1(parV[ind], inverse = isOpt)
+
+      if (profiled) {
+        # un-profile (when going from profiled par_opt to par_orig)
+        if (isOpt) {
+          # access observations for specified group
+          obs <- if (group == "y") y else x
+          k <- if (distribution == 'weibull') res0[[2L]] else 1L
+          # calculate scale parameter
+          scale0 <- if (isSurv) {
+            # XXX Surv: only right-censored observations currently implemented!
+            stopifnot(attr(obs, which = "type", exact = TRUE) == 'right')
+            # we do not devide by n, but by n_ev, hence censorings increase the scale estimate
+            (mean((obs[,1L]-res0[[1L]])^k) * length(obs)/(length(obs) - cens$n[[group]][["right"]]) / weights$W1[[group]])^(1/k)
+          } else {
+            (mean((obs-res0[[1L]])^k) / weights$W1[[group]] )^(1/k)
+          }
+          # add scale/rate parameter at the end of parameter vector
+          res0 <- append(res0, values = if (distribution == 'exponential') 1/scale0 else scale0)
+        } else {
+          # extract only remaining parameters
+          res0 <- res0[extractParOptInd[[group]]]
+        }
+      }
+      res0
+    })
+  }
+
+
+  # single group names
+  if (named) {
+    rlang::set_names(res, nm = if (resIsOpt) trNames else oNames)
+  } else {
+    as.vector(res)
+  }
+}
+
+
+# optimization arguments -----
+
+# get optimization start values and upper limits based on observations from a single group
+# for `twoPhase=TRUE` there will be more parameters
+# with profiling no scale parameter is returned (as it is not optimized)
+# @return list with transformed par for single group and upper limits for delay parameters, in canonical order (bind has no effect here!)
+getParSetting.gr <- function(obs){
+  # contract: obs is sorted!
+  DELAY_MIN <- 1e-9
+
+  # Surv: quick fix, use only event times as numeric vector that are observed or right censored
+  # XXX improve here?, e.g., use flatten_surv from lme4cens?! # could use cens-list here
+  if (isSurv) {
+    obs <- obs[, 1L, drop=TRUE][obs[, "status", drop = TRUE] <= 1]
+  }
+
+  parV <- switch(EXPR = distribution,
+                 # min(obs) = obs[1L]
+                 exponential = {
+                   parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
+                               mean(obs - obs[[1L]] + 2/length(obs))**-1L )
+
+                   # two extra parameters when exponential with *two* phases
+                   if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]])
+
+                   #parV0 <- rlang::set_names(parV0, nm = oNames)
+                   # transform start-parameters for optfun-parametrization
+                   parV0 <- transformPars1(parV0, inverse = FALSE)
+
+                   # drop scale if profiling
+                   if (profiled) {
+                     stopifnot(! twoPhase) #XXX not implemented, yet!
+                     parV0 <- parV0[1L] # drop "rate1"
+                   }
+                   parV0
+                 },
+                 weibull = {
+                   # start values from 'Weibull plot'
+                   #+using the empirical distribution function
+                   ## in MASS::fitdistr they simplify:
+                   # lx <- log(x)
+                   # m <- mean(lx)
+                   # v <- var(lx)
+                   # shape <- 1.2/sqrt(v)
+                   # scale <- exp(m + 0.572/shape)
+                   # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
+                   # and then ordinate is log(1/(1-F)) = -log(1-F) on log-scale
+                   start_y <- log(-log(1-stats::ppoints(obs, a=.3)))
+                   # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
+                   # weighted version with more weight in the middle:
+                   # w <- seq_along(obs); w <- w * (max(w)+1-w) #or use plogis-weights to downweight the early obs
+                   # lm.wfit(x = cbind(1, log(obs)), y = start_y, w = plogis(-2:(length(obs)-3)))$coefficients
+                   start_shape <- stats::cor(log(obs), start_y) * stats::sd(start_y) / stats::sd(log(obs))
+                   start_scale <- exp(mean(log(obs)) - mean(start_y) / start_shape) # scale from intercept
+
+
+                   parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/(length(obs)+3)),
+                               start_shape,
+                               start_scale )
+
+                   # support 2-phase with additional start parameters
+                   if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[-1L])
+
+                   #parV0 <- rlang::set_names(parV0, nm = oNames)
+                   # transform start-parameters for optfun-parametrization
+                   parV0 <- transformPars1(parV0, inverse = FALSE)
+
+                   # drop scale if profiling
+                   if (profiled) {
+                     stopifnot(! twoPhase) #XXX not implemented, yet!
+                     parV0 <- parV0[c(1L, 2L)] # drop "scale1"
+                   }
+                   parV0
+
+                 },
+                 # default:
+                 stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
   )
 
-  # transform parameter vector for a single group. Does not use parameter names.
-  # transformed parameters are used within optimization. The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativitiy of original parameter)
-  # @param parV1 parameter vector for a single group
-  # @param inverse logical. If `inverse=TRUE` does inverse transformation, from optimization parameters back to original parameters
-  # @return transformed parameter vector, unnamed!
-  transformPars1 <- function(parV1, inverse = FALSE){
-
-    if (inverse) {
-      # b = Ainv %*% Finv(b')
-      as.numeric(paramTransf[["Minv"]][seq_along(parV1), seq_along(parV1)] %*%
-                   as.numeric(.mapply(FUN = function(f, x) f(x),
-                                      dots = list(paramTransf[["Finv"]][seq_along(parV1)], parV1),
-                                      MoreArgs = NULL)))
-    } else {
-      # b' = F(A %*% b)
-      as.numeric(.mapply(FUN = function(f, x) f(x),
-                         dots = list(paramTransf[["F"]][seq_along(parV1)],
-                                     as.numeric(paramTransf[["M"]][seq_along(parV1), seq_along(parV1)] %*% parV1)),
-                         MoreArgs = NULL))
-    }
-  }# fn transformPars1
-
-  # merge two parameter vectors
-  # @param isOpt flag: are the parameters on optimization scale?
-  # @return merged parameter vector
-  mergePars <- function(parx, pary, isOpt){
-    exParInd <- if (isOpt) extractParOptInd else extractParInd
-    # aggregate parameters (via mean if isOpt or geometric mean if on original scale).
-    #+this is necessary for merging start vector for parameter-optimization
-    res <- as.vector(tapply(X = c(parx, pary),
-                            INDEX = unlist(exParInd),
-                            # arithmetic or geometric mean
-                            FUN = function(x) {
-                              stopifnot(length(x) <= 2L)
-                              if (length(x) <= 1L) x else
-                                if (isOpt) (x[[1L]] + x[[2L]])/2L else #mean(x)
-                                  sqrt(x[[1L]] * x[[2L]]) #prod(x)**(1/length(x))
-                            },
-                            simplify = TRUE))
-    # .. only for delay1 we use minimum as aggregation function (in this case first entry in exParInd$x and exParInd$y is 1!)
-    if (exParInd$x[[1L]] + exParInd$y[[1L]] == 2){
-      res[[1L]] <- min(parx[[1L]], pary[[1L]])
-    }
-
-    res
-  }
-
-  # extract parameter vector for a specified group
-  # if parameters are for optimization and transformation is requested, profiling is undone (if relevant)
-  # @param group character. Extract parameters for the given group. If NULL, keep all parameters.
-  # @param isOpt logical. Are the given parameters on optimization function scale?
-  # @param named logical. Extract parameters as named vector?
-  # @return parameter vector
-  extractPars <- function(parV, group = NULL, isOpt = TRUE, transform = FALSE, named = FALSE){
-    if (is.null(parV)) return(NULL)
-    # result is on optimization scale?
-    resIsOpt <- xor(isOpt, transform)
-
-    # basically, ignore group= when single group: use always canonical "x" then
-    if (!twoGroup) group <- "x"
-
-    if (is.null(group)){
-      return(local({
-
-        # recursive calls for the individual groups
-        parx <- extractPars(parV, group = "x", isOpt = isOpt, transform = transform, named = FALSE)
-        pary <- extractPars(parV, group = "y", isOpt = isOpt, transform = transform, named = FALSE)
-
-        # merge the two parameter vectors back together (after a potential transformation)
-        res0 <- mergePars(parx = parx, pary = pary, isOpt = resIsOpt)
-        if (named){
-          res0 <- rlang::set_names(res0, nm = if (resIsOpt) trNamesFull else oNamesFull)
-        }
-        res0
-      }))
-    } #fi is.null(group)
-
-    # index vector for specified group
-    ind <- if (isOpt) extractParOptInd[[group]] else extractParInd[[group]]
-
-    if (is.null(ind)) return(NULL)
-
-    res <- if (!transform) {
-      parV[ind]
-    } else {
-      # do transform
-      local({
-        res0 <- transformPars1(parV[ind], inverse = isOpt)
-
-        if (profiled) {
-          # un-profile (when going from profiled par_opt to par_orig)
-          if (isOpt) {
-            # access observations for specified group
-            obs <- if (group == "y") y else x
-            k <- if (distribution == 'weibull') res0[[2L]] else 1L
-            # calculate scale parameter
-            scale0 <- if (isSurv) {
-              # XXX Surv: only right-censored observations currently implemented!
-              stopifnot(attr(obs, which = "type", exact = TRUE) == 'right')
-              # we do not devide by n, but by n_ev, hence censorings increase the scale estimate
-              (mean((obs[,1L]-res0[[1L]])^k) * length(obs)/(length(obs) - cens$n[[group]][["right"]]) / weights$W1[[group]])^(1/k)
-            } else {
-              (mean((obs-res0[[1L]])^k) / weights$W1[[group]] )^(1/k)
-            }
-            # add scale/rate parameter at the end of parameter vector
-            res0 <- append(res0, values = if (distribution == 'exponential') 1/scale0 else scale0)
-          } else {
-            # extract only remaining parameters
-            res0 <- res0[extractParOptInd[[group]]]
-          }
-        }
-        res0
-      })
-    }
-
-
-    # single group names
-    if (named) {
-      rlang::set_names(res, nm = if (resIsOpt) trNames else oNames)
-    } else {
-      as.vector(res)
-    }
-  }
-
-
-  # optimization arguments -----
-
-  # get optimization start values and upper limits based on observations from a single group
-  # for `twoPhase=TRUE` there will be more parameters
-  # with profiling no scale parameter is returned (as it is not optimized)
-  # @return list with transformed par for single group and upper limits for delay parameters, in canonical order (bind has no effect here!)
-  getParSetting.gr <- function(obs){
-    # contract: obs is sorted!
-    DELAY_MIN <- 1e-9
-
-    # Surv: quick fix, use only event times as numeric vector that are observed or right censored
-    # XXX improve here?, e.g., use flatten_surv from lme4cens?! # could use cens-list here
-    if (isSurv) {
-      obs <- obs[, 1L, drop=TRUE][obs[, "status", drop = TRUE] <= 1]
-    }
-
-    parV <- switch(EXPR = distribution,
-                   # min(obs) = obs[1L]
-                   exponential = {
-                     parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
-                                 mean(obs - obs[[1L]] + 2/length(obs))**-1L )
-
-                     # two extra parameters when exponential with *two* phases
-                     if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]])
-
-                     #parV0 <- rlang::set_names(parV0, nm = oNames)
-                     # transform start-parameters for optfun-parametrization
-                     parV0 <- transformPars1(parV0, inverse = FALSE)
-
-                     # drop scale if profiling
-                     if (profiled) {
-                       stopifnot(! twoPhase) #XXX not implemented, yet!
-                       parV0 <- parV0[1L] # drop "rate1"
-                     }
-                     parV0
-                   },
-                   weibull = {
-                     # start values from 'Weibull plot'
-                     #+using the empirical distribution function
-                     ## in MASS::fitdistr they simplify:
-                     # lx <- log(x)
-                     # m <- mean(lx)
-                     # v <- var(lx)
-                     # shape <- 1.2/sqrt(v)
-                     # scale <- exp(m + 0.572/shape)
-                     # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
-                     # and then ordinate is log(1/(1-F)) = -log(1-F) on log-scale
-                     start_y <- log(-log(1-stats::ppoints(obs, a=.3)))
-                     # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
-                     # weighted version with more weight in the middle:
-                     # w <- seq_along(obs); w <- w * (max(w)+1-w) #or use plogis-weights to downweight the early obs
-                     # lm.wfit(x = cbind(1, log(obs)), y = start_y, w = plogis(-2:(length(obs)-3)))$coefficients
-                     start_shape <- stats::cor(log(obs), start_y) * stats::sd(start_y) / stats::sd(log(obs))
-                     start_scale <- exp(mean(log(obs)) - mean(start_y) / start_shape) # scale from intercept
-
-
-                     parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/(length(obs)+3)),
-                                 start_shape,
-                                 start_scale )
-
-                     # support 2-phase with additional start parameters
-                     if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[-1L])
-
-                     #parV0 <- rlang::set_names(parV0, nm = oNames)
-                     # transform start-parameters for optfun-parametrization
-                     parV0 <- transformPars1(parV0, inverse = FALSE)
-
-                     # drop scale if profiling
-                     if (profiled) {
-                       stopifnot(! twoPhase) #XXX not implemented, yet!
-                       parV0 <- parV0[c(1L, 2L)] # drop "scale1"
-                     }
-                     parV0
-
-                   },
-                   # default:
-                   stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
-    )
-
-    list(
-      par = parV,
-      delay1_upper = max(DELAY_MIN, obs[[1L]] - .01/length(obs), obs[[1L]]*.9999),
-      delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
-    )
-  }# fn getParSetting.gr
-
-  # profile likelihood: maximize profiled log-lik f directly
-  # if FALSE, go indirectly: consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
-  #profiled_llik_directly <- TRUE
-
-  # parameter bounds: set lower & upper bounds
-  lowerB <- upperB <- rlang::set_names(rep_len(NA_real_, length(trNamesFull)),
-                                       nm = trNamesFull)
-
-  #XXX #QQQ Should this go up to extractPars-function where the transformations are defined???
-  PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
-                     delay2 = c(lower = -Inf, upper = NA_real_),
-                     rate  = c(lower = -Inf, upper = +Inf),
-                     # shape lower bound for MLEnp (actually for shape1)
-                     #shape = c(lower = if (profiled && method == 'MLEn' && !profiled_llik_directly) 1.49e-8 else -Inf, upper = +Inf),
-                     shape = c(lower = -Inf, upper = +Inf),
-                     scale = c(lower = -Inf, upper = +Inf))
-
-
-  # alas, purrr::iwalk did not work for me here
-  for (nam in names(PAR_BOUNDS)) {
-    idx <- startsWith(trNamesFull, prefix = nam)
-    if (any(idx)) {
-      lowerB[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'lower')
-      upperB[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'upper')
-    } #fi
-  } #rof
-
-
-
-  par0_x <- getParSetting.gr(x)
-  parV <-
-    if (! twoGroup) {
-      # set parameter vector for group 1 and finish upper bound: match delay1 and delay2
-      upperB[['delay1_tr']]  <- par0_x[['delay1_upper']]
-      if (twoPhase) upperB[['delay2_tr']] <- par0_x[['delay2_upper']]
-
-      par0_x[['par']]
-
-    } else { #twoGroup
-
-      # all parameters are bound
-      if ( length(bind) == length(oNames) ) {
-
-        # treat x and y as a single group for upper limit & start value heuristic
-        par0_xy <- getParSetting.gr(c(x,y))
-
-        upperB['delay1_tr'] <- par0_xy[['delay1_upper']]
-        if (twoPhase) upperB[['delay2_tr']] <- par0_xy[['delay2_upper']]
-
-        par0_xy[['par']]
-
-      } else { #twoGroup, not all params bound!
-
-        par0_y <- getParSetting.gr(y)
-
-        start_x <- par0_x[['par']]
-        start_y <- par0_y[['par']]
-
-        # set upper bound for delay parameter(s)!
-        if ('delay1' %in% bind) {
-          upperB['delay1_tr'] <- min(par0_x[['delay1_upper']], par0_y[['delay1_upper']])
-        } else {
-          upperB['delay1_tr.x'] <- par0_x[['delay1_upper']]
-          upperB['delay1_tr.y'] <- par0_y[['delay1_upper']]
-        } # fi
-
-        if (twoPhase) {
-          if ('delay2' %in% bind){
-            upperB[['delay2_tr']] <- max(par0_x[['delay2_upper']], par0_y[['delay2_upper']])
-          } else {
-            upperB['delay2_tr.x'] <- par0_x[['delay2_upper']]
-            upperB['delay2_tr.y'] <- par0_y[['delay2_upper']]
-          }
-        }
-
-        # return start value
-        if ( is.null(bind) ){ # two groups unbound
-          c(start_x, start_y)
-        } else {
-
-          mergePars(parx = start_x, pary = start_y, isOpt = TRUE)
-        }
-      } #twoGrp, not all params bound!
-    } # twoGrp
-
-  # ensure we have names of transformed parameters
-  parV <- rlang::set_names(parV, nm = trNamesFull)
-
-  stopifnot( ! any(is.na(lowerB), is.na(upperB)) )
-  # clean up env. # use local() more???
-  remove(list=c("PAR_BOUNDS", "par0_x"))
-
-
-  optim_args <- list(
+  list(
     par = parV,
-    method = "L-BFGS-B",
-    lower = lowerB,
-    upper = upperB,
-    # most parameters are on log-scale.
-    control = list(parscale = scalePars(parV, lowerB = 1e-3, upperB = 1e3))
+    delay1_upper = max(DELAY_MIN, obs[[1L]] - .01/length(obs), obs[[1L]]*.9999),
+    delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
   )
+}# fn getParSetting.gr
+
+# profile likelihood: maximize profiled log-lik f directly
+# if FALSE, go indirectly: consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
+#profiled_llik_directly <- TRUE
+
+# parameter bounds: set lower & upper bounds
+lowerB <- upperB <- rlang::set_names(rep_len(NA_real_, length(trNamesFull)),
+                                     nm = trNamesFull)
+
+#XXX #QQQ Should this go up to extractPars-function where the transformations are defined???
+PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
+                   delay2 = c(lower = -Inf, upper = NA_real_),
+                   rate  = c(lower = -Inf, upper = +Inf),
+                   # shape lower bound for MLEnp (actually for shape1)
+                   #shape = c(lower = if (profiled && method == 'MLEn' && !profiled_llik_directly) 1.49e-8 else -Inf, upper = +Inf),
+                   shape = c(lower = -Inf, upper = +Inf),
+                   scale = c(lower = -Inf, upper = +Inf))
 
 
-  # objective function ----
-
-  # calculate the log-likelihood, either naive, weighted or in corrected form.
-  # What precisely is calculated depends on method but also on the profiled-flag.
-  # @param criterion logical. if `criterion=TRUE`, then pars are on original scale and the proper log-likelihood is returned
-  getLogLik <- function(pars, group, criterion = FALSE) {
-
-    # access observations of group
-    obs <- if (group == "y") y else x #direct access by name
-    #rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
-
-    # extract parameters for specified group on original scale (for CDF)
-    pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
+# alas, purrr::iwalk did not work for me here
+for (nam in names(PAR_BOUNDS)) {
+  idx <- startsWith(trNamesFull, prefix = nam)
+  if (any(idx)) {
+    lowerB[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'lower')
+    upperB[idx] <- purrr::chuck(PAR_BOUNDS, nam, 'upper')
+  } #fi
+} #rof
 
 
-    # for Weibull, do we want to penalize high shape values in MLE?
-    pen_shape <- distribution == 'weibull' && method == "MLEw" && FALSE #to turn off (could become an option)
-    pen_shape_shift <- 7 #shift parameter of softplus penalty
-    pen_shape_steep <- 1 #steepness of softplus penality
 
-    penF <- function(k) pen_shape * log(1 + exp(pen_shape_steep * (k - pen_shape_shift))/pen_shape_steep) / sqrt(n)
+par0_x <- getParSetting.gr(x)
+parV <-
+  if (! twoGroup) {
+    # set parameter vector for group 1 and finish upper bound: match delay1 and delay2
+    upperB[['delay1_tr']]  <- par0_x[['delay1_upper']]
+    if (twoPhase) upperB[['delay2_tr']] <- par0_x[['delay2_upper']]
 
-    densFun <- getDist(distribution, type = "density")
-    cdfFun <- getDist(distribution, type = "cdf")
+    par0_x[['par']]
 
-    if (criterion) {
-      # criterion = log-likelihood
-      return(
-        if (isSurv) {
-          #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
-          switch (attr(obs, which = "type", exact = TRUE),
-                  right = {
-                    sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
-                        rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) )
-                  },
-                  stop("This type of censoring is not supported!", call. = FALSE)
-          )
+  } else { #twoGroup
+
+    # all parameters are bound
+    if ( length(bind) == length(oNames) ) {
+
+      # treat x and y as a single group for upper limit & start value heuristic
+      par0_xy <- getParSetting.gr(c(x,y))
+
+      upperB['delay1_tr'] <- par0_xy[['delay1_upper']]
+      if (twoPhase) upperB[['delay2_tr']] <- par0_xy[['delay2_upper']]
+
+      par0_xy[['par']]
+
+    } else { #twoGroup, not all params bound!
+
+      par0_y <- getParSetting.gr(y)
+
+      start_x <- par0_x[['par']]
+      start_y <- par0_y[['par']]
+
+      # set upper bound for delay parameter(s)!
+      if ('delay1' %in% bind) {
+        upperB['delay1_tr'] <- min(par0_x[['delay1_upper']], par0_y[['delay1_upper']])
+      } else {
+        upperB['delay1_tr.x'] <- par0_x[['delay1_upper']]
+        upperB['delay1_tr.y'] <- par0_y[['delay1_upper']]
+      } # fi
+
+      if (twoPhase) {
+        if ('delay2' %in% bind){
+          upperB[['delay2_tr']] <- max(par0_x[['delay2_upper']], par0_y[['delay2_upper']])
         } else {
-          # numeric response, non-Surv
-          sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+          upperB['delay2_tr.x'] <- par0_x[['delay2_upper']]
+          upperB['delay2_tr.y'] <- par0_y[['delay2_upper']]
         }
-      )
-    } #fi criterion
+      }
+
+      # return start value
+      if ( is.null(bind) ){ # two groups unbound
+        c(start_x, start_y)
+      } else {
+
+        mergePars(parx = start_x, pary = start_y, isOpt = TRUE)
+      }
+    } #twoGrp, not all params bound!
+  } # twoGrp
+
+# ensure we have names of transformed parameters
+parV <- rlang::set_names(parV, nm = trNamesFull)
+
+stopifnot( ! any(is.na(lowerB), is.na(upperB)) )
+# clean up env. # use local() more???
+remove(list=c("PAR_BOUNDS", "par0_x"))
 
 
-    # !criterion
-    # calculate the objective function which depends on
-    #+ method
-    #+ profiled
-    n <- length(obs)
-    stopifnot( n > 1L )
-    # shape parameter (candidate)
-    k <- if (distribution == 'weibull') pars.gr[[2L]] else 1L
+optim_args <- list(
+  par = parV,
+  method = "L-BFGS-B",
+  lower = lowerB,
+  upper = upperB,
+  # most parameters are on log-scale.
+  control = list(parscale = scalePars(parV, lowerB = 1e-3, upperB = 1e3))
+)
 
-    switch(EXPR = method,
-           MLEn = {
-             if (profiled && distribution == 'weibull') {
-               if (isSurv) {
-                 switch(attr(obs, which = "type", exact = TRUE),
-                        right = {
-                          obs_c <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
 
-                          # objective function to maximize:
-                          # we use 1st derivative to profile out scale parameter, but otherwise, use log-likelihood function directly
-                          (n - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) +
-                            # contribution of right censorings
-                            sum(rlang::exec(cdfFun, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
-                                # optional penalty term for large values of shape
-                                -penF(k))
+# objective function ----
 
-                        },
-                        stop("This type of censoring is not supported!", call. = FALSE)
-                 )
-               } else {
-                 # numeric response, non-Surv
-                 obs_c <- obs - pars.gr[[1L]]
-                 #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
+# calculate the log-likelihood, either naive, weighted or in corrected form.
+# What precisely is calculated depends on method but also on the profiled-flag.
+# @param criterion logical. if `criterion=TRUE`, then pars are on original scale and the proper log-likelihood is returned
+getLogLik <- function(pars, group, criterion = FALSE) {
 
-                 # objective function to maximize:
-                 # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
-                 # 2nd & 3rd summand could also be: - log(sum(obs_c**k)) + log(n*k)
-                 n * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) - penF(k)
+  # access observations of group
+  obs <- if (group == "y") y else x #direct access by name
+  #rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
 
-                 # alternative:
-                 #indirect way: ! profiled_llik_directly
-                 #consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
-                 #We would need to check that we have indeed an local **maximum** for the log-likelihood (as we have only found candidate values by looking for roots of f')
-                 #   - (1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 -
-                 #     # 1st factor is inverse of harmonic mean
-                 #     (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 -
-                 #     # optional penalization term
-                 #     penalize_shape*log(k+1)
-               }
+  # extract parameters for specified group on original scale (for CDF)
+  pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
 
-             } else {
-               # log-likelihood with all parameters (scale is not profiled out)
-               if (isSurv) {
-                 switch (attr(obs, which = "type", exact = TRUE),
-                         right = {
-                           sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
-                               rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
-                               # optional penalty term for high shape parameter
-                               -penF(k))
-                         },
-                         stop("This type of censoring is not supported!", call. = FALSE)
-                 )
-               } else { #numeric, non-Surv
-                 sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)),
-                     -penF(k))
-               } #esle
-             }
-           },
 
-           # weighted MLE
-           MLEw = {
-             stopifnot(profiled)
+  # for Weibull, do we want to penalize high shape values in MLE?
+  pen_shape <- distribution == 'weibull' && method == "MLEw" && FALSE #to turn off (could become an option)
+  pen_shape_shift <- 7 #shift parameter of softplus penalty
+  pen_shape_steep <- 1 #steepness of softplus penality
 
+  penF <- function(k) pen_shape * log(1 + exp(pen_shape_steep * (k - pen_shape_shift))/pen_shape_steep) / sqrt(n)
+
+  densFun <- getDist(distribution, type = "density")
+  cdfFun <- getDist(distribution, type = "cdf")
+
+  if (criterion) {
+    # criterion = log-likelihood
+    return(
+      if (isSurv) {
+        #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
+        switch (attr(obs, which = "type", exact = TRUE),
+                right = {
+                  sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
+                      rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) )
+                },
+                stop("This type of censoring is not supported!", call. = FALSE)
+        )
+      } else {
+        # numeric response, non-Surv
+        sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+      }
+    )
+  } #fi criterion
+
+
+  # !criterion
+  # calculate the objective function which depends on
+  #+ method
+  #+ profiled
+  n <- length(obs)
+  stopifnot( n > 1L )
+  # shape parameter (candidate)
+  k <- if (distribution == 'weibull') pars.gr[[2L]] else 1L
+
+  switch(EXPR = method,
+         MLEn = {
+           if (profiled && distribution == 'weibull') {
              if (isSurv) {
-               switch(EXPR = attr(obs, which = "type", exact = TRUE),
+               switch(attr(obs, which = "type", exact = TRUE),
                       right = {
-                        obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
+                        obs_c <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
 
-                        if (verbose > 1L) {
-                          cat(glue("Weights: W2 = {weights$W2[[group]]} and W3 = {weights$W2[[group]](k)} for {group}.",
-                                   "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
-                        }
+                        # objective function to maximize:
+                        # we use 1st derivative to profile out scale parameter, but otherwise, use log-likelihood function directly
+                        (n - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) +
+                          # contribution of right censorings
+                          sum(rlang::exec(cdfFun, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                              # optional penalty term for large values of shape
+                              -penF(k))
 
-                        # objective function to maximize
-                        - (weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k)/sum(obs_evc**k))**2 +
-                          # 1st factor is inverse of harmonic mean
-                          -(mean(1/obs_evc) * sum(obs_evc**k)/sum(obs_evc**(k-1)) - weights$W3[[group]](k))**2 +
-                          # contribution of right-censored obs
-                          rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
-                          # optional penalization term for big shape
-                          -penF(k)
                       },
-                      stop("This type of survival is not supported here!", call. = FALSE))
-
+                      stop("This type of censoring is not supported!", call. = FALSE)
+               )
              } else {
                # numeric response, non-Surv
                obs_c <- obs - pars.gr[[1L]]
+               #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
 
-               if (verbose > 1L) {
-                 cat(glue("Weights: W1 = {weights$W1[[group]]}, W2 = {weights$W2[[group]]} and W3 = {weights$W3[[group]](k)} for {group}. ",
-                          "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
-               }
+               # objective function to maximize:
+               # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
+               # 2nd & 3rd summand could also be: - log(sum(obs_c**k)) + log(n*k)
+               n * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) - penF(k)
 
-               # objective function to maximize
-               -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
-                 # 1st factor is inverse of harmonic mean
-                 -(mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 +
-                 # optional penalization term
-                 -penF(k)
+               # alternative:
+               #indirect way: ! profiled_llik_directly
+               #consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
+               #We would need to check that we have indeed an local **maximum** for the log-likelihood (as we have only found candidate values by looking for roots of f')
+               #   - (1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 -
+               #     # 1st factor is inverse of harmonic mean
+               #     (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 -
+               #     # optional penalization term
+               #     penalize_shape*log(k+1)
              }
-           },
 
-           # corrected MLE
-           # objective function to maximize
-           MLEc = {
-             stopifnot(n >= 2L)
-             # contribution of first observation is corrected for: we take first two different values
-             ind12 <- indForefront[[group]]
+           } else {
+             # log-likelihood with all parameters (scale is not profiled out)
              if (isSurv) {
                switch (attr(obs, which = "type", exact = TRUE),
                        right = {
-                         # we need at least two observed event times
-                         stopifnot( length(cens$ind[[group]]$obs) >= 2L )
-
-                         # first event-time needs correction
-                         sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]), pars.gr)))),
-                             # remaining observed event times
-                             rlang::exec(densFun, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
-                             # right-censored observations do not need correction
-                             #+(as they are tail probabilities that do not peak so drastically as densities do)
+                         sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
                              rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
-                             # optional penalization term
+                             # optional penalty term for high shape parameter
                              -penF(k))
                        },
                        stop("This type of censoring is not supported!", call. = FALSE)
                )
-             } else {
-               # numeric response, non-Surv
-               sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))),
-                   rlang::exec(densFun, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr)),
-                   # optional penalization term
+             } else { #numeric, non-Surv
+               sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)),
                    -penF(k))
+             } #esle
+           }
+         },
+
+         # weighted MLE
+         MLEw = {
+           stopifnot(profiled)
+
+           if (isSurv) {
+             switch(EXPR = attr(obs, which = "type", exact = TRUE),
+                    right = {
+                      obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
+
+                      if (verbose > 1L) {
+                        cat(glue("Weights: W2 = {weights$W2[[group]]} and W3 = {weights$W2[[group]](k)} for {group}.",
+                                 "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
+                      }
+
+                      # objective function to maximize
+                      - (weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k)/sum(obs_evc**k))**2 +
+                        # 1st factor is inverse of harmonic mean
+                        -(mean(1/obs_evc) * sum(obs_evc**k)/sum(obs_evc**(k-1)) - weights$W3[[group]](k))**2 +
+                        # contribution of right-censored obs
+                        rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
+                        # optional penalization term for big shape
+                        -penF(k)
+                    },
+                    stop("This type of survival is not supported here!", call. = FALSE))
+
+           } else {
+             # numeric response, non-Surv
+             obs_c <- obs - pars.gr[[1L]]
+
+             if (verbose > 1L) {
+               cat(glue("Weights: W1 = {weights$W1[[group]]}, W2 = {weights$W2[[group]]} and W3 = {weights$W3[[group]](k)} for {group}. ",
+                        "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
              }
-           },
-           stop("This method is not handled here!", call. = FALSE)
-    )
+
+             # objective function to maximize
+             -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
+               # 1st factor is inverse of harmonic mean
+               -(mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 +
+               # optional penalization term
+               -penF(k)
+           }
+         },
+
+         # corrected MLE
+         # objective function to maximize
+         MLEc = {
+           stopifnot(n >= 2L)
+           # contribution of first observation is corrected for: we take first two different values
+           ind12 <- indForefront[[group]]
+           if (isSurv) {
+             switch (attr(obs, which = "type", exact = TRUE),
+                     right = {
+                       # we need at least two observed event times
+                       stopifnot( length(cens$ind[[group]]$obs) >= 2L )
+
+                       # first event-time needs correction
+                       sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]), pars.gr)))),
+                           # remaining observed event times
+                           rlang::exec(densFun, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
+                           # right-censored observations do not need correction
+                           #+(as they are tail probabilities that do not peak so drastically as densities do)
+                           rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                           # optional penalization term
+                           -penF(k))
+                     },
+                     stop("This type of censoring is not supported!", call. = FALSE)
+             )
+           } else {
+             # numeric response, non-Surv
+             sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))),
+                 rlang::exec(densFun, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr)),
+                 # optional penalization term
+                 -penF(k))
+           }
+         },
+         stop("This method is not handled here!", call. = FALSE)
+  )
+}
+
+
+# log spacings:
+# calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
+# The criterion is always the negative mean of these log-spacings.
+# @param pars vector of parameters (by default, on transformed scale, i.e. when criterion = FALSE)
+# @param criterion logical. When `criterion = TRUE`, then pars are on original scale.
+# @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
+getCumDiffs <- function(pars, group, criterion = FALSE) {
+
+  # extract parameters for specified group on original scale (for CDF)
+  pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
+
+  if (verbose > 1L){
+    cat(glue("Parameter vector for group {group} after back-transformation: ",
+             "{paste(round(pars.gr, 2), collapse = ', ')}"), "\n")
   }
 
+  # access observations of group
+  #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
+  #+or use env = rlang::fn_env(getCumDiffs) # (but requires function obj)
+  obs <- if (group == "y") y else x # direct access by name
 
-  # log spacings:
-  # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
-  # The criterion is always the negative mean of these log-spacings.
-  # @param pars vector of parameters (by default, on transformed scale, i.e. when criterion = FALSE)
-  # @param criterion logical. When `criterion = TRUE`, then pars are on original scale.
-  # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
-  getCumDiffs <- function(pars, group, criterion = FALSE) {
 
-    # extract parameters for specified group on original scale (for CDF)
-    pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
+  # calculate spacings
+  # contract: data is sorted!
+  cumDiffs <- if (isSurv) {
 
-    if (verbose > 1L){
-      cat(glue("Parameter vector for group {group} after back-transformation: ",
-               "{paste(round(pars.gr, 2), collapse = ', ')}"), "\n")
+    ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here [but 0 is 0 also for interval!?])
+
+    # get the right subset of indices for specified group (when having two groups)
+    if (twoGroup) {
+      # Cave: works only for two groups (x or y) as I only use the strata[[1L]] as cutpoint
+      ind_evKM <- if (group == "x") ind_evKM[ind_evKM <= kmFit$strata[[1L]]] else ind_evKM[ind_evKM > kmFit$strata[[1L]]]
     }
+    h <- rep_len(-1, length.out = length(obs))
 
-    # access observations of group
-    #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
-    #+or use env = rlang::fn_env(getCumDiffs) # (but requires function obj)
-    obs <- if (group == "y") y else x # direct access by name
+    # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
+    # floor(n.event + n.censor) = n
+    stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
+                   if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
+    # use CDF of right-censored outcome variable for all observed event times
+    h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens$surv[ind_evKM]) + (1 - kmFitrcens$surv[ind_evKM]),
+                                       # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
+                                       times = kmFit$n.event[ind_evKM])
+    # censored observations get interpolated values
+    ind_hrcens <- which(h<0)
+    if (length(ind_hrcens)) {
+      ind_hobs <- which(h>0)
+      # interpolate values for all censored observations
+      h[ind_hrcens] <- stats::approx(x = c(0L, ind_hobs, length(obs)+1L), y = c(0L, h[ind_hobs], 1L),
+                                     method = "linear", ties = "ordered", yleft = NA, yright = NA, xout = ind_hrcens)$y
+    } #fi
 
+    h <- diff( c(0L, h, 1L) )
 
-    # calculate spacings
-    # contract: data is sorted!
-    cumDiffs <- if (isSurv) {
+    # tie handling for observed event times with density
+    ind_t <- which(diff(obs[,1L]) == 0L & # equal adjacent times
+                     diff(obs[,"status"] == 1) == 0L & # equal adjacent status
+                     obs[-1L, "status"] == 1L) # status is indeed 1 (=observed), drop first row to be on same page as diff(obs)
+    if ( length(ind_t) ){
+      stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
+      # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
+      h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t,1L]), pars.gr))
+    } #fi
+    h
 
-      ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here [but 0 is 0 also for interval!?])
+  } else {
+    # numeric response, non-Surv
+    h <- diff( c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L) )
 
-      # get the right subset of indices for specified group (when having two groups)
-      if (twoGroup) {
-        # Cave: works only for two groups (x or y) as I only use the strata[[1L]] as cutpoint
-        ind_evKM <- if (group == "x") ind_evKM[ind_evKM <= kmFit$strata[[1L]]] else ind_evKM[ind_evKM > kmFit$strata[[1L]]]
-      }
-      h <- rep_len(-1, length.out = length(obs))
-
-      # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
-      # floor(n.event + n.censor) = n
-      stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
-                     if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
-      # use CDF of right-censored outcome variable for all observed event times
-      h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens$surv[ind_evKM]) + (1 - kmFitrcens$surv[ind_evKM]),
-                                         # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
-                                         times = kmFit$n.event[ind_evKM])
-      # censored observations get interpolated values
-      ind_hrcens <- which(h<0)
-      if (length(ind_hrcens)) {
-        ind_hobs <- which(h>0)
-        # interpolate values for all censored observations
-        h[ind_hrcens] <- stats::approx(x = c(0L, ind_hobs, length(obs)+1L), y = c(0L, h[ind_hobs], 1L),
-                                       method = "linear", ties = "ordered", yleft = NA, yright = NA, xout = ind_hrcens)$y
-      } #fi
-
-      h <- diff( c(0L, h, 1L) )
-
-      # tie handling for observed event times with density
-      ind_t <- which(diff(obs[,1L]) == 0L & # equal adjacent times
-                       diff(obs[,"status"] == 1) == 0L & # equal adjacent status
-                       obs[-1L, "status"] == 1L) # status is indeed 1 (=observed), drop first row to be on same page as diff(obs)
-      if ( length(ind_t) ){
-        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
-        # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
-        h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t,1L]), pars.gr))
-      } #fi
-      h
-
-    } else {
-      # numeric response, non-Surv
-      h <- diff( c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L) )
-
-      # ties: we check difference of obs directly (not cumDiffs)
-      #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
-      ind_t <- which(diff(obs) == 0L)
-      if (length(ind_t)) {
-        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
-        # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
-        h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
-      } #fi
-      h
-    }
-
-    # respect the machine's numerical lower limit
-    cumDiffs[which(cumDiffs < .Machine$double.xmin)] <- .Machine$double.xmin
-
-    log(cumDiffs)
-
-  }# fn getCumDiffs
-
-
-  # Objective function like negative mean log-spacings for MPSE or negative log-likelihood for MSE0
-  # Parameters are estimated by minimizing this function.
-  # param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
-  # param `criterion` a logical flag. If requested, give the original criterion to minimize. Then, the parameters are on original scale
-  # param `aggregated` a logical flag. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
-  objFun <- function(pars, criterion = FALSE, aggregated = TRUE) {
-
-    switch(method,
-           MPSE = {
-             - if (! twoGroup) {
-               mean(getCumDiffs(pars, group = "x", criterion = criterion))
-             } else {
-               #twoGroup:
-               #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
-               #because the parameters should be optimized within group.
-               #merged data lead to frequent non-convergence or visually bad fits
-               res <- c(mean(getCumDiffs(pars, group = "x", criterion = criterion)), mean(getCumDiffs(pars, group = "y", criterion = criterion)))
-
-               if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
-             }
-           },
-           MLEn = ,
-           MLEw = ,
-           MLEc = {
-             stopifnot( ! twoPhase ) #XXX not implemented yet!
-
-             - if (! twoGroup) getLogLik(pars, group = "x", criterion = criterion) else {
-               res <- c(getLogLik(pars, group = "x", criterion = criterion), getLogLik(pars, group = "y", criterion = criterion))
-
-               if (aggregated) sum(res) else res
-             }
-
-           },
-           stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
-    )
-  } #fn objFun
-
-  # attach analytical solution for MLE
-  if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' && ! isSurv ){
-    attr(objFun, which = "opt") <- local({
-      par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
-      list(par_orig = par_analytic,
-           #transformed parameters
-           par = extractPars(par_analytic, isOpt = FALSE, transform = TRUE, named = TRUE),
-           value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
-           methodOpt = "analytic",
-           convergence = 0L,
-           message = "analytic solution for naive MLE ('MLEn')",
-           counts = 0L)
-    })
+    # ties: we check difference of obs directly (not cumDiffs)
+    #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
+    ind_t <- which(diff(obs) == 0L)
+    if (length(ind_t)) {
+      stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
+      # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
+      h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t]), pars.gr))
+    } #fi
+    h
   }
 
-  objFun
+  # respect the machine's numerical lower limit
+  cumDiffs[which(cumDiffs < .Machine$double.xmin)] <- .Machine$double.xmin
+
+  log(cumDiffs)
+
+}# fn getCumDiffs
+
+
+# Objective function like negative mean log-spacings for MPSE or negative log-likelihood for MSE0
+# Parameters are estimated by minimizing this function.
+# param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
+# param `criterion` a logical flag. If requested, give the original criterion to minimize. Then, the parameters are on original scale
+# param `aggregated` a logical flag. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
+objFun <- function(pars, criterion = FALSE, aggregated = TRUE) {
+
+  switch(method,
+         MPSE = {
+           - if (! twoGroup) {
+             mean(getCumDiffs(pars, group = "x", criterion = criterion))
+           } else {
+             #twoGroup:
+             #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
+             #because the parameters should be optimized within group.
+             #merged data lead to frequent non-convergence or visually bad fits
+             res <- c(mean(getCumDiffs(pars, group = "x", criterion = criterion)), mean(getCumDiffs(pars, group = "y", criterion = criterion)))
+
+             if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
+           }
+         },
+         MLEn = ,
+         MLEw = ,
+         MLEc = {
+           stopifnot( ! twoPhase ) #XXX not implemented yet!
+
+           - if (! twoGroup) getLogLik(pars, group = "x", criterion = criterion) else {
+             res <- c(getLogLik(pars, group = "x", criterion = criterion), getLogLik(pars, group = "y", criterion = criterion))
+
+             if (aggregated) sum(res) else res
+           }
+
+         },
+         stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
+  )
+} #fn objFun
+
+# attach analytical solution for MLE
+if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' && ! isSurv ){
+  attr(objFun, which = "opt") <- local({
+    par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
+    list(par_orig = par_analytic,
+         #transformed parameters
+         par = extractPars(par_analytic, isOpt = FALSE, transform = TRUE, named = TRUE),
+         value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
+         methodOpt = "analytic",
+         convergence = 0L,
+         message = "analytic solution for naive MLE ('MLEn')",
+         counts = 0L)
+  })
+}
+
+objFun
 }
 
 

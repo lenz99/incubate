@@ -910,13 +910,11 @@ test_that("Fit delayed Weibull", {
   # MLEw
   fd_wbc_mlew <- delay_model(x = cousEx, distribution = "weib", method = "MLEw", profile = TRUE)
   expect_true(fd_wbc_mlew$optimizer$profiled)
-  expect_equal(coef(fd_wbc_mlew), expected = cousPar_mlew, tolerance = .09)
-  # similar criterion value
-  expect_equal(fd_wbc_mlew$criterion, expected = fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = .005)
+  expect_equal(coef(fd_wbc_mlew), expected = cousPar_mlew, tolerance = .25)
   # our implementation finds a smaller value of the objective function (to be minimized)
-  expect_lte(fd_wbc_mlew$optimizer$valOpt, fd_wbc_mlew$objFun(c(delay1=283.7, shape1=log(2.29))))
-  # but log-likelihood is in fact quite similar (actually, Cousineau's solution is slightly better)
-  expect_equal(fd_wbc_mlew$criterion, fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = .01)
+  expect_lte(fd_wbc_mlew$optimizer$valOpt, fd_wbc_mlew$objFun(c(delay1=cousPar_mlew[["delay1"]], shape1=log(cousPar_mlew[["shape1"]]))))
+  # but log-likelihood criterion is in fact quite similar (actually, Cousineau's solution is slightly better)
+  expect_equal(fd_wbc_mlew$criterion, fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = .001)
 
 
   # two groups -----

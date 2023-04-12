@@ -7,19 +7,24 @@
 
 # init -----
 
-message("Start script for internal data at ", toString(Sys.time()))
+message("Script to prepare internal data")
+message("Start at ", toString(Sys.time()))
 
 library("rlang")
 library("usethis")
-library("readr")
+library("readr") #parse_number
 library("tibble")
 library("tidyr", warn.conflicts = FALSE)
 library("dplyr", warn.conflicts = FALSE)
 library("purrr", warn.conflicts = FALSE)
+library("ggplot2")
+
 library("future")
 library("future.callr")
 library("furrr")
 library("matrixStats", warn.conflicts = FALSE)
+library("gslnls")
+library("splines")
 
 suppressPackageStartupMessages(library('R.utils'))
 
@@ -34,7 +39,8 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
 
 
 if (any(c('help', 'h') %in% names(cmdArgs))){
-  cat('Run Monte-Carlo simulations to estimate the median weights W1, W2 and W3 for weighted maximum likelihood approach (MLEw).\n')
+  cat('Run Monte-Carlo simulations to estimate the median weights W1, W2 and W3 for weighted maximum likelihood approach (MLEw) and\n')
+  cat('And also find approximating functions for these weights.\n')
   cat('See as reference Cousineau, 2009.\n')
   cat('  --help\t print this help\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent.\n')
@@ -63,10 +69,11 @@ myOverwrite <- isTRUE(any(c("overwrite", "ow", "f") %in% tolower(names(cmdArgs))
 
 
 # fail early
-rdsFile <- file.path(myResultsDir, "MLEw_weights.rds")
-if (file.exists(rdsFile) && ! myOverwrite) {
-  stop("File ", rdsFile, "already exists! You would need to set overwrite-flag.")
+rdataFile <- file.path(myResultsDir, "MLEw_weights.RData")
+if (file.exists(rdataFile) && ! myOverwrite) {
+  stop("File ", rdataFile, "already exists! You would need to set overwrite-flag.")
 }
+
 
 
 # set up simulation setting -----
@@ -78,7 +85,7 @@ if (myWorkers > 1L) {
 
 
 # distribution of W1 is Gamma with shape n and scale 1/n
-nObs <- c(1:25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 10000)
+nObs_vctr <- c(1:25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 10000)
 shape_W3 <- c(0.01, 0.05, 0.1, 0.25, 0.5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7)
 
 aggFun <- stats::median; isMedian <- TRUE
@@ -89,27 +96,38 @@ stopifnot( is.function(aggFun), "na.rm" %in% formalArgs(aggFun) )
 
 message("Start with W1")
 
-W1_mc <- furrr::future_map_dbl(.x = nObs,
-                               .f = ~ aggFun(rgamma(n=myMCNrep, shape = .x, scale = 1/.x)),
-                               .options = furrr_options(seed = TRUE)) %>%
-  purrr::set_names(nm = nObs)
-if ( abs(W1_mc[[1]] - log(2)) > 1e-3 ) {
+W1_mcs <- furrr::future_map_dbl(.x = nObs_vctr,
+                                .f = ~ aggFun(rgamma(n=myMCNrep, shape = .x, scale = 1/.x)),
+                                .options = furrr_options(seed = TRUE)) %>%
+  purrr::set_names(nm = nObs_vctr)
+if ( abs(W1_mcs[[1]] - log(2)) > 1e-3 ) {
   warning("For n=1, W1 deviates more than 1e-3 from the true value ln(2)! (We use ln(2) instead, anyhow.)", call. = FALSE)
 }
-W1_mc[[1L]] <- log(2)
+W1_mcs[[1L]] <- log(2)
 
 
 # simulation of W2 -----------------------------------------
 
 message("Start with W2")
-W2_mc <- furrr::future_map_dbl(.x = nObs, .f = ~ aggFun(replicate(n = myMCNrep,
-                                                                 expr = {
-                                                                   z <- rexp(n=.x)
-                                                                   sum(z * log(z))/sum(z) - mean(log(z))
-                                                                 })), .options = furrr_options(seed = TRUE)) %>%
-  purrr::set_names(nm = nObs)
-stopifnot( abs(W2_mc[[1]]) < 1e-5 )
-W2_mc[[1L]] <- 0
+W2_mcs <- furrr::future_map_dbl(.x = nObs_vctr,
+                                .f = ~ aggFun(replicate(n = myMCNrep,
+                                                        expr = {
+                                                          z <- rexp(n=.x)
+                                                          sum(z * log(z))/sum(z) - mean(log(z))
+                                                        })), .options = furrr_options(seed = TRUE)) %>%
+  purrr::set_names(nm = nObs_vctr)
+stopifnot( abs(W2_mcs[[1]]) < 1e-5 )
+W2_mcs[[1L]] <- 0
+
+
+# gather results for W1 & W2 in a combined dataframe
+W12_mcs_df <- dplyr::inner_join(
+  x = tibble::enframe(W1_mcs, name = "nObs", value = "W1"),
+  y = tibble::enframe(W2_mcs, name = "nObs", value = "W2"),
+  by = join_by(nObs)
+) %>%
+  dplyr::mutate(nObs = as.integer(nObs))
+
 
 
 # simulation of W3 --------------------------------------------------------
@@ -119,8 +137,8 @@ message("Start with W3")
 #+this works for median but for instance not for mean!
 stopifnot(isMedian)
 
-W3_mc_df <- tidyr::expand_grid(nObs = as.integer(nObs),
-                               shape = shape_W3) %>%
+W3_mcs_df <- tidyr::expand_grid(nObs = as.integer(nObs_vctr),
+                                shape = shape_W3) %>%
   dplyr::mutate(W3 = furrr::future_map2_dbl(.x = nObs, .y = shape,
                                             .f = ~ exp(aggFun(replicate(n = myMCNrep,
                                                                         expr = {
@@ -138,29 +156,243 @@ W3_mc_df <- tidyr::expand_grid(nObs = as.integer(nObs),
                                             .options = furrr_options(seed = TRUE)))
 
 
-W12 <- dplyr::inner_join(
-  x = tibble::enframe(W1_mc, name = "nObs", value = "W1"),
-  y = tibble::enframe(W2_mc, name = "nObs", value = "W2"),
-  by = join_by(nObs) ) %>%
-  dplyr::mutate(nObs = as.integer(nObs))
+# Monte-Carlo simulation results for median
+.MLEw_mcs <- list(
+  W12 = W12_mcs_df,
+  W3 = W3_mcs_df,
+  setting = list(seed = mySeed,
+                 aggFun = aggFun,
+                 mcnrep = myMCNrep)
+)
+
+try(expr = rm(W12_mcs_df, W3_mcs_df), silent = FALSE)
+
+
+
+# approximation W1 ----------------------------------------------------------
+
+w1F <- function(nObs) {
+
+  if (missing(nObs) || length(nObs) != 1L || !is.numeric(nObs) || !is.finite(nObs) ) {
+    stop("Please provide the number of observations within group!", call. = FALSE)
+  }
+
+  nObs <- max(1L, nObs)
+
+  if (nObs <= 13L) {
+    .MLEw_mcs[["W12"]]$W1[[nObs]]
+  } else {
+    # approximation for median of gamma(n, 1/n)
+    #+using Wilson-Hilferty transformation (see <https://en.wikipedia.org/wiki/Gamma_distribution>)
+    (1 - 1 / (9 * nObs))^3
+  }
+}
+
+
+# approximation W2 --------------------------------------------------------
+
+# asymptotic regression model: cf. SSasymp model on log(nObs)
+# starting at nObs = 2. nObs = 1 is off.
+fm_W2 <- gsl_nls(W2 ~ 1 + (R0 - 1) * nObs**-exp(lr),
+                 start = list(R0 = -.25, lr = -.01),
+                 data = .MLEw_mcs$W12[-1L,])
+
+# check model fit
+if (!fm_W2$convInfo$isConv || fm_W2$convInfo$stopCode != 0 || fm_W2$convInfo$nEval[["f"]] > 23 || deviance(fm_W2) > 0.01){
+  stop("Model fit for W2 is bad!")
+}
+
+if (rlang::is_interactive()) {
+  ggplot(data = .MLEw_mcs$W12[-1L,] %>%
+           dplyr::mutate(W2pred = predict(fm_W2)),
+         mapping = aes(x = nObs, y = W2)) +
+    geom_point() + geom_line() +
+    geom_point(mapping = aes(y = W2pred), size = .5, col = "darkred") +
+    geom_line(mapping = aes(y = W2pred), col = "darkred") +
+    scale_x_log10()
+}
+
+
+# save infos for MLEw-approximation
+.MLEw_approx <- list(
+  coef = list(
+    W2_R0 = coef(fm_W2)[[1L]], #was -0.44193638
+    W2_negRate = -exp(coef(fm_W2)[[2L]]) #was -exp(-0.00624712316)
+  )
+)
+
+
+
+w2F <- function(nObs) {
+
+  if (missing(nObs) || length(nObs) != 1L || !is.numeric(nObs) || !is.finite(nObs)) {
+    stop("Please provide the number of observations within group!", call. = FALSE)
+  }
+
+  nObs <- max(1L, nObs)
+
+  if (nObs <= 13L) {
+    .MLEw_mcs[["W12"]]$W2[[nObs]]
+  } else {
+    # median approximation via asymptotic regression model SSasymp on log(n):
+    # We hence model: W2 = 1 + (R0 - 1) * nObs**(-r)
+    1 + (.MLEw_approx[["coef"]][["W2_R0"]]- 1) * nObs**.MLEw_approx[["coef"]][["W2_negRate"]]
+  }
+}
+
+
+# approximation W3 --------------------------------------------------------
+
+.MLEw_approx[["coef"]][["W3_richards"]] <- local({
+  W3 <- .MLEw_mcs$W3 %>%
+    dplyr::mutate(lshape = log(shape))
+
+  ITER_MAX <- 1011
+  nObs_vctr <- unique(W3$nObs)
+
+  # Richards' generalized logistic function
+  fm_W3_indiv <- purrr::map(.x = nObs_vctr,
+                            .f = ~ gsl_nls(W3 ~ A + (K - A) / (1 + Q * exp(-B * lshape))**(1/nu),
+                                           data = W3, subset = nObs == .x, #jac = TRUE,
+                                           start = list(A = 2*.x, K = 1, Q = .15 - .015 * log(.x), B = log(.x+1), nu = log(.x+1)/3),
+                                           control = gsl_nls_control(maxiter = ITER_MAX)))
+
+  # check convergence for each model
+  stopifnot( all(purrr::map_lgl(fm_W3_indiv, .f = list("convInfo", "isConv"))) )
+  stopifnot( all(purrr::map_dbl(fm_W3_indiv, .f = list("convInfo", "nEval", "f")) < ITER_MAX) )
+
+  # gather coefficients of individual generalized logistic functions per n
+  purrr::map(fm_W3_indiv, .f = coef) %>%
+    purrr::list_transpose(simplify = TRUE) %>%
+    append(values = list(nObs=nObs_vctr), after = 0) %>%
+    append(values = list(resStdDev = purrr::map_dbl(fm_W3_indiv, .f = sigma))) %>%
+    as_tibble()
+})
+
+if (rlang::is_interactive()) {
+  ggplot(.MLEw_approx[["coef"]][["W3_richards"]], mapping = aes(x = nObs, y = resStdDev)) + geom_point() +
+    labs(title = "Residual std. deviation")
+
+  local({
+    nObs_vctr <- .MLEw_approx[["coef"]][["W3_richards"]]$nObs
+    opar <- par(mfrow = c(2,3))
+    purrr::iwalk(.MLEw_approx[["coef"]][["W3_richards"]][-1L],
+                 .f = ~plot(x = nObs_vctr, y = .x, main = paste("parameter", .y)))
+    par(opar)
+  })
+}
+
+# # spline interpolation through individual curve coefficients
+# dat_ips_A  <- with(.MLEw_approx[["coef"]][["W3_richards"]], interpSpline(A ~ nObs))
+# dat_ips_K  <- with(.MLEw_approx[["coef"]][["W3_richards"]], interpSpline(K ~ nObs))
+# dat_ips_B  <- with(.MLEw_approx[["coef"]][["W3_richards"]], interpSpline(B ~ nObs))
+# dat_ips_Q  <- with(.MLEw_approx[["coef"]][["W3_richards"]], interpSpline(Q ~ nObs))
+# dat_ips_nu <- with(.MLEw_approx[["coef"]][["W3_richards"]], interpSpline(nu ~ nObs))
+
+
+.MLEw_approx[["coef"]][["W3_richards_ips"]] <- with(data = .MLEw_approx[["coef"]][["W3_richards"]],
+                                                    expr = list(A =  splines::interpSpline(A ~ nObs),
+                                                                K =  splines::interpSpline(K ~ nObs),
+                                                                B =  splines::interpSpline(B ~ nObs),
+                                                                Q =  splines::interpSpline(Q ~ nObs),
+                                                                nu = splines::interpSpline(nu ~ nObs)))
+
+if (rlang::is_interactive()) {
+  nObs_interp <- sort(unique(c(.MLEw_approx[["coef"]][["W3_richards"]]$nObs[-seq_len(7)],
+                               5000, 6000, 7000, 8000, 9000, 10000, 11000, 13000, 15000)))
+
+  ggplot(.MLEw_approx[["coef"]][["W3_richards"]], mapping = aes(x = nObs, y = A)) +
+    geom_point() +
+    geom_line(data = as_tibble(predict(.MLEw_approx[["coef"]][["W3_richards_ips"]][["A"]], x = nObs_interp)),
+              mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
+    #  geom_line(data = dat_sp2, mapping = aes(x = x, y = y), col = "blue") +
+    #  geom_line(data = dat_sp3, mapping = aes(x = x, y = y), col = "darkgreen") +
+    scale_x_log10() +
+    scale_y_log10() +
+    labs(title = "Parameter A")
+
+  ggplot(.MLEw_approx[["coef"]][["W3_richards"]], mapping = aes(x = nObs, y = K)) +
+    geom_point() +
+    geom_line(data = as_tibble(predict(.MLEw_approx[["coef"]][["W3_richards_ips"]][["K"]], x = nObs_interp)),
+              mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
+    scale_x_log10() +
+    scale_y_log10() +
+    labs(title = "Parameter K")
+
+  ggplot(.MLEw_approx[["coef"]][["W3_richards"]], mapping = aes(x = nObs, y = B)) +
+    geom_point() +
+    geom_line(data = as_tibble(predict(.MLEw_approx[["coef"]][["W3_richards_ips"]][["B"]], x = nObs_interp)),
+              mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
+    #  geom_line(data = dat_sp2, mapping = aes(x = x, y = y), col = "blue") +
+    #  geom_line(data = dat_sp3, mapping = aes(x = x, y = y), col = "darkgreen") +
+    scale_x_log10() +
+    #scale_y_log10() +
+    labs(title = "Parameter B")
+
+  ggplot(.MLEw_approx[["coef"]][["W3_richards"]], mapping = aes(x = nObs, y = Q)) +
+    geom_point() +
+    geom_line(data = as_tibble(predict(.MLEw_approx[["coef"]][["W3_richards_ips"]][["Q"]], x = nObs_interp)) %>%
+                # avoid negative values
+                mutate(y = pmax.int(sqrt(.Machine$double.eps), y)),
+              mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
+    scale_x_log10() +
+    #scale_y_log10() +
+    labs(title = "Parameter Q")
+
+  ggplot(.MLEw_approx[["coef"]][["W3_richards"]], mapping = aes(x = nObs, y = nu)) +
+    geom_point() +
+    geom_line(data = as_tibble(predict(.MLEw_approx[["coef"]][["W3_richards_ips"]][["nu"]], x = nObs_interp)),
+              mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
+    scale_x_log10() +
+    #scale_y_log10() +
+    labs(title = "Parameter nu")
+}
+
+
+w3FF <- function(nObs) {
+
+  if (missing(nObs) || length(nObs) != 1L || !is.numeric(nObs) || !is.finite(nObs) ) {
+    stop("Please provide the number of observations within group!", call. = FALSE)
+  }
+
+  # we use W1 from MCS
+
+  # catch all for n = 1
+  if (nObs < 2L) return(function(k) 1)
+
+  # Richards generalized logistic function
+  # check for coefficients for each small n
+  approx_W3_ind <- which(.MLEw_approx[["coef"]][["W3_richards"]]$nObs == nObs)
+  approx_W3_names <- c("A", "K", "Q", "B", "nu")
+
+  approx_W3_coefs <- if (length(approx_W3_ind) == 1L) {
+    .MLEw_approx[["coef"]][["W3_richards"]][approx_W3_ind, approx_W3_names]
+  } else {
+    purrr::map(.x = .MLEw_approx[["coef"]][["W3_richards_ips"]],
+               .f = ~ max(0, predict(.x, x = nObs)$y)) %>%
+      rlang::set_names(nm = approx_W3_names)
+  }
+
+  # fn of shape k
+  function(k) {
+    evalq(expr = A + (K - A) / (1 + Q * k**-B)**(1/nu),
+          envir = approx_W3_coefs,
+          enclos = rlang::current_env())
+  } #fn
+}
+
 
 
 # save results ------------------------------------------------------------
 
-.MLEw_weights <- list(
-  W12 = W12,
-  W3 = W3_mc_df,
-  MCSS_setting = list(seed = mySeed,
-                      aggFun = aggFun,
-                      mcnrep = myMCNrep)
-)
+# append weight functions
+.MLEw_approx <- append(.MLEw_approx,
+                       values = list(fun = list(w1F = w1F,
+                                                w2F = w2F,
+                                                w3FF = w3FF)))
 
-message("Save weights for MLEw as RDS file ", rdsFile)
-if (file.exists(rdsFile) && ! myOverwrite) {
-  warning("File ", rdsFile, "already exists! You would need to set overwrite-flag.")
-} else {
-  saveRDS(.MLEw_weights, file = rdsFile)
-}
+message("Save MLEw-weights info (MCS and approx) as RData-file ", rdataFile)
+save(list = c(".MLEw_mcs", ".MLEw_approx"), file = rdataFile)
 
 
 # exit --------------------------------------------------------------------
