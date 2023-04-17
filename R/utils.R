@@ -66,14 +66,14 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 #' @param roundDigits integer. Which level of rounding to test? Negative numbers round to corresponding powers of 10
 #' @param maxObs integer. How many observations to consider at most? If the provided sample has more observations a sub-sample is used.
 #' @return estimated rounding error
-estimRoundingError <- function(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100L) {
+estimRoundingError <- function(obs, roundDigits = seq.int(from = -4L, to = 6L), maxObs = 100L) {
   stopifnot( is.numeric(maxObs), length(maxObs) == 1L )
   maxObs <- trunc(maxObs)
   # drop NA and Inf
   obs <- obs[is.finite(obs)]
 
   if (maxObs > 1L && length(obs) > maxObs){
-    obs <- obs[round(seq.int(from = 1, to = length(obs), length.out = maxObs))]
+    obs <- obs[round(seq.int(from = 1L, to = length(obs), length.out = maxObs))]
   }
 
 
@@ -84,21 +84,21 @@ estimRoundingError <- function(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100
   if (all(abs(obs) < .1)) obs <- 1L + obs
 
   rDigInd <- purrr::map_lgl(.x = roundDigits,
-                            .f = ~all(abs(obs - round(obs, digits = .x)) < 2L * 10L**min(-2L, -.x-1L)) )
+                            .f = function(.x) all(abs(obs - round(obs, digits = .x)) < 2L * 10L**min(-2L, -.x-1L)) )
   10L**-if (!any(rDigInd)) max(roundDigits)+1L else if (all(rDigInd)) min(roundDigits)-1L else roundDigits[which.max(rDigInd)]
 }
 
 
 #' Check and prepare the survival response(s).
 #' Allowed censoring types are right-, left-, and interval-censoring.
-#' If `y0` is not `NULL` it will return either both numeric, non-Surv or both Surv-objects of the same type.
+#' If `y0` is not `NULL` this function will return either both numeric, non-Surv or both Surv-objects of the same type.
 #' @param x0 response as numeric or [survival::Surv] using left, right or interval-coding
 #' @param y0 response as numeric or [survival::Surv] using left, right or interval-coding
 #' @param simplify logical. Should the result be as simple as possible? If `FALSE`, result will be in any case [survival::Surv] objects.
 #' @return a list of the two responses, either both as [survival::Surv] or plain numeric (if no censorings and `simplify=TRUE`)
 prepResponseVar <- function(x0, y0=NULL, simplify = TRUE) {
 
-  if (missing(x0)) stop("Input for x0 is expected!", call. = FALSE)
+  if (missing(x0)) stop("Input for x0 is mandatory!", call. = FALSE)
   stopifnot(is.numeric(x0),  is.null(y0) || is.numeric(y0))
 
   isSurv.x <- inherits(x0, what = "Surv")

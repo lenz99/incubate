@@ -4,7 +4,7 @@
 \alias{prepResponseVar}
 \title{Check and prepare the survival response(s).
 Allowed censoring types are right-, left-, and interval-censoring.
-If \code{y0} is not \code{NULL} it will return either both numeric, non-Surv or both Surv-objects of the same type.}
+If \code{y0} is not \code{NULL} this function will return either both numeric, non-Surv or both Surv-objects of the same type.}
 \usage{
 prepResponseVar(x0, y0 = NULL, simplify = TRUE)
 }
@@ -21,5 +21,5 @@ a list of the two responses, either both as \link[survival:Surv]{survival::Surv}
 \description{
 Check and prepare the survival response(s).
 Allowed censoring types are right-, left-, and interval-censoring.
-If \code{y0} is not \code{NULL} it will return either both numeric, non-Surv or both Surv-objects of the same type.
+If \code{y0} is not \code{NULL} this function will return either both numeric, non-Surv or both Surv-objects of the same type.
 }

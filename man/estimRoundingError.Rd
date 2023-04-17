@@ -5,7 +5,11 @@
 \title{Estimate rounding error based on given sample of metric values
 The idea is to check at which level of rounding the sample values do not change.}
 \usage{
-estimRoundingError(obs, roundDigits = seq.int(-4L, 6L), maxObs = 100L)
+estimRoundingError(
+  obs,
+  roundDigits = seq.int(from = -4L, to = 6L),
+  maxObs = 100L
+)
 }
 \arguments{
 \item{obs}{numeric. Metric values from a sample to estimate the corresponding rounding error}

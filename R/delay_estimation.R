@@ -54,7 +54,7 @@ objFunFactory <- function(x, y = NULL,
   stopifnot( is.list(respL), identical(names(respL), c("x", "y")) )
   x <- respL[["x"]]
   y <- respL[["y"]]
-  rm(respL)
+  rm(list = "respL")
 
   # flag if we have Surv-data or not
   isSurv <- inherits(x, what = "Surv")
@@ -96,8 +96,8 @@ objFunFactory <- function(x, y = NULL,
     } else {
       # Surv response
       survType <- attr(obs, which = "type", exact = TRUE)
-      # for MPSE: check we only have no other censoring than right-censoring
-      if (method == 'MPSE' && survType != 'right') { #any(obs[, "status"] > 1)) {
+      # for MPSE: check we only have right-censoring
+      if (method == 'MPSE' && survType != 'right') {
         warning("MPSE-fitting supports only right censored observations currently.", call. = FALSE)
         return(invisible(NULL))
       }
@@ -125,22 +125,28 @@ objFunFactory <- function(x, y = NULL,
         return(invisible(NULL))
       }# fi
 
-      # check spread in data
+      # check spread in data (any, observed or censored times)
       if (obs[length(obs), 1L] < obs[1L, 1L] + 3L*TOL_NUM ) { #&& method %in% c("MPSE", "MLEc")) {
         warning("Too small spread in data for this estimation method!", call. = FALSE)
         return(invisible(NULL))
       }
-    }
+    } #esle isSurv
 
 
     if (is.null(obs)) return(NULL)
 
 
     # tie break
-    #XXX think Surv: ties in observed event-times?!
-    if ( startsWith(method, 'MLE') || ties == 'density' || isSurv ) return(obs)
+    if ( startsWith(method, 'MLE') || ties == 'density' ) return(obs)
 
-    diffobs <- diff(obs)
+    # differences of adjacent observed event times
+    diffobs <- if (isSurv) {
+      obsEvInd <- which(obs[, "status"] == 1)
+      diff(obs[obsEvInd, 1L])
+    } else {
+      diff(obs)
+    }
+
     stopifnot( all(diffobs >= 0L) ) # i.e. sorted obs
 
     tiesDiffInd <- which(diffobs < TOL_NUM) # == 0 or < .Machine$double.xmin
@@ -149,51 +155,70 @@ objFunFactory <- function(x, y = NULL,
       #rl <- rle(diff(tiesDiffInd))
       if (verbose > 0L) {
         #length(which(rl$values > 1L))+1L,
-        cat(glue('{length(tiesDiffInd) + sum(diff(tiesDiffInd)>1L) + 1L} tied observations ',
+        cat(glue('{length(tiesDiffInd) + sum(diff(tiesDiffInd)>1L) + 1L} tied observation times ',
                  'in {sum(diff(tiesDiffInd)>1L) + 1L} group(s) within data vector.\n'))
       }
 
       if ( ties == 'error' ) stop('Ties within data are not allowed!', call. = FALSE)
 
-      roundOffPrecision <- estimRoundingError(obs, maxObs = 1001L)
-      if (verbose > 0L){
+      # for precision estimate, consider all observations (events or censorings)
+      roundOffPrecision <- estimRoundingError(if (isSurv) obs[, 1L] else obs, maxObs = 1001L)
+      if (verbose > 1L) {
         cat(glue("Round-off error has magnitude {roundOffPrecision}\n"))
       }
 
       # rounding radius can't be wider than smallest observed diff.
       # plogis to mitigate the effect of sample size: the larger the sample the more we can 'trust' the observed minimal diff
       # obs[1L] = min(obs) = diff of minimal obs with 0
-      rr <- .5 * min(stats::plogis(q = length(obs), scale = 11) * diffobs[which(diffobs > 0L)],
+      rr <- .5 * min(stats::plogis(q = length(obs), scale = 17) * diffobs[which(diffobs > 0L)],
                      # rounding precision here
-                     roundOffPrecision, obs[[1L]], na.rm = TRUE)
+                     roundOffPrecision,
+                     # first observed event time
+                     if (isSurv) obs[which.max(obs[, "status"] == 1), 1L] else obs[[1L]], na.rm = TRUE)
 
       ## modify tied observations per group of ties
       startInd <- endInd <- 1L
       repeat {
         #proceed to end of tie-group
-        while (endInd < length(tiesDiffInd) && tiesDiffInd[endInd+1L] == tiesDiffInd[endInd] + 1L) {endInd <- endInd+1L}
+        while (endInd < length(tiesDiffInd) && tiesDiffInd[endInd+1L] == tiesDiffInd[endInd] + 1L) { endInd <- endInd+1L }
         #include adjacent index to complete tie-group
         obsInd <- c(tiesDiffInd[startInd:endInd], tiesDiffInd[endInd]+1L)
-        stopifnot( stats::sd(obs[obsInd]) == 0L ) #check: tie-group
-        obs[obsInd] <- obs[obsInd] + if (ties == 'random') {
-          # sort ensures that data after tie-break are still sorted from small to large
-          sort(stats::runif(n = length(obsInd), min = -rr, max = +rr)) } else {
-            stopifnot( ties == 'equidist' )
-            # use evenly spaced observations to break tie as proposed by Cheng (1989) on Moran test statistic
-            #+(they first use the ties = 'density' approach for initial estimation of parameters for Moran's statistic, though)
-            seq.int(from = -rr, to = +rr, length.out = length(obsInd))
-          }
+        stopifnot( diff(range(if (isSurv) obs[obsEvInd, 1L][obsInd] else obs[obsInd])) == 0L ) #check: tie-group
+        tieFix <- switch(ties,
+               random = {
+                 # sort ensures that data after tie-break are still sorted from small to large
+                 sort(stats::runif(n = length(obsInd), min = -rr, max = +rr))
+               },
+               equidist = {
+                 # use evenly spaced observations to break tie as proposed by Cheng (1989) on Moran test statistic
+                 #+(they first use the ties = 'density' approach for initial estimation of parameters for Moran's statistic, though)
+                 seq.int(from = -rr, to = +rr, length.out = length(obsInd))
+               },
+               stop("Method ", ties, " to handle ties is not supported.", call. = FALSE)
+        )
+
+        # fix ties in observed event times
+        if (isSurv) {
+          obs[obsEvInd, 1L][obsInd] <- obs[obsEvInd, 1L][obsInd] + tieFix
+        } else {
+          obs[obsInd] <- obs[obsInd] + tieFix
+        }
         startInd <- endInd <- endInd+1L
-        if ( startInd > length(tiesDiffInd) ) break
+        if (startInd > length(tiesDiffInd)) break
       } #repeat
 
-      if (verbose > 1L ){
+      # re-sort in case tie breaking also broke ordering (a censoring on same moment as tied observations,
+      #+then the censoring goes in between the tie-breaked observations)
+      if (isSurv) obs <- sort(obs)
+
+      if (verbose > 1L) {
         cat(glue("New data: {paste(obs[seq_len(min(25L, length(obs)))], collapse = ', ')}\n"))
       }
-    } #fi tiesdiff
+    } #fi tiesDiffInd
 
-    # we have broken all ties
-    stopifnot( !any(diff(obs) == 0) )
+    ## we have broken all ties
+    ##+but this check only works for non-Surv objects
+    #stopifnot( !any(diff(obs) == 0) )
 
     obs
   } #fn preprocessF
