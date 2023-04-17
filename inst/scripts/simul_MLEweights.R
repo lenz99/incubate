@@ -19,12 +19,14 @@ library("dplyr", warn.conflicts = FALSE)
 library("purrr", warn.conflicts = FALSE)
 library("ggplot2")
 
+library("gslnls")
+library("splines")
+library("matrixStats", warn.conflicts = FALSE)
+
 library("future")
 library("future.callr")
 library("furrr")
-library("matrixStats", warn.conflicts = FALSE)
-library("gslnls")
-library("splines")
+
 
 suppressPackageStartupMessages(library('R.utils'))
 
