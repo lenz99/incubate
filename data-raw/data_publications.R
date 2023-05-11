@@ -31,5 +31,15 @@ pollution <- c(
   11500, 12700, 15300, 18300, 20400
 )
 
+# graphite data
+# from
+graphite <- sort(
+  c(27.55, 31.82, 33.74, 34.15, 35.32, 36.78,
+    29.89, 32.23, 33.74, 34.44, 35.44, 37.07,
+    30.07, 32.28, 33.86, 34.62, 35.61, 37.36,
+    30.65, 32.69, 33.86, 34.74, 35.61, 37.36,
+    31.23, 32.98, 33.86, 34.74, 35.73, 37.36,
+    31.53, 33.28, 34.15, 35.03, 35.90, 40.28,
+    31.53, 33.28, 34.15, 35.03, 36.20))
 
-usethis::use_data(publication_examples, fatigue, susquehanna, pollution, overwrite = TRUE)
+usethis::use_data(publication_examples, fatigue, susquehanna, pollution, graphite, overwrite = TRUE)

@@ -26,18 +26,20 @@
 #'
 #' @aliases rockette
 #' @details
-#' These small data sets are provided as numeric vectors.
+#' The following small data sets are provided as numeric vectors.
 #' \describe{
 #'   \item{`rockette`:}{Artificial sample of length 4 given by Rockette. The maximum likelihood function has two stationary points, none of them is the global maximum.}
 #'   \item{`fatigue`:}{Fatigue times of ten bearings of a specific type in hours.}
 #'   \item{`susquehanna`:}{Maximum flood levels (in millions of cubic feet per second) for the Susquehanna River of Harrisburg (Pennsylvania, USA) over 20 4-year periods.}
 #'   \item{`pollution`:}{Beach pollution levels in South Wales (measured in number of coliform per 100 ml) on 20 days over a 5-week period.}
+#'   \item{`graphite`:}{Breaking stress (in MPa x 10^6) of 41 beam specimens cut from a single graphite H590 block, from a reliability study reported by Margetson & Cooper (1984), cited by Cheng & Stephen (1989)}
 #' }
 #'
-#' @source McCool, J.I., 1974. Inferential techniques for Weibull populations. Technical Report TR 74-0180, Wright Patterson Air Force Base, Ohio.
-#' @source Rockette, H., 1974. Maximum Likelihood Estimation with the Weibull Model.
-#' @source Dumonceaux, R. and Antle, C. E., 1973. Discrimination between the lognormal and the Weibull distributions. Technometrics, 15, 923-926.
-#' @source Steen, P. J. and Stickler, D. J., 1976. A Sewage Pollution Study of Beaches from Cardiff to Ogmore. Report January 1976, Cardiff: Department of Applied Biology, UWIST.
+#' @references McCool, J.I., 1974. Inferential techniques for Weibull populations. Technical Report TR 74-0180, Wright Patterson Air Force Base, Ohio.
+#' @references Rockette, H., 1974. Maximum Likelihood Estimation with the Weibull Model.
+#' @references Dumonceaux, R. and Antle, C. E., 1973. Discrimination between the lognormal and the Weibull distributions. Technometrics, 15, 923-926.
+#' @references Steen, P. J. and Stickler, D. J., 1976. A Sewage Pollution Study of Beaches from Cardiff to Ogmore. Report January 1976, Cardiff: Department of Applied Biology, UWIST.
+#' @references Cheng, R.C.H. and Stephen, M.A., 1989. A Goodness of Fit Test Using Moran’s Statistic with Estimated Parameters. Biometrika, 76, 386-392.
 "publication_examples"
 
 
@@ -49,3 +51,6 @@
 
 #' @rdname publication_examples
 "pollution"
+
+#' @rdname publication_examples
+"graphite"
