@@ -15,7 +15,7 @@
 The transformed data, either a vector (for single group) or a list with entries x and y (in two group scenario)
 }
 \description{
-The transformation is the probability integral transform. It uses the cumulative distribution function with the estimated parameters of the model fit.
+The transformation used is the probability integral transform. It uses the cumulative distribution function with the estimated parameters of the model fit.
 All available data in the model fit is transformed.
 }
 \note{

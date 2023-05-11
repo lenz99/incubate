@@ -1260,7 +1260,7 @@ getLogLik <- function(pars, group, criterion = FALSE) {
 
 # log spacings:
 # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
-# The criterion is always the negative mean of these log-spacings.
+# These log-spacings are the heart of the MPSE-criterion which is the negative mean of these log-spacings.
 # @param pars vector of parameters (by default, on transformed scale, i.e. when criterion = FALSE)
 # @param criterion logical. When `criterion = TRUE`, then pars are on original scale.
 # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
@@ -1269,7 +1269,7 @@ getCumDiffs <- function(pars, group, criterion = FALSE) {
   # extract parameters for specified group on original scale (for CDF)
   pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
 
-  if (verbose > 1L){
+  if (verbose > 1L) {
     cat(glue("Parameter vector for group {group} after back-transformation: ",
              "{paste(round(pars.gr, 2), collapse = ', ')}"), "\n")
   }
@@ -1291,13 +1291,14 @@ getCumDiffs <- function(pars, group, criterion = FALSE) {
       # Cave: works only for two groups (x or y) as I only use the strata[[1L]] as cutpoint
       ind_evKM <- if (group == "x") ind_evKM[ind_evKM <= kmFit$strata[[1L]]] else ind_evKM[ind_evKM > kmFit$strata[[1L]]]
     }
+    # h: return object
     h <- rep_len(-1, length.out = length(obs))
 
     # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
-    # floor(n.event + n.censor) = n
+    # floor(n.event + n.censor) == n
     stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
                    if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
-    # use CDF of right-censored outcome variable for all observed event times
+    # use CDF for all observed event times of right-censored outcome variable
     h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens$surv[ind_evKM]) + (1 - kmFitrcens$surv[ind_evKM]),
                                        # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
                                        times = kmFit$n.event[ind_evKM])
@@ -1307,16 +1308,19 @@ getCumDiffs <- function(pars, group, criterion = FALSE) {
       ind_hobs <- which(h>0)
       # interpolate values for all censored observations
       h[ind_hrcens] <- stats::approx(x = c(0L, ind_hobs, length(obs)+1L), y = c(0L, h[ind_hobs], 1L),
-                                     method = "linear", ties = "ordered", yleft = NA, yright = NA, xout = ind_hrcens)$y
+                                     method = "linear", ties = "ordered", # x-values are already ordered!
+                                     yleft = NA, yright = NA,
+                                     # values where to interpolate
+                                     xout = ind_hrcens)$y
     } #fi
 
-    h <- diff( c(0L, h, 1L) )
+    h <- diff(c(0L, h, 1L))
 
     # tie handling for observed event times with density
     ind_t <- which(diff(obs[,1L]) == 0L & # equal adjacent times
                      diff(obs[,"status"] == 1) == 0L & # equal adjacent status
                      obs[-1L, "status"] == 1L) # status is indeed 1 (=observed), drop first row to be on same page as diff(obs)
-    if ( length(ind_t) ){
+    if (length(ind_t)) {
       stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
       # increase index by 1 to get from diff(obs)-indices to cumDiffs-indices
       h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t,1L]), pars.gr))
@@ -1325,7 +1329,7 @@ getCumDiffs <- function(pars, group, criterion = FALSE) {
 
   } else {
     # numeric response, non-Surv
-    h <- diff( c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L) )
+    h <- diff(c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L))
 
     # ties: we check difference of obs directly (not cumDiffs)
     #+because cumDiffs can be 0 even if obs are different, in particular for non-suitable parameters!
@@ -1620,11 +1624,11 @@ print.incubate_fit <- function(x, ...){
   rangeTime <- if (x[["twoGroup"]]) {
     ns <- lengths(x[["data"]])
     paste(
-      sort(c(x[["data"]]$x[[1L]], x[["data"]]$y[[1L]]))[[1L]],
-      sort(c(x[["data"]]$x[[ns[["x"]]]], x[["data"]]$y[[ns[["y"]]]]))[[2L]],
+      round(sort(c(x[["data"]]$x[[1L]], x[["data"]]$y[[1L]]))[[1L]], 4),
+      round(sort(c(x[["data"]]$x[[ns[["x"]]]], x[["data"]]$y[[ns[["y"]]]]))[[2L]], 4),
       sep = " to ")
   } else {
-    paste(x$data[[1L]], x[["data"]][[length(x$data)]], sep = " to ")
+    paste(round(x$data[[1L]],4), round(x[["data"]][[length(x$data)]],4), sep = " to ")
   }
   cat(glue::glue_data(x, .sep = "\n",
                       "Fit a delayed {distribution}{c('', ' with two delay phases')[[1L+twoPhase]]} through{c('', ' profiled')[[1L+optimizer$profiled]]} {switch(method,
@@ -2142,7 +2146,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
 #' Transform observed data to unit interval
 #'
-#' The transformation is the probability integral transform. It uses the cumulative distribution function with the estimated parameters of the model fit.
+#' The transformation used is the probability integral transform. It uses the cumulative distribution function with the estimated parameters of the model fit.
 #' All available data in the model fit is transformed.
 #'
 #' @note

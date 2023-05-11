@@ -13,7 +13,7 @@
 test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
   stopifnot( inherits(delayFit, what = 'incubate_fit') )
-  if (delayFit$method != 'MPSE'){
+  if (delayFit$method != 'MPSE') {
     stop('Goodness-of-fit test only supported for models that are fit with maximum product of spacings estimation (MPSE)!', call. = FALSE)
   }
 
@@ -40,25 +40,25 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
            # @param n nbr of observations, length 1 or 2
            # @param k nbr of parameters to be estimated
            # @return Moran's test statistic, length 1 or 2
-           testStat_mo <- function(mseCrit, n, k){
-             mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - (12L*(n + 1L))**-1L
-             mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - (6L*(n + 1L))**-1L
+           testStat_mo <- function(mseCrit, n, k) {
+             mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - 1/(12L*(n + 1L))
+             mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - 1/(6L*(n + 1L))
 
              C1 <- mo_m - sqrt(.5 * n * mo_v)
              C2 <- sqrt(mo_v / (2L*n))
 
-             # factor (n+1) to go from -avg to -sum
+             # factor (n+1) takes -avg to -sum
              (mseCrit * (n+1L) + .5 * k - C1) / C2
            }# fun
 
 
-           statist <- if (twoGroup){ ##  && length(delayFit$bind) < length(oNames) # not needed!?
+           statist <- if (twoGroup) { ##  && length(delayFit$bind) < length(oNames) # not needed!?
              # sum of two independent chi-sq. is chi-sq
              c(`X^2` = sum(testStat_mo(mseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE), #criterion per group
                                        n = nObs, k = k/2)) )
            } else {
              # single group
-             c(`X^2` = testStat_mo(mseCrit = delayFit[["criterion"]], n = nObs, k = k) )
+             c(`X^2` = testStat_mo(mseCrit = delayFit[["criterion"]], n = nObs, k = k))
            }
 
            p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
@@ -193,7 +193,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
-test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("exponential", "weibull"), twoPhase = FALSE,
+test_diff <- function(x, y = stop('Provide data for group y!'), distribution = c("exponential", "weibull"), twoPhase = FALSE,
                       method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profiled = method == 'MLEw',
                       ties = c('density', 'equidist', 'random', 'error'),
                       param = "delay1",
@@ -224,6 +224,16 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     warning("Goodness-of-fit (GOF) tests are only supported with MPSE currently!")
     return(invisible(NULL))
   }
+
+  # what kind of data
+  respL <- prepResponseVar(x0 = x, y0 = y, simplify = TRUE)
+  stopifnot( is.list(respL), identical(names(respL), c("x", "y")) )
+  x <- respL[["x"]]
+  y <- respL[["y"]]
+  rm(list = "respL")
+
+  # flag if we have Surv-data or not
+  isSurv <- inherits(x, what = "Surv")
 
   # parameters to test differences
   if (any(grepl(pattern = "_tr", param, fixed = TRUE))){
@@ -356,7 +366,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
   }
 
   t0_dist <- P_boot <- chisq_df_hat <- NULL
-  if (testMask[['bootstrap']]){
+  if (testMask[['bootstrap']]) {
     # parametric bootstrap:
     # generate R samples (x, y) by random sampling from the fitted H0-model (e.g. common delay),
     #+where all nuisance parameters are at there best fit
@@ -370,7 +380,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
     retL <- 1L+(verbose>0L)
     t0_dist <- future.apply::future_vapply(X = seq_len(R), FUN.VALUE = double(retL),
-                                           FUN = function(dummy){
+                                           FUN = function(dummy) {
 
                                              # generate new data according to given fitted null-model
                                              # sort is not needed here, as it goes through the whole pipeline (factory method)
@@ -384,7 +394,7 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
                                            }, future.seed = TRUE)
 
-    if (verbose > 0L){
+    if (verbose > 0L) {
       stopifnot( NROW(t0_dist) == 2L )
       fit0_conv <- t0_dist[2L,]
       cat(glue('Proportion of model failures: {as_percent(length(which(is.na(fit0_conv)))/length(fit0_conv))}',
@@ -395,10 +405,10 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
     }
     t0_dist <- t0_dist[is.finite(t0_dist)]
 
-    if (chiSqApprox && length(t0_dist) > 7L){
+    if (chiSqApprox && length(t0_dist) > 7L) {
       try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
                                                       start = list(df = length(param)),
-                                                      method = "Brent", lower = .001, upper = 401))},
+                                                      method = "Brent", lower = .001, upper = 1001))},
           silent = TRUE)
     }
 
@@ -408,14 +418,14 @@ test_diff <- function(x, y=stop('Provide data for group y!'), distribution = c("
 
   # Log-rank tests
   P_logrank <- P_logrank_pp <- NULL
-  if (testMask[["logrank"]]){
+  if (testMask[["logrank"]]) {
     # data in long format
-    dat_2gr <- tibble::tibble(evtime = c(x,y),
+    dat_2gr <- tibble::tibble(evtime = if (isSurv) c(x,y) else Surv(c(x,y)),
                               group = rep.int(c("x", "y"), times = c(length(x), length(y))))
-    P_logrank <- stats::pchisq(q = survival::survdiff(survival::Surv(evtime) ~ group, rho = 0, data = dat_2gr)$chisq,
+    P_logrank <- stats::pchisq(q = survival::survdiff(evtime ~ group, rho = 0, data = dat_2gr)$chisq,
                                df = 1L, lower.tail = FALSE)
     # Peto & Peto modified Gehan-Wilcoxon test
-    P_logrank_pp <- stats::pchisq(q = survival::survdiff(survival::Surv(evtime) ~ group, rho = 1, data = dat_2gr)$chisq,
+    P_logrank_pp <- stats::pchisq(q = survival::survdiff(evtime ~ group, rho = 1, data = dat_2gr)$chisq,
                                   df = 1L, lower.tail = FALSE)
   }
 
