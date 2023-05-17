@@ -731,6 +731,20 @@ test_that("Fit delayed exponentials with censoring", {
   expect_equal(coef(fmCR1w_mlewp), coef(fmCR1w_mpse), tolerance = .25)
 
 
+  # shorter surv-data that has censorings & ties
+  ticr2 <- local({
+    set.seed(20230517)
+    n <- 17L
+    sort(survival::Surv(time =  1.5 + rpois(n, lambda = 9.8),
+                        event = sample(c(0,0,1,1,1), size = n, replace = TRUE)))[-c(1, 3, 8)]
+  })
+
+  fmCR2_mpse <- delay_model(x = ticr2, distribution = "expon", method = "MPSE")
+  expect_identical(fmCR2_mpse$optimizer$convergence, expected = 0L)
+  expect_equal(fmCR2_mpse$cens$n$x[["right"]], expected = sum(ticr2[, "status"] == 0)) # nbr of right censorings
+  expect_identical(rlang::env_get(rlang::fn_env(fmCR2_mpse$objFun), nm = "tieInfo")$x[["cumDiffInd"]], expected = 7L) # single duplicated observed event time at entry 7
+
+
   # two group handling ------------------------------------------------------
 
   # numeric, non-Surv

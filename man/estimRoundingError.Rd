@@ -8,7 +8,7 @@ The idea is to check at which level of rounding the sample values do not change.
 estimRoundingError(
   obs,
   roundDigits = seq.int(from = -4L, to = 6L),
-  maxObs = 100L
+  n_obs = 100L
 )
 }
 \arguments{

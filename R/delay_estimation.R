@@ -175,25 +175,38 @@ objFunFactory <- function(x, y = NULL,
       cat(glue("Round-off error has magnitude {roundOffPrecision}."), "\n")
     }
 
-    # for Surv, we only consider observed event times, here.
-    # as we only need to fix ties within observed times, ties in censored times use interpolation!?
-    if (isSurv) {
-      obs <- obs[which(obs[, "status"] == 1), 1L]
-    }
     if (! length(obs)) return(invisible(NULL))
 
-    dupInd <- which(duplicated(obs))
+    # for Surv, we only consider duplicated observed event times, here.
+    # as we only need to fix ties within observed times, ties in censored times use interpolation!?
+    dupInd <- if (isSurv) {
+      which(duplicated(obs) & obs[, "status"] == 1)
+    } else {
+      which(duplicated(obs))
+    }
+
+    # # reduce obs to only the observed event times for the remainder of the function
+    # obs <- obs[which(obs[, "status"] == 1), 1L]
 
     tieGrp <- matrix(NA_real_, nrow=0, ncol = 0)
     cumDiffInd <- integer(0L)
 
+    # rounding radius:
     # used to break ties later on when evaluating MPSE-criterion
-    # rounding radius can't be wider than smallest observed diff.
+    # it can't be wider than smallest observed diff.
     # plogis to mitigate the effect of sample size: the larger the sample the more we can 'trust' the observed minimal diff
-    # obs[1L] = min(obs) = diff of minimal obs with 0
-    rRad <- .5 * min(roundOffPrecision,
-                     abs(obs[[1L]]), # obs[[1L]] should be non-negative, anyways.
-                     stats::plogis(q = .1+length(obs), scale = 17) * diff(obs[if (length(dupInd)) -dupInd else TRUE]), na.rm = TRUE)
+    #
+    diffObs <- if (isSurv) {
+      outInd <- union(dupInd, which(obs[, "status"] != 1))
+      diff(obs[if (length(outInd)) -outInd else TRUE, 1L])
+    } else {
+      diff(obs[if (length(dupInd)) -dupInd else TRUE])
+    }
+
+    rRad <- TOL_NUM + .5 * min(roundOffPrecision,
+                               # obs[1L] = min(obs) = diff of minimal obs with 0
+                               abs(if (isSurv) obs[which.max(obs[, "status"] == 1), 1L] else obs[[1L]]), # very first time obs[[1L]] should be non-negative, anyways.
+                               stats::plogis(q = .1+length(diffObs), scale = 17) * diffObs, na.rm = TRUE)
 
     if (length(dupInd)) {
       stopifnot(dupInd[[1]] > 1L) # duplicated entries start at least 2
@@ -208,7 +221,9 @@ objFunFactory <- function(x, y = NULL,
       # start one position before duplicated-indices
       startInd <- dupInd[gapsInDupInds] - 1L
       # tabulate instead of for-loop
-      len <- tabulate(factor(obs[c(startInd, dupInd)], levels = obs[startInd]), nbins = length(startInd))
+      len <- tabulate(bin = if (isSurv)
+        factor(obs[c(startInd, dupInd), 1L], levels = obs[startInd, 1L]) else
+          factor(obs[c(startInd, dupInd)], levels = obs[startInd]), nbins = length(startInd))
       # len <- rep_len(-1L, length.out = length(startInd))
       # for (i in seq_along(len)) {
       #   j <- 1
@@ -1318,59 +1333,49 @@ objFunFactory <- function(x, y = NULL,
                                        xout = ind_hrcens)$y
       } #fi
 
-      h <- diff(c(0L, h, 1L))
-
-      # tie handling for observed event times with density
-      # XXX think, if this can be handled together, Surv and non-Surv, using tieInfo[[group]] like below
-      ind_t <- which(diff(obs[,1L]) < TOL_NUM & # equal adjacent times
-                       diff(obs[,"status"] == 1) == 0L & # equal adjacent status
-                       obs[-1L, "status"] == 1L) # status is indeed 1 (=observed), drop first row to be on same page as diff(obs)
-      if (length(ind_t)) {
-        stopifnot( ties == 'density' ) # other tie-strategies have already dealt with ties in *preprocess_gr*
-        # index +1 to get from diff(obs)-indices to cumDiffs-indices
-        h[1L+ind_t] <- rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[ind_t,1L]), pars.gr))
-      } #fi
-      h
+      diff(c(0L, h, 1L))
 
     } else {
       # numeric response, non-Surv
-      h <- diff(c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L))
-
-      # check for ties
-      tig <- tieInfo[[group]]
-      nTigs <- NROW(tig[["tieGrp"]])
-      if (nTigs) {
-        stopifnot( all(h[tig[["cumDiffInd"]]] == 0)) #all spacings for tied obs are 0
-
-        h[tig[["cumDiffInd"]]] <- switch(ties.,
-                                         density = {
-                                           # use density instead of diff of CDF for tied observation pairs
-                                           rep.int(
-                                             # take first observation per tie-group
-                                             rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obs[tig$tieGrp[, "startInd"]]), pars.gr)),
-                                             #tig$tieGrp[, "len"]-1L # number of repeats per tie group
-                                             times = tig$tieGrp[, "len"]-1L)
-                                         },
-                                         # ties = "equispaced" for CDF-backtransformed using given parameters, then equispaced spacings across tie groups
-                                         #we keep using a standard density strategy for fitting, but can request another tie-strategy for evaluating the MPSE-criterion (e.g., for Moran's test)
-                                         equispaced = {
-                                           rep.int(
-                                             # per tie group, use equal spacings in transformed space
-                                             diff(rlang::exec(getDist(distribution, type = "cdf"),
-                                                              !!! c(list(q = rep(obs[tig$tieGrp[, "startInd"]], each = 2L) + c(-1, 1) * tig$numPrecision[["rRad"]]), pars.gr)))[seq.int(from = 1, by = 2, length.out = nTigs)] / (tig$tieGrp[, "len"]-1L),
-                                             times = tig$tieGrp[, "len"]-1L)
-
-                                         },
-                                         # for what it's worth: tie-strategy "error" has normally already quit
-                                         error = {
-                                           stop("getCumDiffs: ties are not allowed!", call. = FALSE)
-                                         },
-                                         # handle exception
-                                         stop("Unknown strategy to handle ties here.", call. = FALSE)
-        )
-      } #fi
-      h
+      diff(c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L))
     }
+
+    # check for ties to fix cumDiffs for observed event times
+    tig <- tieInfo[[group]]
+    nTigs <- NROW(tig[["tieGrp"]])
+
+    if (nTigs) {
+      stopifnot( all(cumDiffs[tig[["cumDiffInd"]]] == 0)) #all spacings for tied observed event times are 0
+
+      obsVals <- if (isSurv) obs[tig$tieGrp[, "startInd"], 1L] else obs[tig$tieGrp[, "startInd"]]
+
+      cumDiffs[tig[["cumDiffInd"]]] <- switch(ties.,
+                                              density = {
+                                                # use density instead of diff of CDF for tied observation pairs
+                                                rep.int(
+                                                  # take first observation per tie-group
+                                                  rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obsVals), pars.gr)),
+                                                  #tig$tieGrp[, "len"]-1L # number of repeats per tie group
+                                                  times = tig$tieGrp[, "len"]-1L)
+                                              },
+                                              # ties = "equispaced" for CDF-backtransformed using given parameters, then equispaced spacings across tie groups
+                                              #we keep using a standard density strategy for fitting, but can request another tie-strategy for evaluating the MPSE-criterion (e.g., for Moran's test)
+                                              equispaced = {
+                                                rep.int(
+                                                  # per tie group, use equal spacings in transformed space
+                                                  diff(rlang::exec(getDist(distribution, type = "cdf"),
+                                                                   !!! c(list(q = rep(obsVals, each = 2L) + c(-1, 1) * tig$numPrecision[["rRad"]]), pars.gr)))[seq.int(from = 1, by = 2, length.out = nTigs)] / (tig$tieGrp[, "len"]-1L),
+                                                  times = tig$tieGrp[, "len"]-1L)
+
+                                              },
+                                              # for what it's worth: tie-strategy "error" has normally already quit
+                                              error = {
+                                                stop("getCumDiffs: ties are not allowed!", call. = FALSE)
+                                              },
+                                              # handle exception
+                                              stop("Unknown strategy to handle ties here.", call. = FALSE)
+      )
+    } #fi
 
     # respect the machine's numerical lower limit
     cumDiffs[which(cumDiffs < .Machine$double.xmin)] <- .Machine$double.xmin
