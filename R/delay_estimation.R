@@ -170,12 +170,13 @@ objFunFactory <- function(x, y = NULL,
     ##obs <- graphite[12:20][-4] ##test case: twins + triplicate
     if (is.null(obs)) return(invisible(NULL))
 
-    roundOffPrecision <- estimRoundingError(if (isSurv) obs[, 1L] else obs, maxObs = 1001L)
+    roundOffPrecision <- estimRoundingError(obs, n_obs = 1001L)
     if (verbose > 0L) {
       cat(glue("Round-off error has magnitude {roundOffPrecision}."), "\n")
     }
 
     # for Surv, we only consider observed event times, here.
+    # as we only need to fix ties within observed times, ties in censored times use interpolation!?
     if (isSurv) {
       obs <- obs[which(obs[, "status"] == 1), 1L]
     }
@@ -1319,9 +1320,9 @@ objFunFactory <- function(x, y = NULL,
 
       h <- diff(c(0L, h, 1L))
 
-      # XXX think, if this can be handled together, Surv and non-Surv, using tieInfo[[group]] like below
       # tie handling for observed event times with density
-      ind_t <- which(diff(obs[,1L]) == 0L & # equal adjacent times
+      # XXX think, if this can be handled together, Surv and non-Surv, using tieInfo[[group]] like below
+      ind_t <- which(diff(obs[,1L]) < TOL_NUM & # equal adjacent times
                        diff(obs[,"status"] == 1) == 0L & # equal adjacent status
                        obs[-1L, "status"] == 1L) # status is indeed 1 (=observed), drop first row to be on same page as diff(obs)
       if (length(ind_t)) {

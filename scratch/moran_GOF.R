@@ -97,7 +97,7 @@ preprocess <- function(obs, verbose = 0, ties = c('equidist', 'random', 'density
           'group(s) within data vector.\n')
     }
 
-    roundOffPrecision <- incubate:::estimRoundingError(obs, maxObs = 1000L)
+    roundOffPrecision <- incubate:::estimRoundingError(obs, n_obs = 1000L)
     if (verbose > 0L){
       cat("Round-off error has magnitude", roundOffPrecision, "\n")
     }

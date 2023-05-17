@@ -66,16 +66,23 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 #' @param roundDigits integer. Which level of rounding to test? Negative numbers round to corresponding powers of 10
 #' @param maxObs integer. How many observations to consider at most? If the provided sample has more observations a sub-sample is used.
 #' @return estimated rounding error
-estimRoundingError <- function(obs, roundDigits = seq.int(from = -4L, to = 6L), maxObs = 100L) {
-  stopifnot( is.numeric(maxObs), length(maxObs) == 1L )
-  maxObs <- trunc(maxObs)
+estimRoundingError <- function(obs, roundDigits = seq.int(from = -4L, to = 6L), n_obs = 100L) {
+  stopifnot( is.numeric(obs) )
+
+  # in case of Surv: take into account only times of event or censoring
+  if (inherits(obs, "Surv")) {
+    obs <- obs[, 1L]
+  }
+
   # drop NA and Inf
   obs <- obs[is.finite(obs)]
 
-  if (maxObs > 1L && length(obs) > maxObs){
-    obs <- obs[round(seq.int(from = 1L, to = length(obs), length.out = maxObs))]
-  }
+  stopifnot( is.numeric(n_obs), length(n_obs) == 1L )
+  n_obs <- trunc(n_obs)
 
+  if (n_obs > 1L && length(obs) > n_obs) {
+    obs <- obs[round(seq.int(from = 1L, to = length(obs), length.out = n_obs))]
+  }
 
   # digits to round to
   roundDigits <- unique(trunc(roundDigits))
@@ -85,6 +92,7 @@ estimRoundingError <- function(obs, roundDigits = seq.int(from = -4L, to = 6L), 
 
   rDigInd <- purrr::map_lgl(.x = roundDigits,
                             .f = function(.x) all(abs(obs - round(obs, digits = .x)) < 2L * 10L**min(-2L, -.x-1L)) )
+
   10L**-if (!any(rDigInd)) max(roundDigits)+1L else if (all(rDigInd)) min(roundDigits)-1L else roundDigits[which.max(rDigInd)]
 }
 
