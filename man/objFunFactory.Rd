@@ -13,7 +13,7 @@ objFunFactory(
   bind = NULL,
   method = c("MPSE", "MLEn", "MLEc", "MLEw"),
   profiled = FALSE,
-  ties = c("density", "equidist", "random", "error"),
+  ties = c("density", "error"),
   verbose = 0
 )
 }

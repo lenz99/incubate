@@ -55,18 +55,18 @@ test_that("Ties in data", {
 
   expect_error(objFunFactory(x = x, ties = "error"))
 
-  objFunEqui1 <- objFunFactory(x = x, ties = "equi")
-  x_pp <- rlang::env_get(rlang::fn_env(objFunEqui1), nm = "x")
-  # there are no duplicates any more!
-  expect_false(any(duplicated(x_pp)))
-  #waldo::compare(x, y=rlang::env_get(rlang::fn_env(objFunEqui1), nm = "x"))
-  # deviations through tie-break are below and above tie and sum to zer0
-  expect_identical(sum(x_pp - x), expected = 0)
+  # objFunEqui1 <- objFunFactory(x = x, ties = "equi")
+  # x_pp <- rlang::env_get(rlang::fn_env(objFunEqui1), nm = "x")
+  # # there are no duplicates any more!
+  # expect_false(any(duplicated(x_pp)))
+  # #waldo::compare(x, y=rlang::env_get(rlang::fn_env(objFunEqui1), nm = "x"))
+  # # deviations through tie-break are below and above tie and sum to zer0
+  # expect_identical(sum(x_pp - x), expected = 0)
 
-  objFunEqui2 <- objFunFactory(x = xs, ties = "equi")
-  xs_pp <- rlang::env_get(rlang::fn_env(objFunEqui2), nm = "x")
-  # there are no duplicates any more!
-  #+ for array/matrix: it means no duplicate rows, here: no time + status duplicates!
-  #+ this means, we allow for same times that are once as observed time and once as a (right-) censoring time
-  expect_false(any(duplicated(xs_pp)))
+  # objFunEqui2 <- objFunFactory(x = xs, ties = "equi")
+  # xs_pp <- rlang::env_get(rlang::fn_env(objFunEqui2), nm = "x")
+  # # there are no duplicates any more!
+  # #+ for array/matrix: it means no duplicate rows, here: no time + status duplicates!
+  # #+ this means, we allow for same times that are once as observed time and once as a (right-) censoring time
+  # expect_false(any(duplicated(xs_pp)))
 })

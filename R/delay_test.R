@@ -40,7 +40,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
            # @param n nbr of observations, length 1 or 2
            # @param k nbr of parameters to be estimated
            # @return Moran's test statistic, length 1 or 2
-           testStat_mo <- function(mseCrit, n, k) {
+           testStat_mo <- function(mpseCrit, n, k){
              mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - 1/(12L*(n + 1L))
              mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - 1/(6L*(n + 1L))
 
@@ -48,17 +48,18 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
              C2 <- sqrt(mo_v / (2L*n))
 
              # factor (n+1) takes -avg to -sum
-             (mseCrit * (n+1L) + .5 * k - C1) / C2
+             (mpseCrit * (n+1L) + .5 * k - C1) / C2
            }# fun
 
 
            statist <- if (twoGroup) { ##  && length(delayFit$bind) < length(oNames) # not needed!?
              # sum of two independent chi-sq. is chi-sq
-             c(`X^2` = sum(testStat_mo(mseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE), #criterion per group
+             c(`X^2` = sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE, ties. = "equispaced"), #criterion per group
                                        n = nObs, k = k/2)) )
            } else {
              # single group
-             c(`X^2` = testStat_mo(mseCrit = delayFit[["criterion"]], n = nObs, k = k))
+             c(`X^2` = testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, ties. = "equispaced"),
+                                   n = nObs, k = k) )
            }
 
            p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
@@ -73,8 +74,8 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
            testStat_pe <- function(datr, nCl) {
              tab_transf <- tabulate(findInterval(datr,
-                                   vec = seq.int(from=0L, to=1L, length.out = nCl+1L),
-                                   rightmost.closed = TRUE, all.inside = TRUE), nbins = nCl)
+                                                 vec = seq.int(from=0L, to=1L, length.out = nCl+1L),
+                                                 rightmost.closed = TRUE, all.inside = TRUE), nbins = nCl)
              sum((tab_transf - mean(tab_transf))**2L) / mean(tab_transf)
            }
 

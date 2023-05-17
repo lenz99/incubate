@@ -775,12 +775,12 @@ test_that("Fit delayed Weibull", {
   # single group ----
 
   # susquehanna is an example dataset within incubate
-  fd_maxFl <- delay_model(susquehanna, distribution = "weib")
+  fd_maxFl <- delay_model(susquehanna, distribution = "weib", method = "MPSE")
   coef_maxFl <- coef(fd_maxFl)
 
   expect_identical(purrr::chuck(fd_maxFl, 'optimizer', 'convergence'), expected = 0L)
   expect_lte(fd_maxFl$criterion, expected = 3.0987)
-  expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .005)
+  expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .001)
 
   # MLE-based fits to susquehanna --
   fd_maxFl_MLEn <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
