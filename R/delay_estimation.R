@@ -1656,7 +1656,7 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 }
 
 #' @export
-print.incubate_fit <- function(x, ...){
+print.incubate_fit <- function(x, ...) {
   coe <- coef(x)
   rangeTime <- if (x[["twoGroup"]]) {
     ns <- lengths(x[["data"]])
@@ -1674,8 +1674,8 @@ print.incubate_fit <- function(x, ...){
                       MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
                       "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {rangeTime}",
                       "Criterion: {signif(criterion,3)}",
-                      "Fitted coefficients: {paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}\n\n")
-  )
+                      "Fitted coefficients: {if (is.null(coe)) '-' else paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}"),
+      "\n")
 }
 
 #' Coefficients of a delay-model fit.
@@ -1685,7 +1685,7 @@ print.incubate_fit <- function(x, ...){
 #' @param ... further arguments, currently not used.
 #' @return named coefficient vector
 #' @export
-coef.incubate_fit <- function(object, transformed = FALSE, group = NULL, ...){
+coef.incubate_fit <- function(object, transformed = FALSE, group = NULL, ...) {
   stopifnot( inherits(object, "incubate_fit") )
   transformed <- isTRUE(transformed)
 
