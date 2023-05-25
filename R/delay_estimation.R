@@ -2183,8 +2183,9 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 
 #' Transform observed data to unit interval
 #'
-#' The transformation used is the probability integral transform. It uses the cumulative distribution function with the estimated parameters of the model fit.
-#' All available data in the model fit is transformed.
+#' The transformation used is the probability integral transform:
+#' the cumulative distribution function with the estimated parameters of the model fit takes the data into the 0-1 interval.
+#' All available data in the model fit is transformed. Censored observations lead to censored back-transformed observations as well.
 #'
 #' @note
 #' This S3-method implementation is quite different from its default method that allows for non-standard evaluation on data frames, primarily intended for interactive use.
@@ -2194,17 +2195,31 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 #' @param ... currently ignored
 #' @return The transformed data, either a vector (for single group) or a list with entries x and y (in two group scenario)
 #' @export
-transform.incubate_fit <- function(`_data`, ...){
+transform.incubate_fit <- function(`_data`, ...) {
   stopifnot(inherits(`_data`, "incubate_fit"))
 
   cdfFun <- getDist(`_data`$distribution, type = "cdf")
 
-  twoGroup <- `_data`$twoGroup
+  twoGroup <- isTRUE(`_data`$twoGroup)
+  isSurv <- isTRUE(`_data`$cens$isSurv)
+
   x <- if (twoGroup) `_data`$data$x else `_data`$data
 
-  #XXX Surv: does not work currently!
-  tr <- purrr::exec(cdfFun, !!! c(list(q=x), coef(`_data`, group = 'x')))
-  if (twoGroup) tr <- list(x = tr, y = purrr::exec(cdfFun, !!! c(list(q=`_data`$data$y), coef(`_data`, group = 'y'))))
+  tr <- NULL
+
+  if (isSurv) {
+    # currently, handle right-censored case only
+    stopifnot( attr(x, which = "type", exact = TRUE) == "right")
+    tr <- Surv(time = rlang::exec(cdfFun, !!! c(list(q=x[,1L]), coef(`_data`, group = "x"))),
+               event = x[, "status"], type = "right")
+    if (twoGroup) tr <- list(x = tr,
+                             y = Surv(time = rlang::exec(cdfFun, !!! c(list(q=`_data`$data$y[,1L]), coef(`_data`, group = "y"))),
+                                      event = `_data`$data$y[, "status"], type = "right"))
+  } else {
+    tr <- rlang::exec(cdfFun, !!! c(list(q=x), coef(`_data`, group = "x")))
+    if (twoGroup) tr <- list(x = tr,
+                             y = rlang::exec(cdfFun, !!! c(list(q=`_data`$data$y), coef(`_data`, group = "y"))))
+  }
 
   tr
 }

@@ -7,7 +7,7 @@
 test_GOF(delayFit, method = c("moran", "pearson"))
 }
 \arguments{
-\item{delayFit}{delay_model fit}
+\item{delayFit}{delay_model fit object}
 
 \item{method}{character(1). which method to use for GOF. Default is 'moran'.}
 }

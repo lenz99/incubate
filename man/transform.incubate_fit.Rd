@@ -15,8 +15,9 @@
 The transformed data, either a vector (for single group) or a list with entries x and y (in two group scenario)
 }
 \description{
-The transformation used is the probability integral transform. It uses the cumulative distribution function with the estimated parameters of the model fit.
-All available data in the model fit is transformed.
+The transformation used is the probability integral transform:
+the cumulative distribution function with the estimated parameters of the model fit takes the data into the 0-1 interval.
+All available data in the model fit is transformed. Censored observations lead to censored back-transformed observations as well.
 }
 \note{
 This S3-method implementation is quite different from its default method that allows for non-standard evaluation on data frames, primarily intended for interactive use.
