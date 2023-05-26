@@ -189,13 +189,13 @@ objFunFactory <- function(x, y = NULL,
     # obs <- obs[which(obs[, "status"] == 1), 1L]
 
     tieGrp <- matrix(NA_real_, nrow=0, ncol = 0)
+    # index vector for cumDiff where spacing will be zer0 due to ties
     cumDiffInd <- integer(0L)
 
     # rounding radius:
     # used to break ties later on when evaluating MPSE-criterion
     # it can't be wider than smallest observed diff.
     # plogis to mitigate the effect of sample size: the larger the sample the more we can 'trust' the observed minimal diff
-    #
     diffObs <- if (isSurv) {
       outInd <- union(dupInd, which(obs[, "status"] != 1))
       diff(obs[if (length(outInd)) -outInd else TRUE, 1L])
@@ -206,7 +206,8 @@ objFunFactory <- function(x, y = NULL,
     rRad <- TOL_NUM + .5 * min(roundOffPrecision,
                                # obs[1L] = min(obs) = diff of minimal obs with 0
                                abs(if (isSurv) obs[which.max(obs[, "status"] == 1), 1L] else obs[[1L]]), # very first time obs[[1L]] should be non-negative, anyways.
-                               stats::plogis(q = .1+length(diffObs), scale = 17) * diffObs, na.rm = TRUE)
+                               stats::plogis(q = .1+length(diffObs), scale = 17) * diffObs,
+                               na.rm = TRUE)
 
     if (length(dupInd)) {
       stopifnot(dupInd[[1]] > 1L) # duplicated entries start at least 2
@@ -221,9 +222,9 @@ objFunFactory <- function(x, y = NULL,
       # start one position before duplicated-indices
       startInd <- dupInd[gapsInDupInds] - 1L
       # tabulate instead of for-loop
-      len <- tabulate(bin = if (isSurv)
-        factor(obs[c(startInd, dupInd), 1L], levels = obs[startInd, 1L]) else
-          factor(obs[c(startInd, dupInd)], levels = obs[startInd]), nbins = length(startInd))
+      len <- tabulate(bin = if (isSurv) factor(obs[c(startInd, dupInd), 1L], levels = obs[startInd, 1L]) else
+        factor(obs[c(startInd, dupInd)], levels = obs[startInd]),
+        nbins = length(startInd))
       # len <- rep_len(-1L, length.out = length(startInd))
       # for (i in seq_along(len)) {
       #   j <- 1
@@ -267,18 +268,28 @@ objFunFactory <- function(x, y = NULL,
   profiled <- profiled && (! any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) && ! twoPhase
   #&& method %in% c("MLEn", "MLEc", "MLEw") #&& distribution == 'weibull' &&
 
-  if (xor(profiled0, profiled)){
+  if (xor(profiled0, profiled)) {
     warning(glue("Option `profiled={profiled0}` was reversed to profiled={profiled}!"), call. = FALSE)
   }
   rm("profiled0")
 
+  # KM fit (used for plotting later)
+  survDat <- tibble(time = if (isSurv) c(x, y) else Surv(c(x,y)),
+                    group = rep.int(c("x", "y"), times = c(length(x), length(y))))
+  kmFit <- survival::survfit(time ~ group, data = survDat,
+                             start.time = 0, se.fit = FALSE, conf.type = "none")
 
   cens <- local({
     # little helper function to count the censored observed by type (right, left, interval)
-    censDescF <- function(.x, what = c("n", "ind")) {
+    censDescF <- function(.x, what = c("n", "ind", "rcens")) {
       what <- match.arg(what)
+
+      # mock survfit-object
+      rcensDummy <- list(surv=rlang::rep_along(kmFit$surv, 1))
       if (!isSurv) return(list(n = c(right = 0L, left = 0L, interval = 0L, any = 0L),
-                               ind = list(right = integer(0), left = integer(0), interval = integer(0), obs = seq_along(.x)))[[what]])
+                               ind = list(right = integer(0), left = integer(0), interval = integer(0), obs = seq_along(.x)),
+                               rcens = rcensDummy)[[what]])
+
       switch(what,
              n = {
                nvctr <- switch(attr(.x, which = "type", exact = TRUE),
@@ -297,36 +308,35 @@ objFunFactory <- function(x, y = NULL,
                                       obs = which(.x[, "status"] == 1)),
                       stop("This type of censoring is not supported!", call. = FALSE) )
              },
+             rcens = {
+               stopifnot(is.numeric(.x), length(.x) == 1L, .x >= 0L) #.x is nbr of right censorings in the data
+               if (.x > 0L) {
+                 # treat right-censorings as events and rest as censoring
+                 survival::survfit(Surv(time[, 1L], event = !time[, "status"], type = "right") ~ group, data = survDat,
+                                   conf.type = "none", se.fit = FALSE)
+               } else {
+                 rcensDummy
+               }
+             },
              stop("This request ", sQuote(what, q = FALSE), " is not supported here!", call. = FALSE)
       )
     }
 
-    list(isSurv = isSurv,
+    retL <- list(isSurv = isSurv,
          n = purrr::compact(list(x=censDescF(x, what = "n"), y = if (twoGroup) censDescF(y, what = "n"))),
-         ind = purrr::compact(list(x=censDescF(x, what = "ind"), y = if (twoGroup) censDescF(y, what = "ind")))
-    )
+         ind = purrr::compact(list(x=censDescF(x, what = "ind"), y = if (twoGroup) censDescF(y, what = "ind"))))
+    # add KM estimator for right-censorings (combines all data, even when two groups, in one object)
+    retL[["rcens"]] <- censDescF(retL$n$x[["right"]] + if (twoGroup) retL$n$y[["right"]] else 0, what = "rcens")
+
+    retL
   })
 
-  # KM fit
-  survDat <- tibble(time = if (isSurv) c(x, y) else Surv(c(x,y)),
-                    group = rep.int(c("x", "y"), times = c(length(x), length(y))))
-  kmFit <- survival::survfit(time ~ group, data = survDat, start.time = 0, se.fit = FALSE, conf.type = "none")
 
-  # estimate rcens-distribution via KM (only for MPSE)
-  kmFitrcens <- if (method == 'MPSE' && cens$n$x[["right"]] + if (twoGroup) cens$n$y[["right"]] else 0 > 0L) {
+  # kmFit and rcens have same number of rows
+  stopifnot( length(kmFit$surv) == length(cens$rcens$surv) )
 
-    # treat right-cens as events and rest as censoring
-    survival::survfit(Surv(time[, 1L], event = !time[, "status"], type = "right") ~ group, data = survDat,
-                      conf.type = "none", se.fit = FALSE)
-  } else {
-    # mock survfit-object
-    list(surv=rlang::rep_along(kmFit$surv, x = 1))
-  }
-
-  # kmFit and kmFitrcens have same number of rows
-  stopifnot( length(kmFit$surv) == length(kmFitrcens$surv) )
-
-  indForefront <- local({
+  # indices of first two relevant observations (for MLEc)
+  indForefront <- if (method != "MLEc") NULL else local({
     # little helper function to get the indices for the first two smallest observed values (non-censorings)
     #+in a sorted vector of observations
     #@param .x sorted numeric/Surv vector
@@ -1302,7 +1312,7 @@ objFunFactory <- function(x, y = NULL,
     # calculate spacings
     # contract: data is sorted!
     cumDiffs <- if (isSurv) {
-
+      # Surv-response
       ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here [but 0 is 0 also for interval!?])
 
       # get the right subset of indices for specified group (when having two groups)
@@ -1315,10 +1325,10 @@ objFunFactory <- function(x, y = NULL,
 
       # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
       # floor(n.event + n.censor) == n
-      stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
-                     if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
+      stopifnot(sum(as.integer(kmFit$n.event[ind_evKM]),
+                    if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]])
       # use CDF for all observed event times of right-censored outcome variable
-      h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (kmFitrcens$surv[ind_evKM]) + (1 - kmFitrcens$surv[ind_evKM]),
+      h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (cens$rcens$surv[ind_evKM]) + (1 - cens$rcens$surv[ind_evKM]),
                                          # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
                                          times = kmFit$n.event[ind_evKM])
       # censored observations get interpolated values
@@ -1345,7 +1355,7 @@ objFunFactory <- function(x, y = NULL,
     nTigs <- NROW(tig[["tieGrp"]])
 
     if (nTigs) {
-      stopifnot( all(cumDiffs[tig[["cumDiffInd"]]] == 0)) #all spacings for tied observed event times are 0
+      stopifnot( all(cumDiffs[tig[["cumDiffInd"]]] == 0)) # all spacings for tied observed event times are 0
 
       obsVals <- if (isSurv) obs[tig$tieGrp[, "startInd"], 1L] else obs[tig$tieGrp[, "startInd"]]
 
@@ -1368,7 +1378,7 @@ objFunFactory <- function(x, y = NULL,
                                                   times = tig$tieGrp[, "len"]-1L)
 
                                               },
-                                              # for what it's worth: tie-strategy "error" has normally already quit
+                                              # for what it's worth: tie-strategy "error" should have already quit
                                               error = {
                                                 stop("getCumDiffs: ties are not allowed!", call. = FALSE)
                                               },
