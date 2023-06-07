@@ -339,16 +339,16 @@ objFunFactory <- function(x, y = NULL,
   indForefront <- if (method != "MLEc") NULL else local({
     # little helper function to get the indices for the first two smallest observed values (non-censorings)
     #+in a sorted vector of observations
-    #@param .x sorted numeric/Surv vector
-    forefrontIndF <- function(group = c("x", "y")) {
+    forefrontIndF <- function(group) {
+      stopifnot(! missing(group), is.character(group), length(group) == 1L)
       obs <- if (group == "y") y else x
 
       ind_obs1 <- ind_next <- integer()
 
       if (isSurv) {
+        # Surv-response
         cind_gr <- cens$ind[[group]]
         cindo_gr <- cens$ind[[group]]$obs
-        # Surv-response
         stopifnot(length(cindo_gr) >= 2L)
 
         # check for easy case: no tie at first two observed event times
@@ -374,7 +374,7 @@ objFunFactory <- function(x, y = NULL,
           ind_next <- 2L
         } else {
           # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
-          for (l in sort(c(5, 10, 50, 100, 500, 1000, length(obs)))) {
+          for (l in sort.int(unique(c(5, 10, 50, 100, 500, 1000, length(obs))))) {
             if (l > length(obs)) break
             obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
             #which.max(obs_r > 1) # 1st index of 2nd obs
@@ -914,7 +914,13 @@ objFunFactory <- function(x, y = NULL,
     # contract: obs is sorted!
     DELAY_MIN <- 1e-9
 
-    # Surv: quick fix, use only event times as numeric vector that are observed or right censored
+    if (isSurv && (cens$n$x[["left"]] %||% 0) + (cens$n$y[["left"]] %||% 0) > 0) {
+      stop("Left-censoring is not supported here!", call. = FALSE)
+    }
+    # extract first event time (we assume there is no left-censoring!)
+    firstEvTime <- if (isSurv) obs[which(obs[, "status"] == 1)[[1L]], 1L] else obs[[1L]]
+
+    # Surv: convert to numeric, quick fix, use only event times as numeric vector that are observed or right censored
     # XXX improve here?, e.g., use flatten_surv from lme4cens?! # could use cens-list here
     if (isSurv) {
       obs <- obs[, 1L, drop=TRUE][obs[, "status", drop = TRUE] <= 1]
@@ -985,7 +991,7 @@ objFunFactory <- function(x, y = NULL,
 
     list(
       par = parV,
-      delay1_upper = max(DELAY_MIN, obs[[1L]] - .01/length(obs), obs[[1L]]*.9999),
+      delay1_upper = max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
       delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
     )
   }# fn getParSetting.gr
