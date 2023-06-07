@@ -4,7 +4,7 @@
 \alias{test_GOF}
 \title{Goodness-of-fit (GOF) test statistic.}
 \usage{
-test_GOF(delayFit, method = c("moran", "pearson"))
+test_GOF(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
 }
 \arguments{
 \item{delayFit}{delay_model fit object}

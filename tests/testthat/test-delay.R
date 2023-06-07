@@ -254,3 +254,43 @@ test_that('(restricted) mean survival time of delayed distributions', {
                tolerance = .003)
 })
 
+
+test_that("Partial derivatives of CDF", {
+
+  tVec <- c(4, 4.5, seq.int(from = 5, to = 8))
+
+  set.seed(2023-05-30)
+  delay1 <- 2 + rpois(1, lambda = 3)
+  rate1 <- .01+round(abs(rnorm(1, sd = .4)), 2)
+  shape1 <- sample(x = c(.2, .8, 1.2, 2.2), size = 1)
+  scale1 <- 1+round(abs(rnorm(n = 1, mean = 0, sd = .9)), 2)
+
+  nd_exp <- numericDeriv(quote(pexp_delayed(q = q, delay1 = delay1, rate1 = rate1)), theta = c("delay1", "rate1"),
+                         rho = rlang::env(q = tVec, delay1 = delay1, rate1 = rate1), dir = c(-1, 1))
+
+  # evaluates to the expected outcome
+  expect_identical(as.numeric(nd_exp),
+                   expected = ifelse(tVec > delay1, 1-exp(-rate1 * (tVec-delay1)), no = 0),
+                   tolerance = 1e-7)
+  expect_equal(unname(pexp_delayed(q = tVec, delay1 = delay1, rate1=rate1, grad = TRUE)),
+               # direction -1 for parameter delay which matters on the border case when t=alpha
+               expected = t(attr(nd_exp, which = "gradient")),
+               tolerance = 1e-6)
+
+
+  nd_wb <- numericDeriv(quote(pweib_delayed(q = q, delay1 = delay1, shape1 = shape1, scale1 = scale1)),
+                        theta = c("delay1", "shape1", "scale1"),
+                        rho = rlang::env(q = tVec, delay1 = delay1, shape1 = shape1, scale1 = scale1))
+  # same function evaluation
+  expect_identical(as.numeric(nd_wb),
+                   expected = pweib_delayed(q = tVec, delay1 = delay1, shape1 = shape1, scale1 = scale1),
+                   tolerance = 1e-7)
+
+  expect_identical(pweib_delayed(q = tVec, delay1 = delay1, shape1 = shape1, scale1 = scale1),
+                   expected = ifelse(tVec > delay1, 1-exp(-((tVec-delay1)/scale1)**shape1), no = 0),
+                   tolerance = 1e-7)
+
+  expect_equal(unname(pweib_delayed(q = tVec, delay1 = delay1, shape1 = shape1, scale1 = scale1, grad = TRUE)),
+               expected = t(attr(nd_wb, which = "gradient")),
+               tolerance = 1e-6)
+})

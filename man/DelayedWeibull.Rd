@@ -35,7 +35,8 @@ pweib_delayed(
   shape = shape1,
   scale = scale1,
   lower.tail = TRUE,
-  log.p = FALSE
+  log.p = FALSE,
+  grad = FALSE
 )
 
 qweib_delayed(
@@ -118,7 +119,7 @@ mweib_delayed(
 Functions pertaining to the delayed Weibull distribution:
 \itemize{
 \item \code{dweib_delayed} gives the density
-\item \code{pweib_delayed} gives the distribution function
+\item \code{pweib_delayed} gives the vector of cumulative probabilities or the gradient matrix (nbr parameters x quantile times)
 \item \code{qweib_delayed} gives the quantile function
 \item \code{rweib_delayed} generates a pseudo-random sample
 \item \code{mweib_delayed} gives the restricted mean survival time

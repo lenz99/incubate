@@ -686,17 +686,17 @@ test_that("Fit delayed exponentials with censoring", {
 
   expect_named(fmCR1_mpse, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
                                         "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
-  expect_named(fmCR1_mpse$cens, expected = c("isSurv", "n", "ind"))
+  expect_named(fmCR1_mpse$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1_mpse$cens$isSurv)
 
   expect_named(fmCR1_mlec, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
                                         "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
-  expect_named(fmCR1_mlec$cens, expected = c("isSurv", "n", "ind"))
+  expect_named(fmCR1_mlec$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1_mlec$cens$isSurv)
 
   expect_named(fmCR1_mlewp, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
                                         "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
-  expect_named(fmCR1_mlewp$cens, expected = c("isSurv", "n", "ind"))
+  expect_named(fmCR1_mlewp$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1_mlewp$cens$isSurv)
 
   # parameters do not change much when profiling
@@ -722,7 +722,7 @@ test_that("Fit delayed exponentials with censoring", {
 
   expect_named(fmCR1w_mlewp, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
                                          "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
-  expect_named(fmCR1w_mlewp$cens, expected = c("isSurv", "n", "ind"))
+  expect_named(fmCR1w_mlewp$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1w_mlewp$cens$isSurv)
 
   # similar criterion value
@@ -733,7 +733,7 @@ test_that("Fit delayed exponentials with censoring", {
 
   # shorter surv-data that has censorings & ties
   ticr2 <- local({
-    set.seed(20230517)
+    set.seed(2023-05-17)
     n <- 17L
     sort(survival::Surv(time =  1.5 + rpois(n, lambda = 9.8),
                         event = sample(c(0,0,1,1,1), size = n, replace = TRUE)))[-c(1, 3, 8)]
@@ -742,7 +742,9 @@ test_that("Fit delayed exponentials with censoring", {
   fmCR2_mpse <- delay_model(x = ticr2, distribution = "expon", method = "MPSE")
   expect_identical(fmCR2_mpse$optimizer$convergence, expected = 0L)
   expect_equal(fmCR2_mpse$cens$n$x[["right"]], expected = sum(ticr2[, "status"] == 0)) # nbr of right censorings
-  expect_identical(rlang::env_get(rlang::fn_env(fmCR2_mpse$objFun), nm = "tieInfo")$x[["cumDiffInd"]], expected = 7L) # single duplicated observed event time at entry 7
+  # we have three duplicated observed event times
+  expect_identical(rlang::env_get(rlang::fn_env(fmCR2_mpse$objFun), nm = "tieInfo")$x[["cumDiffInd"]],
+                   expected = c(7L, 8L, 11L))
 
 
   # two group handling ------------------------------------------------------

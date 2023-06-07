@@ -7,7 +7,7 @@
 #' @importFrom glue glue
 #' @importFrom MASS boxcox
 #' @importFrom purrr chuck
-#' @importFrom rlang .data
+#' @importFrom rlang .data `%||%`
 #' @importFrom survival Surv
 #' @importFrom stats coef simulate update
 #' @importFrom tibble tibble

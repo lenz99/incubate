@@ -6,11 +6,11 @@
 #' * __Moran GOF__ is based on spacings, like the MPSE-criterion itself.
 #' * __Pearson GOF__ uses categories and compares observed to expected frequencies.
 #'
-#' @param delayFit delay_model fit
+#' @param delayFit delay_model fit object
 #' @param method character(1). which method to use for GOF. Default is 'moran'.
 #' @return An `htest`-object containing the GOF-test result
 #' @export
-test_GOF <- function(delayFit, method = c('moran', 'pearson')){
+test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR")) {
 
   stopifnot( inherits(delayFit, what = 'incubate_fit') )
   if (delayFit$method != 'MPSE') {
@@ -19,14 +19,16 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
   method <- match.arg(method)
   twoGroup <- isTRUE(delayFit$twoGroup)
-  data_name <- if (twoGroup) paste(names(delayFit$data), collapse = ' and ') else 'x'
+  isSurv <- isTRUE(delayFit$cens$isSurv)
+  distribution <- delayFit$distribution
+  data_name <- if (twoGroup) paste(names(delayFit$data), collapse = " and ") else "x"
   nObs <- if (twoGroup) lengths(delayFit$data) else length(delayFit$data)
   params <- coef.incubate_fit(delayFit, transformed = FALSE)
   k <- length(params)
 
 
   # required variables
-  meth <- statist <- p_val <- NULL
+  meth <- statist <- dgf <- p_val <- NULL
 
   switch(method,
          moran = {
@@ -40,7 +42,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
            # @param n nbr of observations, length 1 or 2
            # @param k nbr of parameters to be estimated
            # @return Moran's test statistic, length 1 or 2
-           testStat_mo <- function(mpseCrit, n, k){
+           testStat_mo <- function(mpseCrit, n, k) {
              mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - 1/(12L*(n + 1L))
              mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - 1/(6L*(n + 1L))
 
@@ -49,50 +51,458 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
 
              # factor (n+1) takes -avg to -sum
              (mpseCrit * (n+1L) + .5 * k - C1) / C2
-           }# fun
+           } # fn
 
 
+           # we resolve ties in the back-transformed 0-1 space via equal spacing (see Cheng & Stephens)
            statist <- if (twoGroup) { ##  && length(delayFit$bind) < length(oNames) # not needed!?
-             # sum of two independent chi-sq. is chi-sq
              c(`X^2` = sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE, ties. = "equispaced"), #criterion per group
                                        n = nObs, k = k/2)) )
+             #XXX can be negative, example for instance, happened for the call
+             #delay_model(x = 5 + rpois(17, lambda = 5), y = survival::Surv(8 + rpois(23, lambda = 3), event = sample(x = c(0, 1, 1, 1), size = 23, replace = T)))
            } else {
              # single group
              c(`X^2` = testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, ties. = "equispaced"),
                                    n = nObs, k = k) )
            }
 
-           p_val <- stats::pchisq(q = statist, df = sum(nObs), lower.tail = FALSE)
+           # in case of two groups: sum of two independent chi-sq. is chi-sq
+           dgf <- sum(nObs)
+           p_val <- stats::pchisq(q = statist, df = dgf, lower.tail = FALSE)
          },
 
          pearson = {
            # Pearson GOF-test
            meth <- "Pearson's Goodness-of-fit (GOF) test" # (per group) ## this is our standard
 
-           # under H0, expect frequency counts according to uniform distribution
-           #+nbr of classes as recommended by David S. Moore (Tests of Chi-squared Type, 1986)
 
-           testStat_pe <- function(datr, nCl) {
-             tab_transf <- tabulate(findInterval(datr,
-                                                 vec = seq.int(from=0L, to=1L, length.out = nCl+1L),
-                                                 rightmost.closed = TRUE, all.inside = TRUE), nbins = nCl)
-             sum((tab_transf - mean(tab_transf))**2L) / mean(tab_transf)
-           }
+           if (!isSurv) {
+             # non-Surv case
+             # ordinary Pearson-Fisher X2-test statistic
 
+             nCl <- if (twoGroup) pmax.int(k/2 + 2L, ceiling(2L * nObs**.4)) else max(k + 2L, ceiling(2L * nObs**.4))
 
-           nCl <- NA_real_ #dummy value to start with
+             # under H0, expect frequency counts of back-transformed data per group according to uniform distribution
+             # use fixed number of cells that are equally spaced in back-transformed 0-1 interval
+             # nbr of classes as recommended by David S. Moore (chapter "Tests of Chi-squared Type", 1986)
 
-           statist <- if (twoGroup) {
-             nCl <- pmax.int(k/2 + 2L, ceiling(2L * nObs**.4))
-             # sum of two chi-square test statistics
-             c(`X^2` = sum(purrr::map2_dbl(.x = transform(delayFit), .y = nCl, .f = testStat_pe)))
+             statist <- local({
+               datr <- transform.incubate_fit(delayFit)
+
+               purrr::set_names(
+                 sum(purrr::map2_dbl(.x = if (is.numeric(datr)) list(x=datr) else datr,
+                                     .y = nCl,
+                                     .f = function(.x, .y) {
+                                       tab_transf <- tabulate(findInterval(.x, vec = seq.int(from = 0L, to = 1L, length.out = .y+1L),
+                                                                           rightmost.closed = TRUE, all.inside = TRUE),
+                                                              nbins = .y)
+                                       sum((tab_transf - mean(tab_transf))**2L) / mean(tab_transf)
+                                     })),
+                 nm = "X^2")
+             })
+
+             # inference based on chi-squared distribution.
+             #+use adjusted degrees of freedom (loose one df for each parameter estimated)
+             dgf <- sum(nCl) - (k + 1L) - twoGroup
+             p_val <- stats::pchisq(q = statist, df = dgf, lower.tail = FALSE)
+
            } else {
-             nCl <- max(k + 2L, ceiling(2L * nObs**.4))
-             c(`X^2` = testStat_pe(datr = transform(delayFit), nCl = nCl))
-             # inference based on Chi-square distribution.
-             # use adjusted degrees of freedom (loose one df for each parameter estimated)
+
+             # Surv-response
+             # generalized Pearson-Fisher chi-squared test,
+             #+see Nikulin (2007), referring to Li and Doss (1993) in turn
+
+             cdfF <- getDist(distribution, type = "cdf")
+             densF <- getDist(distribution, type = "density")
+
+
+             # estimate variance-covariance matrix for specified groups
+             # @return variance-covariance matrix
+             vcovF <- function(parEst, grpIdx = 1, boundaries) {
+               stopifnot(is.numeric(parEst), rlang::is_named(parEst))
+               stopifnot(is.numeric(boundaries), length(boundaries) >= 2L)
+
+               # number of classes
+               nCl <- length(boundaries)-1
+               survF <- purrr::partial(.f = cdfF, !!! c(as.list(parEst), lower.tail = FALSE))
+               cdfF2 <- purrr::partial(.f = cdfF, !!! c(as.list(parEst), lower.tail = TRUE))
+               # a similar calculation is done for the xiF-function
+               pIntPred <- diff(cdfF2(q=boundaries))
+               # or: -diff(survF(q = boundaries)))) #negative sign because we have survF(=1-F) instead of F
+
+               # variance function, see Nikulin (2017), 2.1 (p. 33)
+               # @return numeric variance estimate per time point
+               varF <- function(t) {
+                 # vectorize over t
+                 purrr::map_dbl(.x = t,
+                                .f = function(.x) {
+                                  retVal <- NA_real_
+                                  intVal <- stats::integrate(f = function(x) {
+                                    survInd <- c(1L,-1L)[grpIdx] * seq_len(length(x)) # works only for 1- or 2-group setting
+                                    x * rlang::exec(densF, !!! c(as.list(parEst), list(x = x))) / (survF(q=x)^2 * summary(delayFit$cens$rcens, times = x, extend = TRUE)$surv[survInd])
+                                  }, lower = 0, upper = .x)
+                                  if (intVal$message == "OK") retVal <- intVal$value
+                                  retVal
+                                })
+               } #fn varF
+
+               Dmat <- diag(1/sqrt(pIntPred))
+               # apply() transposes the partial derivative matrix as required (see Nikulin, p. 33)
+               #Cmat <- Dmat %*% apply(pd_cdfF(distribution = distribution, par = parEst, q = boundaries), MARGIN = 1L, FUN = diff)
+               Cmat <- Dmat %*% apply(cdfF2(q = boundaries, grad = TRUE), MARGIN = 1L, FUN = diff)
+               Pmat <- diag(nrow = nCl) - Cmat %*% solve(crossprod(Cmat)) %*% t(Cmat)
+
+               S1mat <- matrix(data = -1, nrow = nCl-1, ncol = nCl-1)
+               for (ro in 1L:(nCl-1)) {
+                 for (co in ro:(nCl-1)) {
+                   S1mat[ro, co] <- survF(q = boundaries[1L+ro]) * survF(q = boundaries[1L+co]) * varF(boundaries[1L+min(ro, co)])
+                 } #rof co
+               } #rof ro
+               S1mat[lower.tri(S1mat)] <- t(S1mat)[lower.tri(S1mat)]
+
+               Jmat <- diag(nrow = nCl, ncol = nCl-1L)
+               Jmat[row(Jmat)-1L == col(Jmat)] <- -1
+
+               Pmat %*% Dmat %*% Jmat %*% S1mat %*% t(Jmat) %*% Dmat %*% Pmat
+             }
+
+             # calculates test statistic or generalized Pearson-Fisher GOF-test per group
+             # choose boundaries greedily
+             # @return list with boundaries, test statistic and degrees of freedom
+             genPearsonFisher <- function(group = "x") {
+
+               grpIdx <- if (! twoGroup) 1L else 1L + (group != "x")
+
+               # index of survival-information from KM-fit: we have so many unique event or censor times
+               srvIdx <- if (twoGroup && "strata" %in% names(delayFit$kmFit)) {
+                 stopifnot(length(delayFit$kmFit$strata) == 2L) #two groups
+                 c(1L, -1L)[[grpIdx]] * seq_len(delayFit$kmFit$strata[[1L]])
+               } else {
+                 seq_along(delayFit$kmFit$n.event)
+               }
+
+               nCl_min <- k / (1L+twoGroup) + 2L # ensures at least 1df for chi-sq per group
+
+               nEvGr <- delayFit$kmFit$n.event[srvIdx]
+               timeGr <- delayFit$kmFit$time[srvIdx]
+               # index of observed event times *within the selected group*
+               srvIdxGrpEv <- which(nEvGr > 0)
+               # check if we have enough unique observed event times per group
+               if (length(srvIdxGrpEv) < nCl_min) {
+                 # extreme case with too few classes to really get an insight
+                 warning("Pearson-GOF: less than the required ", nCl_min, " classes for group ", group, call. = FALSE)
+                 return(list(boundaries = NA_real_, testStat = 0, dgf = NA_real_))
+               } #fi
+
+               # min: at most as many classes as we have unique observed event times
+               nCl <- min(length(srvIdxGrpEv), ceiling(2L * (nObs[grpIdx] - delayFit$cens$n[[grpIdx]][["any"]])**.4))
+
+               # find boundaries so that we have at least an observed event per class
+
+
+               # OLD approach using KM-fit but this could yield identical boundaries
+               #+in particular if we have few observed event times
+               # boundaries <- quantile(delayFit$kmFit,
+               #                        probs = c(0.001, #to get an upper bound for delay1 later on
+               #                                  seq.int(from = 1L - max(delayFit$kmFit$surv[srvIdx]),
+               #                                          to = 1L - min(delayFit$kmFit$surv[srvIdx]),
+               #                                          length.out = nCl + 1L)))
+               #if (twoGroup && NROW(boundaries) > 1L) boundaries <- boundaries[grpIdx,]
+               #delay1Upper <- boundaries[[1L]] # upper bound for delay1
+               #boundaries <- as.numeric(boundaries[-1L])
+               #[[.]] always extracts numeric entry, first observed event or censoring time
+               #boundaries[[1L]] <- if (twoGroup) delayFit$data[[group]][[1L]] else delayFit$data[[1L]]
+               #boundaries <- unique(boundaries) #ensure we have unique boundaries
+               #stopifnot(nCl == length(boundaries) - 1L)
+
+
+               boundaries <- numeric(nCl + 1L)
+               nbrAvgEv_Cl <- sum(nEvGr[srvIdxGrpEv]) / nCl
+               # outer boundaries are beyond the first and last observed (event/censored) time
+               #[[.]] always extracts numeric entry, first observed event or censoring time
+               boundaries[[1L]] <- .995 * if (twoGroup) delayFit$data[[group]][[1L]] else delayFit$data[[1L]]
+               boundaries[[length(boundaries)]] <- 1.01 * timeGr[length(timeGr)]
+
+               # # simple heuristics to always have a solution:
+               # # take as many elements as long as their sum remains ≤ target value, if already the first is too big, go just a single step
+               # # #another idea: find indices with highest event counts and use as single intervals
+               # # ind_evGr_dec <- sort.list(x = nEvGr, decreasing = TRUE)
+               # boundaries0 <- boundaries
+               # j <- 1L
+               # for (ind_b in 2L:nCl) {
+               #   stayBelow <- cumsum(nEvGr[srvIdxGrpEv][seq.int(from = j, to = length(srvIdxGrpEv))]) <= nbrAvgEv_Cl
+               #   ind_shift <- if (any(stayBelow)) max(which(stayBelow)) else 1L
+               #   j <- min(j + ind_shift, length(srvIdxGrpEv))
+               #   boundaries0[ind_b] <- (timeGr[srvIdxGrpEv][j-1] + timeGr[srvIdxGrpEv][j]) / 2L
+               # } #rof
+
+
+               # set inner boundaries in turn,
+               # use greedy approach for simplicity
+               #+ example: nEvGr <- c(0, 1, 1, 0, 4, 1, 2); timeGr <- c(6, 7, 8, 9, 10, 11, 12); srvIdxGrpEv <- c(2L, 3L, 5L, 6L, 7L); nCl <- 5
+               j <- 1L #idx within srvIdxGrpEv: from where to look at, inclusively
+               for (ind_b in 2L:nCl) {
+                 #used before: which(cumsum(nEvGr[srvIdxGrpEv][seq.int(from = j, to = length(srvIdxGrpEv))]) > nbrAvgEv_Cl)
+                 ind_shift <- which.min(abs(cumsum(nEvGr[srvIdxGrpEv][seq.int(from = j, to = length(srvIdxGrpEv))]) - nbrAvgEv_Cl))
+                 cat("j =", j, "and best ind_shift is", ind_shift, "with nbr events", sum(nEvGr[srvIdxGrpEv][j:(j+ind_shift-1)]), "\t") ##DEBUG
+                 # min() establish upper bound for ind_shift:
+                 # we need at least one event more than 0s in boundary-vector still to fill after this current (pending) one
+                 # nbr of events still free after smallest pending boundary update (i.e., ind_shift = 1) - 0s in boundary still to fill after this one
+                 #ind_shift <- min(ind_shift, length(srvIdxGrpEv) - (j + ind_shift - 1) + 1 - (nCl-1-(ind_b-1)))
+                 #ind_shift <- min(ind_shift, length(srvIdxGrpEv) - j - (nCl-1-(ind_b-1)))
+                 # length(srvIdxGrpEv) - j + 1: still free event counts (before choosing boundaries[ind_b])
+                 # nCl - ind_b
+                 ind_shift <- min(ind_shift, length(srvIdxGrpEv) - j + 1 - (nCl-1-(ind_b-1)+1))
+                 cat("... new ind_shift ", ind_shift, "\n") ##DEBUG
+                 if (length(ind_shift) != 1L || ind_shift < 1L) {
+                   stop("Choosing boundaries at ", ind_b," failed! Think of using a simple heuristic instead.", call. = FALSE)
+                   break
+                 }
+                 # update idx within srvIdxGrpEv
+                 if (j+ind_shift > length(srvIdxGrpEv)) stop("j bigger than length(srvIdxGrpEv)!") #never?!
+                 #j <- min(j + ind_shift, length(srvIdxGrpEv)) # at most last event time idx #+not needed?
+                 j <- j + ind_shift
+                 # choose boundary which lies betw (j-1)th and j-th observed time
+                 boundaries[ind_b] <- (timeGr[srvIdxGrpEv][j-1] + timeGr[srvIdxGrpEv][j]) / 2L
+               } #rof
+               rm(list = c("j", "ind_b", "ind_shift")) #clean-up
+
+               # there are better versions that try to repeatedly improve a partitioning looking at the biggest offenders
+               # cf https://stackoverflow.com/questions/35517051/split-a-list-of-numbers-into-n-chunks-such-that-the-chunks-have-close-to-equal (link thx to FU)
+               # example from SO: nEvGr <- c(95, 15, 75, 25, 85, 5); timeGr <- 1:6; srvIdxGrpEv <- 1:6; nCl <- 3
+               #+ it should group the first two together! The greedy single-pass run without look-ahead groups first event alone
+
+               # ideally, we have equal nbr of observed events per class
+               # evaluate balancedness of observed events for given boundaries
+               # grping <- findInterval(timeGr[srvIdxGrpEv], vec = unique(boundaries))
+               # sum((tapply(X = nEvGr[srvIdxGrpEv], INDEX = grping, FUN = sum) - nbrAvgEv_Cl)^2)
+
+
+               # we do not expect duplicate boundaries
+               stopifnot(all(boundaries[-1] > 0), !any(duplicated(boundaries)))
+
+
+               # observed probabilities per interval, minus sign because we have diff of survival, not diff of CDF
+               pIntObs <- -diff(summary(delayFit$kmFit, times = boundaries, extend = TRUE)$surv[c(1L, -1L)[[grpIdx]] * seq_along(boundaries)])
+               stopifnot(all(pIntObs>= 0))
+
+               # xi: vector of normalized differences between observed and expected counts per interval
+               # @param pars numeric parameter vector for single group
+               xiF <- function(pars) {
+                 pIntPred <- diff(rlang::exec(cdfF, !!! c(list(q = boundaries), pars)))
+                 sqrt(nObs[grpIdx]) * (pIntObs - pIntPred) / sqrt(pIntPred)
+               }
+
+               # minimize the distance measure (xi^t * xi) as function of theta to get parameter estimate for GOF-test
+               # parameters are not specifically transformed for better optimization (the main optimization for parameter estimation does this)
+               parStart <- coef(delayFit, group = group)
+               minChisqOpt <- stats::optim(par = parStart,
+                                           fn = function(pars) as.numeric(crossprod(xiF(pars))),
+                                           method = "L-BFGS-B",
+                                           lower = c(0, rep_len(TOL_NUM, length(parStart)-1L)),
+                                           upper = c(boundaries[[1L]], rep_len(+Inf, length(parStart)-1L)),
+                                           control = list(
+                                             factr = 1.5e7 # less stringent for convergence than default factor 1e7
+                                             #trace = 1, REPORT = 5))
+                                           )
+               )
+               # minimum X2-estimate for parameter vector theta
+               coef_minX2 <- if (minChisqOpt$convergence > 0) {
+                 warning("minimum chi^2 parameter estimate for group ", group, " did not converge!", call. = FALSE)
+                 # fall back to start value
+                 parStart
+               } else minChisqOpt$par
+
+               Smat <- vcovF(parEst = coef_minX2, grpIdx = grpIdx, boundaries = boundaries)
+
+               # return value of test statistic
+               testStat <- as.numeric(t(xiF(coef_minX2)) %*% MASS::ginv(Smat) %*% xiF(coef_minX2))
+
+               list(boundaries = boundaries, testStat = testStat, dgf = nCl - k/(1L+twoGroup) - 1)
+             } #fn
+
+
+             genPF_x <- genPearsonFisher(group = "x")
+             genPF_y <- if (twoGroup) genPearsonFisher(group = "y")
+
+
+             statist <- c(`X^2` = genPF_x[["testStat"]] + genPF_y[["testStat"]] %||% 0)
+
+             dgf <- genPF_x[["dgf"]] + genPF_y[["dgf"]] %||% 0
+             p_val <- stats::pchisq(q = statist, df = dgf, lower.tail = FALSE)
+
+
+             # #
+             # ##
+             # ### OLD
+             # ##
+             # #
+             #
+             # nCl <- local({
+             #   # for number of classes, only consider observed event times
+             #   nCensAny <- if (! isSurv) 0 else {
+             #     if (twoGroup) c(delayFit$cens$n$x["any"], delayFit$cens$n$y["any"]) else delayFit$cens$n$x["any"]
+             #   }
+             #
+             #   if (twoGroup) {
+             #     pmin.int(
+             #
+             #       pmax.int(k/2 + 2L, ceiling(2L * (nObs - nCensAny)**.4)))
+             #   } else {
+             #     # min: at most nbr of classes as we have unique observed event times
+             #     min(sum(delayFit$kmFit$n.event > 0), max(k + 2L, ceiling(2L * (nObs-nCensAny)**.4)))
+             #   }
+             # })
+             #
+             # stopifnot(! twoGroup) #XXX implement two group setting!
+             # myGroup <- "x"
+             # nCl <- nCl[1]
+             #
+             #
+             # # interval boundaries:
+             # #+choose so that we have equal observed events, from lowest to highest value of observed CDF
+             # #+XXX ensure we observe events in each interval!
+             # boundaries <- quantile(delayFit$kmFit,
+             #                        probs = seq.int(from = 1L-max(delayFit$kmFit$surv), to = 1L-min(delayFit$kmFit$surv), length.out = nCl + 1L))
+             # if (twoGroup) boundaries <- boundaries[1L + (myGroup != "x"),]
+             # boundaries <- as.numeric(boundaries)
+             # boundaries[[1L]] <- delayFit$data[[1L]]
+             # #boundaries[length(boundaries)] <- +Inf
+             #
+             # # observed probabilities per interval
+             # pIntObs <- rep_len(1/nCl, length.out = nCl)
+             #
+             # # xi: vector of normalized differences between observed and expected counts per interval
+             # xiF <- function(pars) {
+             #   pIntPred <- diff(rlang::exec(cdfF, !!! c(list(q = boundaries), pars)))
+             #   sqrt(nObs[1L+(myGroup != "x")]) * (pIntObs - pIntPred) / sqrt(pIntPred)
+             # }
+             #
+             # # minimize the distance measure (xi^t * xi) as function of theta to get parameter estimate for GOF-test
+             # # parameters are not specifically transformed for better optimization (the main optimization for parameter estimation does this)
+             # parStart <- coef(delayFit, group = myGroup)
+             # minChisqOpt <- stats::optim(par = parStart,
+             #                             fn = function(pars) as.numeric(crossprod(xiF(pars))),
+             #                             method = "L-BFGS-B",
+             #                             lower = c(0, rep_len(TOL_NUM, length(parStart)-1L)),
+             #                             upper = c(delayFit$data[[1L]], rep_len(+Inf, length(parStart)-1L)),
+             #                             # less stringent for convergence than default factor 1e7
+             #                             control = list(factr = 1.5e7))#trace = 1, REPORT = 5))
+             # # minimum X2-estimate for parameter vector theta
+             # if (minChisqOpt$convergence > 0) {
+             #    warning("minimum chi^2 parameter estimate for group ", myGroup, " did not converge!", call. = FALSE)
+             # }
+             # coef_minX2 <- minChisqOpt$par #coef(delayFit, group = myGroup))
+             #
+             # # variance estimate
+             # survF <- purrr::partial(.f = cdfF, !!! c(as.list(coef_minX2), lower.tail = FALSE))
+             # pIntPred <- diff(survF(q = rev(boundaries))) #rev because we have survF = 1-F instead of F #XXX rev() is wrong, use minus-sign instead
+             #
+             # # variance function, see Nikulin (2017), 2.1 (p. 33)
+             # # @return numeric. variance estimate per time point
+             # varF <- function(t) {
+             #   # vectorize over t
+             #   purrr::map_dbl(.x = t,
+             #                  .f = function(.x) {
+             #                    retVal <- NA_real_
+             #                    intVal <- stats::integrate(f = function(x) {
+             #                      survInd <- c(-1,1)[1+(myGroup == "x")]*seq_len(length(x))
+             #                      x * rlang::exec(densF, !!! c(as.list(coef_minX2), list(x = x))) / (survF(q=x)^2 * summary(delayFit$cens$rcens, times = x, extend = TRUE)$surv[survInd])
+             #                    }, lower = 0, upper = .x)
+             #                    if (intVal$message == "OK") retVal <- intVal$value
+             #                    retVal
+             #                  })
+             # } #fn
+             #
+             # Dmat <- diag(1/sqrt(pIntPred))
+             # # apply() transposes the partial derivative matrix (as required, see Nikulin, p. 33)
+             # Cmat <- Dmat %*% apply(pd_cdfF(distribution = distribution, par = coef_minX2, q = boundaries), MARGIN = 1L, FUN = diff)
+             # Pmat <- diag(nCl) - Cmat %*% solve(crossprod(Cmat)) %*% t(Cmat)
+             #
+             # S1mat <- matrix(data = -1, nrow = nCl-1, ncol = nCl-1)
+             # for (ro in 1L:(nCl-1)) {
+             #   for (co in ro:(nCl-1)) {
+             #     S1mat[ro, co] <- survF(q = boundaries[1L+ro]) * survF(q = boundaries[1L+co]) * varF(boundaries[1L+min(ro, co)])
+             #   } #rof co
+             # } #rof ro
+             # S1mat[lower.tri(S1mat)] <- t(S1mat)[lower.tri(S1mat)]
+             #
+             # Jmat <- diag(nrow = nCl, ncol = nCl-1L)
+             # Jmat[row(Jmat)-1L == col(Jmat)] <- -1
+             #
+             # Smat <- Pmat %*% Dmat %*% Jmat %*% S1mat %*% t(Jmat) %*% Dmat %*% Pmat
+             #
+             # # OLD stuff commented out!
+             # # statist <- c(`X^2` = as.numeric(t(xiF(coef_minX2)) %*% MASS::ginv(Smat) %*% xiF(coef_minX2)))
+             # #
+             # # dgf <- nCl - (k + 1L)
+             # # p_val <- stats::pchisq(q = statist, df = dgf, lower.tail = FALSE)
+             #
+             # #
+             # ##
+             # ### OLD END
+             # ##
+             # #
+
+
+
+           } #esle isSurv
+
+
+         },
+
+         NRR =, nikulin = {
+
+           meth <- "Nikulin-Rao-Robson's Goodness-of-fit (GOF) test"
+
+           if (isSurv) {
+             #+see book, Nikulin, 2017, chapter 2
+             switch (delayFit$distribution,
+                     exponential = {
+                       # with specific test statistics for exponential
+                       # see chapter 2, 2.5.1 (p. 51ff) in Nikulin (2017)
+
+                       if (twoGroup) stop("XXX currently works only for single group!")
+                       dat <- delayFit$data
+                       stopifnot(survival::is.Surv(dat)) # and not list of Surv!
+                       nCl <- nCl[[1L]]
+                       evInd <- delayFit$cens$ind[[1L]]$obs
+
+                       # shift observations back by delay-estimate
+                       obsXc <- dat[,1] - coef(delayFit, group = "x")[1L] # here quick-fix for single group only. XXX fixme
+
+                       # build interval boundaries (data dependent)
+                       S <- c(0, (length(obsXc) - seq_along(obsXc)) * obsXc + cumsum(obsXc))
+                       a <- numeric(length = nCl+1)
+                       a[nCl+1] <- obsXc[length(obsXc)]
+                       for (j in seq_len(nCl)-1L) {
+                         jksn <- j/nCl * S[[length(S)]]
+                         i <- which.max(jksn >= S)
+                         a[j+1] <- (jksn - if (i>1) cumsum(obsXc[seq_len(i-1)]) else 0) / (length(obsXc) - i + 1)
+                       } #rof
+                       U <- tabulate(findInterval(x=obsXc[evInd], vec = a,
+                                                  rightmost.closed = TRUE, all.inside = TRUE),
+                                     nbins = nCl)
+                       stopifnot(any(U>0))
+                       # drop empty intervals
+                       U <- U[U>0]
+
+                       statist <- sum((U-length(evInd)/length(U))^2/U)
+
+                     },
+                     weibull = {
+                       stop("Weibull fixme XXX")
+                     },
+                     stop("This distribution is not handled here!", call. = FALSE)
+             ) #switch
+
+           } else {
+             stop("NRR for non-Surv here, please. XXX")
+             statist <- -99
+             dgf <- -99
            }
-           p_val <- stats::pchisq(q = statist, df = sum(nCl) - k - (1L+twoGroup), lower.tail = FALSE)
+
+           p_val <- stop("use pchisq to fix me. XXX")
          },
 
          AD =, ad =, anderson = {
@@ -101,9 +511,11 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
            # Anderson-Darling (AD) test statistic
            # cf Stephens, Tests based on EDF Statistics p.101, (4.2)
 
-           meth <- 'Anderson-Darling Goodness-of-fit (GOF) test (per group)'
+           meth <- "Anderson-Darling Goodness-of-fit (GOF) test (per group)"
 
-           testStat_ad <- function(datr, n){
+           if (isSurv) stop("Censored observations are not supported here!", call. = FALSE)
+
+           testStat_ad <- function(datr, n) {
              i <- seq_along(datr)
              # in fact, A2 utilizes rev-order in its 2nd summation term
              -n - mean((2L * i - 1L) * log(datr) + (2L*n - (2L*i-1L))*log(1-datr))
@@ -158,7 +570,7 @@ test_GOF <- function(delayFit, method = c('moran', 'pearson')){
   #+parameter, alternative, null.value, conf.int, estimate
   structure(
     list(method = meth, data.name = data_name,
-         statistic = statist, p.value = as.numeric(p_val)),
+         statistic = statist, df = dgf, p.value = as.numeric(p_val)),
     class = 'htest')
 }
 
@@ -389,9 +801,9 @@ test_diff <- function(x, y = stop('Provide data for group y!'), distribution = c
                                                                  y = rlang::exec(ranFun, !!! ranFunArgsY),
                                                                  strict = FALSE)
                                              if (is.null(ts_boot)) rep.int(NA_real_, times = retL) else
-                                                 c(ts_boot[['val']],
-                                                   # verbose-mode: include convergence code
-                                                   purrr::chuck(ts_boot, 'fit0', 'optimizer', 'convergence'))[seq_len(retL)]
+                                               c(ts_boot[['val']],
+                                                 # verbose-mode: include convergence code
+                                                 purrr::chuck(ts_boot, 'fit0', 'optimizer', 'convergence'))[seq_len(retL)]
 
                                            }, future.seed = TRUE)
 

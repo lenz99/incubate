@@ -10,7 +10,6 @@
 #' Optionally, a second phase is possible where the hazard rate might change (parameters `delay2` and `rate2`).
 #'
 #' @details
-#' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the `stats`-package.
 #' If only a single initial delay phase is there, the numerical arguments other than `n` are recycled to the length of the result (as with the exponential distribution in `stats`).
 #' With two phases, the arguments are **not** recycled. Only the first element of delays and rates are used as it otherwise becomes ambiguous which delay and rate parameter apply for observations in different phases.
 #' Generally, only the first elements of the logical arguments are used.
@@ -29,10 +28,9 @@
 #' @param log logical. Return value on log-scale?
 #' @param lower.tail logical. Give cumulative probability of lower tail?
 #' @param log.p logical. P-value on log-sclae?
-#' @param ... further arguments are passed on to the underlying non-delayed function, e.g., `lower.tail=` to [stats::pexp()]
 #' @return Functions pertaining to the delayed exponential distribution:
 #' * `dexp_delayed` gives the density
-#' * `pexp_delayed` gives the distribution function
+#' * `pexp_delayed` gives the vector of cumulative probabilities or the gradient matrix (nbr parameters x quantile times)
 #' * `qexp_delayed` gives the quantile function
 #' * `rexp_delayed` generates a pseudo-random sample
 #' * `mexp_delayed` gives the restricted mean survival time
@@ -62,16 +60,16 @@ dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 
   # two phases
   # take only first value of parameter arguments!
-  if ( length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L ){
+  if (length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L) {
     warning("In two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
+    # first phase
+    delay1 <- delay1[[1L]]
+    rate1 <- rate1[[1L]]
+    dvals <- stats::dexp(x = x - delay1, rate = rate1, log = log)
+    delay2 <- delay2[[1L]]
+    rate2 <- rate2[[1L]]
   }
-  # first phase
-  delay1 <- delay1[[1L]]
-  rate1 <- rate1[[1L]]
-  dvals <- stats::dexp(x = x - delay1, rate = rate1, log = log)
   # we need both delay2 AND rate2
-  delay2 <- delay2[[1L]]
-  rate2 <- rate2[[1L]]
   stopifnot( is.finite(delay2), is.finite(rate2) )
 
   # check delay constraint
@@ -91,40 +89,65 @@ dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 }
 
 #' @rdname DelayedExponential
+#' @param grad logical. Should the gradient be calculated at the given quantile values (and not the cumulative probabilities)?
+#' @return Vector of cumulative probabilities or gradient matrix (nbr parameter x quantile times)
 #' @export
-pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1, ...) {
+pexp_delayed <- function(q, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1, lower.tail = TRUE, log.p = FALSE, grad = FALSE) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
+  log.p <- isTRUE(log.p)
+  lower.tail <- isTRUE(lower.tail)
+  grad <- isTRUE(grad)
 
-  stopifnot( all(is.finite(delay1), is.finite(rate1)) )
+  stopifnot(all(is.finite(delay1), is.finite(rate1)))
 
-  # check for easy case: only a single delay
-  if ( is.null(delay2) ) {
+  # check for easy case when only a single delay is specified
+  if (is.null(delay2)) {
     if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
-    return(stats::pexp(q = q - delay1, rate = rate1, ...))
+    return(
+      if (grad) {
+        if (log.p) warning("Argument log.p=TRUE is ignored here for gradient.", call. = FALSE)
+        local({
+          expTerm <- ifelse(q >= delay1, yes = exp(-rate1 * (q-delay1)), no = 0)
+
+          # return matrix of partial derivatives, 1st row: for delay1, 2nd row: for rate1
+          rbind(delay1 = -rate1 * expTerm,
+                rate1 = (q-delay1) * expTerm) * if (lower.tail) 1 else -1
+        })
+      } else {
+        stats::pexp(q = q - delay1, rate = rate1, lower.tail = lower.tail, log.p = log.p)
+      }
+    )
   }
 
   # two phases
-  if ( length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L ){
+  if (length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L) {
     warning("In two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
+
+    delay1 <- delay1[[1L]]
+    rate1 <- rate1[[1L]]
+    delay2 <- delay2[[1L]]
+    rate2 <- rate2[[1L]]
   }
-  delay1 <- delay1[[1L]]
-  rate1 <- rate1[[1L]]
   # we need both delay2 AND rate2
-  delay2 <- delay2[[1L]]
-  rate2 <- rate2[[1L]]
-  stopifnot( is.finite(delay2), is.finite(rate2) )
+  if (!is.finite(delay2) || !is.finite(rate2)) {
+    stop("2nd delay and rate parameters must be finite!", call. = FALSE)
+  }
 
   # check delay constraint
   if (delay1 >= delay2) {
     stop("First delay phase must antedate the second delay phase!", call. = FALSE)
   }
 
+  if (grad) {
+    stop("Gradient not supported for two-phase setting.", call. = FALSE)
+  }
+
   # first phase
-  pvals <- stats::pexp(q = q - delay1, rate = rate1, ...)
+  pvals <- stats::pexp(q = q - delay1, rate = rate1, lower.tail = lower.tail, log.p = log.p)
   # check if we have observations in 2nd phase
   phase2Ind <- which(q > delay2)
-  if (length(phase2Ind)) pvals[phase2Ind] <- stats::pexp(q = q[phase2Ind] - delay2 + rate1/rate2 * (delay2 - delay1), rate = rate2, ...)
+  if (length(phase2Ind)) pvals[phase2Ind] <- stats::pexp(q = q[phase2Ind] - delay2 + rate1/rate2 * (delay2 - delay1), rate = rate2, lower.tail = lower.tail, log.p = log.p)
 
   pvals
 }
@@ -280,7 +303,7 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = N
 #' @param log.p logical. P-value on log-sclae?
 #' @return Functions pertaining to the delayed Weibull distribution:
 #' * `dweib_delayed` gives the density
-#' * `pweib_delayed` gives the distribution function
+#' * `pweib_delayed` gives the vector of cumulative probabilities or the gradient matrix (nbr parameters x quantile times)
 #' * `qweib_delayed` gives the quantile function
 #' * `rweib_delayed` generates a pseudo-random sample
 #' * `mweib_delayed` gives the restricted mean survival time
@@ -347,31 +370,63 @@ dweib_delayed <- function(x, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
 #' @rdname DelayedWeibull
 #' @export
 pweib_delayed <- function(q, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 = NULL, scale2 = 1,
-                          delay = delay1, shape = shape1, scale = scale1, lower.tail = TRUE, log.p = FALSE) {
+                          delay = delay1, shape = shape1, scale = scale1, lower.tail = TRUE, log.p = FALSE, grad = FALSE) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
   if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
 
-  stopifnot( all(is.finite(delay1), is.finite(shape1), is.finite(scale1)) )
+  grad <- isTRUE(grad)
 
-  # check for easy case: only a single delay
-  if ( is.null(delay2) ) {
+  if (!all(is.finite(delay1), is.finite(shape1), is.finite(scale1))) {
+    stop("All arguments for delay1=, shape1= and scale1= must be finite!", call. = FALSE)
+  }
+
+  # check for easy case when only a single delay is given
+  if (is.null(delay2)) {
     if (!is.null(shape2) || ! missing(scale2)) warning("Arguments shape2= and/or scale2= are ignored, as argument delay2= is not set.", call. = FALSE)
-    return(stats::pweibull(q = q - delay1, shape = shape1, scale = scale1, lower.tail = lower.tail, log.p = log.p))
+
+    return(
+      if (grad) {
+        if (log.p) warning("Argument 'log.p=TRUE' is ignored here for gradient.", call. = FALSE)
+
+        local({
+          qValidInd <- -which(q <= delay1 | shape1 <= 0 | scale1 <= 0) #negative ind of invalid
+          if (length(qValidInd) == 0L) qValidInd <- TRUE # all are valid
+
+          q_std <- (q[qValidInd]-delay1) / scale1
+          expTerm <- exp(-q_std^shape1)
+
+          pd_delay1 <- pd_shape1 <- pd_scale1 <- numeric(length = length(q))
+          pd_delay1[qValidInd] <- -shape1/scale1 * q_std^(shape1-1) * expTerm
+          pd_shape1[qValidInd] <- log(q_std) * q_std^shape1 * expTerm
+          pd_scale1[qValidInd] <- -shape1/scale1 * q_std^shape1 * expTerm
+
+          rbind(delay1 = pd_delay1,
+                shape1 = pd_shape1,
+                scale1 = pd_scale1) * if (lower.tail) 1 else -1
+        })
+
+      } else {
+        stats::pweibull(q = q - delay1, shape = shape1, scale = scale1, lower.tail = lower.tail, log.p = log.p)
+      }
+    )
   }
 
   # two phases
-  if ( length(delay1) > 1L || length(shape1) > 1L || length(scale1) > 1L || length(delay2) > 1L || length(shape2) > 1L || length(scale2) > 1L ){
+  if (grad) stop("gradient is not implemented for two phases!", call. = FALSE)
+
+  if (length(delay1) > 1L || length(shape1) > 1L || length(scale1) > 1L || length(delay2) > 1L || length(shape2) > 1L || length(scale2) > 1L) {
     warning("In two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
   }
+
 
   delay1 <- delay1[[1L]]
   shape1 <- shape1[[1L]]
   scale1 <- scale1[[1L]]
-  # we need both delay2 AND shape2 AND scale2
   delay2 <- delay2[[1L]]
   shape2 <- shape2[[1L]]
   scale2 <- scale2[[1L]]
+  # we need both delay2 AND shape2 AND scale2
   stopifnot( is.finite(delay2), is.finite(shape2), is.finite(scale2) )
 
   # first phase
@@ -639,6 +694,4 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
          },
          stop(glue("Unknown distribution {distribution}."), call. = FALSE)
   )
-
 }
-
