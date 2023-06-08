@@ -117,45 +117,59 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
 
 
              # estimate variance-covariance matrix for specified groups
-             # @return variance-covariance matrix
+             # @return variance-covariance matrix or NULL in case of failures
              vcovF <- function(parEst, grpIdx = 1, boundaries) {
                stopifnot(is.numeric(parEst), rlang::is_named(parEst))
                stopifnot(is.numeric(boundaries), length(boundaries) >= 2L)
 
                # number of classes
                nCl <- length(boundaries)-1
-               survF <- purrr::partial(.f = cdfF, !!! c(as.list(parEst), lower.tail = FALSE))
+               # set parameter vector into CDF and PDF functions
                cdfF2 <- purrr::partial(.f = cdfF, !!! c(as.list(parEst), lower.tail = TRUE))
+               pdfF2 <- purrr::partial(.f = densF, !!! c(as.list(parEst)))
                # a similar calculation is done for the xiF-function
                pIntPred <- diff(cdfF2(q=boundaries))
                # or: -diff(survF(q = boundaries)))) #negative sign because we have survF(=1-F) instead of F
 
+               integrandF <- function(x) {
+                 survInd <- c(1L,-1L)[grpIdx] * seq_len(length(x)) # works only for 1- or 2-group setting
+                 x * pdfF2(x = x) / ((1-cdfF2(q=x))^2 * summary(delayFit$cens$rcens, times = x, extend = TRUE)$surv[survInd])
+               }
+
                # variance function, see Nikulin (2017), 2.1 (p. 33)
+               # @param t numeric time points up to where to integrate
                # @return numeric variance estimate per time point
                varF <- function(t) {
                  # vectorize over t
                  purrr::map_dbl(.x = t,
-                                .f = function(.x) {
+                                .f = function(.x) { # integrate up to upper bound .x
                                   retVal <- NA_real_
-                                  intVal <- stats::integrate(f = function(x) {
-                                    survInd <- c(1L,-1L)[grpIdx] * seq_len(length(x)) # works only for 1- or 2-group setting
-                                    x * rlang::exec(densF, !!! c(as.list(parEst), list(x = x))) / (survF(q=x)^2 * summary(delayFit$cens$rcens, times = x, extend = TRUE)$surv[survInd])
-                                  }, lower = 0, upper = .x)
-                                  if (intVal$message == "OK") retVal <- intVal$value
+                                  try(expr = {
+                                    intVal <- stats::integrate(f = integrandF, lower = 0, upper = .x,
+                                                               # less stringent settings for convergence, but allow for more subdivisions
+                                                               rel.tol = 1.5e-3, subdivisions = 1001L)
+                                    if (intVal$message == "OK") retVal <- intVal$value
+                                  }, silent = TRUE)
                                   retVal
                                 })
                } #fn varF
 
                Dmat <- diag(1/sqrt(pIntPred))
                # apply() transposes the partial derivative matrix as required (see Nikulin, p. 33)
-               #Cmat <- Dmat %*% apply(pd_cdfF(distribution = distribution, par = parEst, q = boundaries), MARGIN = 1L, FUN = diff)
                Cmat <- Dmat %*% apply(cdfF2(q = boundaries, grad = TRUE), MARGIN = 1L, FUN = diff)
-               Pmat <- diag(nrow = nCl) - Cmat %*% solve(crossprod(Cmat)) %*% t(Cmat)
+               CtC_inv <- NULL
+               try(expr = {
+                 CtC_inv <- solve(crossprod(Cmat))
+               }, silent = TRUE)
+               if (is.null(CtC_inv)) return(NULL)
+               Pmat <- diag(nrow = nCl) - Cmat %*% CtC_inv %*% t(Cmat)
 
+               varVals <- varF(boundaries[2L:nCl]) # nCl-1 entries (=number of inner boundaries)
+               if (any(!is.finite(varVals))) return(NULL)
                S1mat <- matrix(data = -1, nrow = nCl-1, ncol = nCl-1)
                for (ro in 1L:(nCl-1)) {
                  for (co in ro:(nCl-1)) {
-                   S1mat[ro, co] <- survF(q = boundaries[1L+ro]) * survF(q = boundaries[1L+co]) * varF(boundaries[1L+min(ro, co)])
+                   S1mat[ro, co] <- (1-cdfF2(q = boundaries[1L+ro])) * (1-cdfF2(q = boundaries[1L+co])) * varVals[ro]
                  } #rof co
                } #rof ro
                S1mat[lower.tri(S1mat)] <- t(S1mat)[lower.tri(S1mat)]
@@ -163,8 +177,9 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
                Jmat <- diag(nrow = nCl, ncol = nCl-1L)
                Jmat[row(Jmat)-1L == col(Jmat)] <- -1
 
+               # return vcov-matrix
                Pmat %*% Dmat %*% Jmat %*% S1mat %*% t(Jmat) %*% Dmat %*% Pmat
-             }
+             } #fn vcovF
 
              # calculates test statistic or generalized Pearson-Fisher GOF-test per group
              # choose boundaries greedily
@@ -267,7 +282,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
                } #rof
                rm(list = c("j", "ind_b", "ind_shift")) #clean-up
 
-               # there are better versions that try to repeatedly improve a partitioning looking at the biggest offenders
+               # there are better ways to repeatedly improve a partitioning looking at the biggest offenders
                # cf https://stackoverflow.com/questions/35517051/split-a-list-of-numbers-into-n-chunks-such-that-the-chunks-have-close-to-equal (link thx to FU)
                # example from SO: nEvGr <- c(95, 15, 75, 25, 85, 5); timeGr <- 1:6; srvIdxGrpEv <- 1:6; nCl <- 3
                #+ it should group the first two together! The greedy single-pass run without look-ahead groups first event alone
@@ -316,7 +331,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
                Smat <- vcovF(parEst = coef_minX2, grpIdx = grpIdx, boundaries = boundaries)
 
                # return value of test statistic
-               testStat <- as.numeric(t(xiF(coef_minX2)) %*% MASS::ginv(Smat) %*% xiF(coef_minX2))
+               testStat <- if (! is.null(Smat)) as.numeric(t(xiF(coef_minX2)) %*% MASS::ginv(Smat) %*% xiF(coef_minX2))
 
                list(boundaries = boundaries, testStat = testStat, dgf = nCl - k/(1L+twoGroup) - 1)
              } #fn
@@ -326,10 +341,10 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
              genPF_y <- if (twoGroup) genPearsonFisher(group = "y")
 
 
-             statist <- c(`X^2` = genPF_x[["testStat"]] + genPF_y[["testStat"]] %||% 0)
+             statist <- if (is.numeric(genPF_x[["testStat"]])) c(`X^2` = genPF_x[["testStat"]] + (genPF_y[["testStat"]] %||% 0))
 
-             dgf <- genPF_x[["dgf"]] + genPF_y[["dgf"]] %||% 0
-             p_val <- stats::pchisq(q = statist, df = dgf, lower.tail = FALSE)
+             dgf <- genPF_x[["dgf"]] + (genPF_y[["dgf"]] %||% 0)
+             p_val <- if (is.numeric(statist)) stats::pchisq(q = statist, df = dgf, lower.tail = FALSE)
 
 
              # #
@@ -562,6 +577,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
          stop('This GOF-test method is not supported!')
   )
 
+  p_val <- if (!is.null(p_val)) as.numeric(p_val)
 
 
   # return test object
@@ -570,7 +586,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
   #+parameter, alternative, null.value, conf.int, estimate
   structure(
     list(method = meth, data.name = data_name,
-         statistic = statist, df = dgf, p.value = as.numeric(p_val)),
+         statistic = statist, df = dgf, p.value = p_val),
     class = 'htest')
 }
 
