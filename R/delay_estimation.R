@@ -1010,7 +1010,7 @@ objFunFactory <- function(x, y = NULL,
                      rate  = c(lower = -Inf, upper = +Inf),
                      # shape lower bound for MLEnp (actually for shape1)
                      #shape = c(lower = if (profiled && method == 'MLEn' && !profiled_llik_directly) 1.49e-8 else -Inf, upper = +Inf),
-                     shape = c(lower = -Inf, upper = +Inf),
+                     shape = c(lower = -Inf, upper = 4.5), # exp(4.5) = 90 is already huge for shape
                      scale = c(lower = -Inf, upper = +Inf))
 
 
@@ -1115,7 +1115,7 @@ objFunFactory <- function(x, y = NULL,
 
 
     # for Weibull, do we want to penalize high shape values in MLE?
-    pen_shape <- distribution == 'weibull' && method == "MLEw" && FALSE #to turn off (could become an option)
+    pen_shape <- FALSE && distribution == 'weibull' && method == "MLEw" # could become an option
     pen_shape_shift <- 7 #shift parameter of softplus penalty
     pen_shape_steep <- 1 #steepness of softplus penality
 
@@ -1427,8 +1427,9 @@ objFunFactory <- function(x, y = NULL,
            MLEn = ,
            MLEw = ,
            MLEc = {
-             stopifnot( ! twoPhase ) #XXX not implemented yet!
+             stopifnot(!twoPhase) #XXX not implemented yet!
 
+             if (verbose > 1) cat("pars:", pars, "\n")
              - if (! twoGroup) getLogLik(pars, group = "x", criterion = criterion) else {
                res <- c(getLogLik(pars, group = "x", criterion = criterion), getLogLik(pars, group = "y", criterion = criterion))
 
@@ -1502,7 +1503,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     # optim: first attempts ----
 
     try({
-      optObj <- purrr::exec(stats::optim, !!! optim_args)
+      optObj <- rlang::exec(stats::optim, !!! optim_args)
       optObj$methodOpt <- optim_args$method
     }, silent = TRUE)
 
@@ -1538,10 +1539,11 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
     # nlminb (PORT): last attempt ----
 
-    if (is.null(optObj) || optObj$convergence > 0L){
+    if (is.null(optObj) || optObj$convergence > 0L) {
       if (verbose > 1L) message("Do another final attempt with PORT-optimizer.")
 
-      optObj <- minObjFunPORT(objFun = objFun, start = optim_args$par, lower = optim_args$lower, upper = optim_args$upper, verbose = verbose)
+      optObj <- minObjFunPORT(objFun = objFun, start = optim_args$par,
+                              lower = optim_args$lower, upper = optim_args$upper, verbose = verbose)
     }
 
 
@@ -1600,14 +1602,16 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
 
 
   # unpack x if it is a list of two vectors
-  if (is.list(x)){
-    stopifnot( length(x) == 2L )
+  if (is.list(x)) {
+    if (length(x) != 2L) {
+      stop("If x= is given a list it must be of size 2.", call. = FALSE)
+    }
     y <- x[[2L]]
     x <- x[[1L]]
   }
 
   # enforce that the first argument x= is properly instantiated
-  stopifnot( !is.null(x) && is.numeric(x) && length(x) )
+  stopifnot(!is.null(x) && is.numeric(x) && length(x))
 
   distribution <- match.arg(distribution)
 
@@ -1618,8 +1622,8 @@ delay_model <- function(x = stop('Specify observations for at least one group x=
   method <- match.arg(method)
   ties <- match.arg(ties)
 
-  if (is.character(bind)){
-    if (any(endsWith(bind, suffix = "_tr"))){
+  if (is.character(bind)) {
+    if (any(endsWith(bind, suffix = "_tr"))) {
       stop("Parameter names to bind= refer to the distribution parameters and not to the transformed parameters of the objective function.", call. = FALSE)
     }
 
