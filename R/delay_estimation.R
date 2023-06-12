@@ -1588,7 +1588,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x = stop('Specify observations for at least one group x=!', call. = FALSE), y = NULL,
+delay_model <- function(x = stop('Specify observations for first group x=!', call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
                         bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
                         method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profiled = method == 'MLEw',

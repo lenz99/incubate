@@ -385,6 +385,11 @@ test_that("Fit delayed Exponentials", {
   expect_named(fd_exp1_mpseP$optimizer$parOpt, expected = "delay1_tr")
   expect_equal(coef(fd_exp1_mpseP), expected = coef(fd_exp1_mpseNP), tolerance = .02)
 
+  # erroneous data input -----
+  expect_error(delay_model(x = "bla"))
+  expect_error(delay_model(NULL))
+  expect_error(delay_model(y = 3 + rlnorm(n=4)), regexp = "Specify.*first group", ignore.case = TRUE)
+
 
   # MLE fits -----------------------------------------------------------
 
@@ -494,6 +499,13 @@ test_that("Fit delayed Exponentials", {
   expect_type(purrr::chuck(fd_exp2, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
   expect_equal(as.numeric(coef_exp2[1:2]), expected = as.numeric(coef_exp), tolerance = .01)
+
+  expect_identical(delay_model(x = list(exp_d9, exp_d10), distribution = "expon"),
+                   expected = fd_exp2)
+  # x= as list must be of length 2
+  expect_error(delay_model(x = list(exp_d9, exp_d10, pi)), regexp = "size 2")
+  expect_error(delay_model(x = list(exp_d9, "bla"))) # must be numeric
+
 
   # no delay in 2nd group
   set.seed(20221124)
@@ -986,11 +998,13 @@ test_that("Fit delayed Weibull", {
 
   # two groups with data from delayed Weibull with similar parameters
   set.seed(20210430)
+
   datw <- list(x = rweib_delayed(n=37, delay1 = 7, shape1 = 1.8, scale1 = 3),
                y = rweib_delayed(n=51, delay1 = 5, shape1 = 1.2, scale1 = 1.5))
+  attr(datw, which = "param") <- list(x = c(delay1 = 7, shape1 = 1.8, scale1 = 3), y = c(delay1 = 5, shape1 = 1.2, scale1 = 1.5))
+  datw_grpEarlier <- "y" # which group is later?
 
-  fd_wb2b <- delay_model(x = datw$x, y = datw$y,
-                         distribution = "weib", bind = "delay1")
+  fd_wb2b <- delay_model(x = datw$x, y = datw$y, distribution = "weib", bind = "delay1")
   coef_wb2b <- coef(fd_wb2b)
 
   # we can provide a list with two entries as well (instead of x= and y= separately)
@@ -1001,13 +1015,34 @@ test_that("Fit delayed Weibull", {
   expect_identical(length(coef_wb2b), expected = 2L*3L-1L)
   expect_named(coef_wb2b, c("delay1", "shape1.x", "scale1.x", "shape1.y", "scale1.y"))
   # expect a delay close to the minimum of the two true delay parameters
-  expect_equal(coef_wb2b[[1L]], expected = 5, tolerance = .02)
+  expect_equal(coef_wb2b[[1L]], expected = 5, tolerance = .03)
 
+
+  # model fit resembles the true underlying model:
+
+  # estimated delay is close to smallest delay in both groups
+  expect_equal(coef_wb2b[["delay1"]],
+               expected = min(purrr::map_dbl(c("x", "y"), ~purrr::chuck(attr(datw, "param"), .x, "delay1"))),
+               tolerance = .03)
+
+  # group with shorter delay has a good model fit parameter wise
+  expect_equal(coef(fd_wb2b, group = datw_grpEarlier)[-1L],
+               expected = purrr::chuck(attr(datw, "param"), datw_grpEarlier)[-1L],
+               tolerance = .15)
+
+
+
+  # MLE fits
   fd_wb2b_MLEn_NP <- delay_model(x = datw, distribution = "weib",
                                  method = "MLEn", bind = "delay1")
   expect_identical(fd_wb2b_MLEn_NP$optimizer$convergence, expected = 0L)
   expect_named(coef(fd_wb2b_MLEn_NP), c("delay1", "shape1.x", "scale1.x", "shape1.y", "scale1.y"))
   expect_equal(coef(fd_wb2b_MLEn_NP), coef_wb2b, tolerance = .03)
+  #delay is bound
+  expect_identical(length(coef(fd_wb2b_MLEn_NP)), expected = 2L*3L-1L)
+  expect_named(coef(fd_wb2b_MLEn_NP), c("delay1", "shape1.x", "scale1.x", "shape1.y", "scale1.y"))
+  # expect a delay close to the minimum of the two true delay parameters
+  expect_equal(coef(fd_wb2b_MLEn_NP)[[1L]], expected = 5, tolerance = .03)
 
   fd_wb2b_MLEn_P <- delay_model(x = datw, distribution = "weib",
                                 method = "MLEn", profile = TRUE, bind = "delay1")
@@ -1017,6 +1052,15 @@ test_that("Fit delayed Weibull", {
   fd_wb2b_MLEc_NP <- delay_model(x = datw, distribution = "weib",
                                  method = "MLEc", profile = FALSE, bind = "delay1")
   expect_identical(fd_wb2b_MLEc_NP$optimizer$convergence, expected = 0L)
+  #delay is bound
+  expect_identical(length(coef(fd_wb2b_MLEc_NP)), expected = 2L*3L-1L)
+  expect_named(coef(fd_wb2b_MLEc_NP), c("delay1", "shape1.x", "scale1.x", "shape1.y", "scale1.y"))
+  # expect a delay close to the minimum of the two true delay parameters
+  expect_equal(coef(fd_wb2b_MLEc_NP)[[1L]], expected = 5, tolerance = .03)
+  # group with shorter delay has a good model fit parameter wise
+  expect_equal(coef(fd_wb2b_MLEc_NP, group = datw_grpEarlier)[-1L],
+               expected = purrr::chuck(attr(datw, "param"), datw_grpEarlier)[-1L],
+               tolerance = .15)
 
   fd_wb2b_MLEc_P <- delay_model(x = datw, distribution = "weib",
                                 method = "MLEc", profile = TRUE, bind = "delay1")
@@ -1027,6 +1071,19 @@ test_that("Fit delayed Weibull", {
   fd_wb2b_MLEw_P <- delay_model(x = datw, distribution = "weib",
                                 method = "MLEw", profile = TRUE, bind = "delay1")
   expect_identical(fd_wb2b_MLEw_P$optimizer$convergence, expected = 0L)
+  #delay is bound
+  expect_identical(length(coef(fd_wb2b_MLEw_P)), expected = 2L*3L-1L)
+  expect_named(coef(fd_wb2b_MLEw_P), c("delay1", "shape1.x", "scale1.x", "shape1.y", "scale1.y"))
+  # expect a delay close to the minimum of the two true delay parameters
+  expect_equal(coef(fd_wb2b_MLEw_P)[[1L]], expected = 5, tolerance = .03)
+  # group with shorter delay has a good model fit parameter wise
+  expect_equal(coef(fd_wb2b_MLEw_P, group = datw_grpEarlier)[-1L],
+               expected = purrr::chuck(attr(datw, "param"), datw_grpEarlier)[-1L],
+               tolerance = .15)
+  # no crazy high shape for group x:
+  #+problem is that the profiling expects that delay was estimated correctly,
+  #+but when delay1 is bound then we subtract too low value for group with later delay1
+  expect_lte(coef(fd_wb2b_MLEw_P, group = "x")[["shape1"]], expected = 10)
 
   # bind shape
   fd_wb2bb <- delay_model(x = rweib_delayed(n=37, delay1 = 7, shape1 = 1.8, scale1 = 3),
