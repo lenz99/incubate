@@ -441,7 +441,7 @@ objFunFactory <- function(x, y = NULL,
       # For Weibull, we have z_i = ((x_(i) - a)/gamma)^k ~ Exp(1).
       # Cousineau uses MC-simulation, drawing from Exp(1). He does not use the observed data to derive F_i.
       # He chooses weights W1-W3 as median of their sampling distribution in MC irrespective of the concrete sample.
-      # @param group Estimate z's for which group
+      # @param group Specifies for which group to estimate the z's
       # @param method How to estimate the z's. mr = median rank method to estimate F_i
       # @param propagateTies logical. Should ties in the observations lead to ties in the z's as well?
       # @return numeric vector of ordered z's, same length as number of observed event time values in group
@@ -618,7 +618,7 @@ objFunFactory <- function(x, y = NULL,
         nObs <- length(obs)
 
         # catch all for n = 1
-        if (nObs < 2L) return( function(k) 1)
+        if (nObs < 2L) return(function(k) 1)
 
         # fn of shape k
         switch(EXPR = method,
@@ -780,9 +780,9 @@ objFunFactory <- function(x, y = NULL,
   )
 
   # transform parameter vector for a single group. Does not use parameter names.
-  # transformed parameters are used within optimization. The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativitiy of original parameter)
+  # transformed parameters are used within optimization. The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativity of original parameter)
   # @param parV1 parameter vector for a single group
-  # @param inverse logical. If `inverse=TRUE` does inverse transformation, from optimization parameters back to original parameters
+  # @param inverse logical. `inverse=TRUE` takes optimization parameters back to original parameters
   # @return transformed parameter vector, unnamed!
   transformPars1 <- function(parV1, inverse = FALSE) {
 
@@ -802,7 +802,7 @@ objFunFactory <- function(x, y = NULL,
   }# fn transformPars1
 
   # merge two parameter vectors
-  # @param isOpt flag: are the parameters on optimization scale?
+  # @param isOpt logical. Are the parameters on optimization scale?
   # @return merged parameter vector
   mergePars <- function(parx, pary, isOpt) {
     exParInd <- if (isOpt) extractParOptInd else extractParInd
@@ -849,7 +849,7 @@ objFunFactory <- function(x, y = NULL,
 
         # merge the two parameter vectors back together (after a potential transformation)
         res0 <- mergePars(parx = parx, pary = pary, isOpt = resIsOpt)
-        if (named){
+        if (named) {
           res0 <- rlang::set_names(res0, nm = if (resIsOpt) trNamesFull else oNamesFull)
         }
         res0
@@ -881,7 +881,7 @@ objFunFactory <- function(x, y = NULL,
               # we do not divide by n, but by n_ev, hence censorings increase the scale estimate
               (mean((obs[,1L]-res0[[1L]])^k) * length(obs)/(length(obs) - cens$n[[group]][["right"]]) / weights$W1[[group]])^(1/k)
             } else {
-              (mean((obs-res0[[1L]])^k) / weights$W1[[group]] )^(1/k)
+              (mean((obs-res0[[1L]])^k) / weights$W1[[group]])^(1/k)
             }
             # add scale/rate parameter at the end of parameter vector
             res0 <- append(res0, values = if (distribution == 'exponential') 1/scale0 else scale0)
@@ -1072,7 +1072,7 @@ objFunFactory <- function(x, y = NULL,
         }
 
         # return start value
-        if ( is.null(bind) ){ # two groups unbound
+        if (is.null(bind)) { # two groups unbound
           c(start_x, start_y)
         } else {
 
@@ -1241,17 +1241,20 @@ objFunFactory <- function(x, y = NULL,
                # numeric response, non-Surv
                obs_c <- obs - pars.gr[[1L]]
 
-               if (verbose > 1L) {
-                 cat(glue("Weights: W1 = {weights$W1[[group]]}, W2 = {weights$W2[[group]]} and W3 = {weights$W3[[group]](k)} for {group}. ",
-                          "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
-               }
 
                # objective function to maximize
-               -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
+               retVal <- -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
                  # 1st factor is inverse of harmonic mean
-                 -(mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 +
+                 -(mean(1/obs_c) * sum(obs_c**k) / sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 +
                  # optional penalization term
                  -penF(k)
+
+               if (verbose > 1L) {
+                 cat(glue("Weights: W1 = {round(weights$W1[[group]],2)}, W2 = {round(weights$W2[[group]],2)} and W3 = {round(weights$W3[[group]](k),4)} for {group}. ",
+                          "Candidate values: delay {round(pars.gr[[1L]],3)} shape {round(k,3)} => {round(retVal, 3)}"), "\n")
+               }
+
+               retVal
              }
            },
 
