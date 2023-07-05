@@ -323,8 +323,8 @@ objFunFactory <- function(x, y = NULL,
     }
 
     retL <- list(isSurv = isSurv,
-         n = purrr::compact(list(x=censDescF(x, what = "n"), y = if (twoGroup) censDescF(y, what = "n"))),
-         ind = purrr::compact(list(x=censDescF(x, what = "ind"), y = if (twoGroup) censDescF(y, what = "ind"))))
+                 n = purrr::compact(list(x=censDescF(x, what = "n"), y = if (twoGroup) censDescF(y, what = "n"))),
+                 ind = purrr::compact(list(x=censDescF(x, what = "ind"), y = if (twoGroup) censDescF(y, what = "ind"))))
     # add KM estimator for right-censorings (combines all data, even when two groups, in one object)
     retL[["rcens"]] <- censDescF(retL$n$x[["right"]] + if (twoGroup) retL$n$y[["right"]] else 0, what = "rcens")
 
@@ -1115,7 +1115,7 @@ objFunFactory <- function(x, y = NULL,
 
 
     # for Weibull, do we want to penalize high shape values in MLE?
-    pen_shape <- FALSE && distribution == 'weibull' && method == "MLEw" # could become an option
+    pen_shape <- FALSE # distribution == 'weibull' && method == "MLEw" # could become an option
     pen_shape_shift <- 7 #shift parameter of softplus penalty
     pen_shape_steep <- 1 #steepness of softplus penality
 
@@ -1125,7 +1125,7 @@ objFunFactory <- function(x, y = NULL,
     cdfFun <- getDist(distribution, type = "cdf")
 
     if (criterion) {
-      # criterion = log-likelihood
+      # criterion = proper log-likelihood
       return(
         if (isSurv) {
           #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
@@ -1216,7 +1216,7 @@ objFunFactory <- function(x, y = NULL,
            MLEw = {
              stopifnot(profiled)
 
-             if (isSurv) {
+             retVal <- if (isSurv) {
                switch(EXPR = attr(obs, which = "type", exact = TRUE),
                       right = {
                         obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
@@ -1227,15 +1227,15 @@ objFunFactory <- function(x, y = NULL,
                         }
 
                         # objective function to maximize
-                        - (weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k)/sum(obs_evc**k))**2 +
+                        -(weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k) / sum(obs_evc**k))**2 +
                           # 1st factor is inverse of harmonic mean
-                          -(mean(1/obs_evc) * sum(obs_evc**k)/sum(obs_evc**(k-1)) - weights$W3[[group]](k))**2 +
+                          -(mean(1/obs_evc) * sum(obs_evc**k) / sum(obs_evc**(k-1)) - weights$W3[[group]](k))**2 +
                           # contribution of right-censored obs
                           rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
                           # optional penalization term for big shape
                           -penF(k)
                       },
-                      stop("This type of survival is not supported here!", call. = FALSE))
+                      stop("This Surv-type is not supported here!", call. = FALSE))
 
              } else {
                # numeric response, non-Surv
@@ -1243,19 +1243,23 @@ objFunFactory <- function(x, y = NULL,
 
 
                # objective function to maximize
-               retVal <- -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k)/sum(obs_c**k))**2 +
+               -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 +
                  # 1st factor is inverse of harmonic mean
                  -(mean(1/obs_c) * sum(obs_c**k) / sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 +
                  # optional penalization term
                  -penF(k)
 
-               if (verbose > 1L) {
-                 cat(glue("Weights: W1 = {round(weights$W1[[group]],2)}, W2 = {round(weights$W2[[group]],2)} and W3 = {round(weights$W3[[group]](k),4)} for {group}. ",
-                          "Candidate values: delay {round(pars.gr[[1L]],3)} shape {round(k,3)} => {round(retVal, 3)}"), "\n")
-               }
+             } #esle isSurv
 
-               retVal
+             if (verbose > 1L) {
+               cat(glue("W1 = {round(weights$W1[[group]],2)}, ",
+                        "W2 = {round(weights$W2[[group]],2)}, ",
+                        "W3 = {round(weights$W3[[group]](k),4)} for {group}. ",
+                        "Candidate values: delay {round(pars.gr[[1L]],3)} shape {round(k,3)} => {round(retVal, 3)}"),
+                   "\n")
              }
+
+             retVal
            },
 
            # corrected MLE
