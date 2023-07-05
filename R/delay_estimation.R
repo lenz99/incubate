@@ -1119,7 +1119,7 @@ objFunFactory <- function(x, y = NULL,
     pen_shape_shift <- 7 #shift parameter of softplus penalty
     pen_shape_steep <- 1 #steepness of softplus penality
 
-    penF <- function(k) pen_shape * log(1 + exp(pen_shape_steep * (k - pen_shape_shift))/pen_shape_steep) / sqrt(n)
+    penF <- function(k) pen_shape * log(1 + exp(pen_shape_steep * (k - pen_shape_shift)) / pen_shape_steep)
 
     densFun <- getDist(distribution, type = "density")
     cdfFun <- getDist(distribution, type = "cdf")
@@ -1139,7 +1139,7 @@ objFunFactory <- function(x, y = NULL,
         } else {
           # numeric response, non-Surv
           sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
-        }
+        } #esle
       )
     } #fi criterion
 
@@ -1149,7 +1149,7 @@ objFunFactory <- function(x, y = NULL,
     #+ method
     #+ profiled
     n <- length(obs)
-    stopifnot( n > 1L )
+    stopifnot(n > 1L)
     # shape parameter (candidate)
     k <- if (distribution == 'weibull') pars.gr[[2L]] else 1L
 
@@ -1170,7 +1170,7 @@ objFunFactory <- function(x, y = NULL,
                                 -penF(k))
 
                         },
-                        stop("This type of censoring is not supported!", call. = FALSE)
+                        stop("This Surv-type is not supported!", call. = FALSE)
                  )
                } else {
                  # numeric response, non-Surv
@@ -1203,7 +1203,7 @@ objFunFactory <- function(x, y = NULL,
                                # optional penalty term for high shape parameter
                                -penF(k))
                          },
-                         stop("This type of censoring is not supported!", call. = FALSE)
+                         stop("This Surv-type is not supported!", call. = FALSE)
                  )
                } else { #numeric, non-Surv
                  sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)),
@@ -1220,11 +1220,6 @@ objFunFactory <- function(x, y = NULL,
                switch(EXPR = attr(obs, which = "type", exact = TRUE),
                       right = {
                         obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
-
-                        if (verbose > 1L) {
-                          cat(glue("Weights: W2 = {weights$W2[[group]]} and W3 = {weights$W2[[group]](k)} for {group}.",
-                                   "Candidate values: delay {pars.gr[[1L]]} and shape {k}."), "\n")
-                        }
 
                         # objective function to maximize
                         -(weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k) / sum(obs_evc**k))**2 +
@@ -1491,18 +1486,18 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
   # check if there is already a solution provided by the objective function
   optObj <- attr(objFun, which = "opt", exact = TRUE)
 
-  if ( is.list(optObj) && all( c('par', "par_orig", 'value', 'convergence') %in% names(optObj)) ){
-    if (verbose > 0L) cat("Using provided (analytical) solution to objective function.\n")
+  if ( is.list(optObj) && all( c("par", "par_orig", "value", "convergence") %in% names(optObj)) ){
+    if (verbose > 0L) message("Using provided (analytical) solution to objective function.")
   } else {
     optObj <- NULL #start from scratch
     # numeric optimization
     if (verbose > 0L) message("Start with numeric optimiziation of objective function.")
 
     if (is.null(optim_args)) optim_args <- objFunObjs[["optim_args"]]
-    stopifnot( is.list(optim_args), 'par' %in% names(optim_args),
-               is.numeric(optim_args$par), length(optim_args$par) == length(objFunObjs$trNamesFull) )
-    if (is.null(names(optim_args$par))) optim_args$par <- rlang::set_names(optim_args$par, objFunObjs$trNamesFull)
-    stopifnot( identical(names(optim_args$par), objFunObjs$trNamesFull))
+    stopifnot(is.list(optim_args), "par" %in% names(optim_args),
+              is.numeric(optim_args$par), length(optim_args$par) == length(objFunObjs$trNamesFull))
+    if (!rlang::is_named(optim_args$par)) rlang::names2(optim_args$par) <- objFunObjs$trNamesFull
+    stopifnot(identical(names(optim_args$par), objFunObjs$trNamesFull))
     # set objective function (overwrite entry 'fn' if it is already present)
     optim_args[["fn"]] <- objFun
 
@@ -1515,19 +1510,19 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     }, silent = TRUE)
 
 
-    if (is.null(optObj)){
+    if (is.null(optObj)) {
       if (verbose > 0L) warning(glue("{objFunObjs$method}-optimization failed during model fit!"),
                                 call. = FALSE)
-    } else if ( isTRUE(optObj$convergence > 0L) ){
+    } else if (isTRUE(optObj$convergence > 0L)) {
       # do a 2nd attempt of optim in case it did not converge in the first place
       if (verbose > 1L) message("No proper convergence during 1st optimization in delay fit. Re-try with different parameter scaling.")
 
       # Use parameter values of non-converged fit as new start values (and adapt parscale accordingly)
       #+The objFun is to be minimized, smaller is better!
-      if ( isTRUE(is.numeric(optObj$par) && all(is.finite(optObj$par)) && optObj$value < objFun(optim_args$par)) ){
+      if (isTRUE(is.numeric(optObj$par) && all(is.finite(optObj$par)) && optObj$value < objFun(optim_args$par))) {
         optim_args[["par"]] <- optObj$par  # purrr::assign_in(where = "par", value = optObj$par)
 
-        if ( "parscale" %in% names(optim_args[["control"]]) ){
+        if ("parscale" %in% names(optim_args[["control"]])) {
           optim_args[['control']][['parscale']] <- scalePars(optim_args[['par']])
         }
 
@@ -1539,7 +1534,9 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
           optObj$methodOpt <- optim_args$method
         }, silent = TRUE)
 
-        if ( is.null(optObj) || isTRUE(optObj$convergence > 0L && verbose > 0L) ) warning("No proper convergence after re-try.", call. = FALSE)
+        if (verbose > 0L && (is.null(optObj) || isTRUE(optObj$convergence > 0L))) {
+          warning("No proper convergence after re-try.", call. = FALSE)
+        }
       }## fi rescaling for 2nd attempt
     }## fi 2nd attempt necessary?
 
@@ -1556,20 +1553,20 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
     # post-process optObj -----
 
-
     # set names to parameter vector
-    if (! is.null(optObj)){
-      stopifnot( 'par' %in% names(optObj) )
-      stopifnot( identical(names(optObj$par), objFunObjs$trNamesFull))
+    if (! is.null(optObj)) {
+      stopifnot("par" %in% names(optObj))
+      stopifnot(identical(names(optObj$par), objFunObjs$trNamesFull))
       # # set canonical names for parameters
       # optObj$par <- rlang::set_names(optObj$par, objFunObjs$trNamesFull)
       # save optim_args in optimization object (but w/o objective function)
       optim_args$fn <- NULL
       optObj <- append(optObj, values = list(optim_args = optim_args))
-    }
+    } #fi
 
     # add par_orig
-    optObj <- append(optObj, values = list(par_orig = objFunObjs$extractPars(parV = optObj$par, group = NULL, isOpt = TRUE, transform = TRUE, named = TRUE)))
+    optObj <- append(optObj,
+                     values = list(par_orig = objFunObjs$extractPars(parV = optObj$par, group = NULL, isOpt = TRUE, transform = TRUE, named = TRUE)))
   } #esle numeric optimization
 
   optObj
