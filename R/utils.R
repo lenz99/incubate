@@ -38,17 +38,17 @@ minObjFunPORT <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0
 #' @param parV named numeric parameter vector for optimization
 #' @param lowerB numeric. lower bound for parameter scales
 #' @param upperB numeric. upper bound for parameter scales
-#' @return vector of parameter scaling
+#' @return numeric. vector of parameter scaling
 scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
   if (is.null(lowerB)) lowerB <- -Inf
   if (is.null(upperB)) upperB <- +Inf
 
-  stopifnot( is.numeric(parV), is.numeric(lowerB), is.numeric(upperB))
-  stopifnot( length(lowerB) == 1L || length(lowerB) == length(parV) )
-  stopifnot( length(upperB) == 1L || length(upperB) == length(parV) )
+  stopifnot(is.numeric(parV), is.numeric(lowerB), is.numeric(upperB))
+  stopifnot(length(lowerB) == 1L || length(lowerB) == length(parV))
+  stopifnot(length(upperB) == 1L || length(upperB) == length(parV))
 
   # scale vector: default value is 1
-  scVect <- rep.int(1, times = length(parV))
+  scVect <- rlang::rep_along(along = parV, x = 1)
 
   # non-log parameters get scaling depending on their initial value
   idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
@@ -56,7 +56,6 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 
   # enforce upper and lower bounds
   pmax.int(lowerB, pmin.int(upperB, scVect))
-
 }
 
 

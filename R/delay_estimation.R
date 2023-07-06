@@ -1001,8 +1001,8 @@ objFunFactory <- function(x, y = NULL,
   #profiled_llik_directly <- TRUE
 
   # parameter bounds: set lower & upper bounds
-  lowerB <- upperB <- rlang::set_names(rep_len(NA_real_, length(trNamesFull)),
-                                       nm = trNamesFull)
+  lowerB <- upperB <- rlang::rep_named(names = trNamesFull, x = NA_real_)
+
 
   #XXX #QQQ Should this go up to extractPars-function where the transformations are defined???
   PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),

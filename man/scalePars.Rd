@@ -14,7 +14,7 @@ scalePars(parV, lowerB = 0.00001, upperB = 100000)
 \item{upperB}{numeric. upper bound for parameter scales}
 }
 \value{
-vector of parameter scaling
+numeric. vector of parameter scaling
 }
 \description{
 The scale per parameter corresponds to the step width within the optimization path.
