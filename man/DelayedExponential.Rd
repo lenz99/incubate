@@ -84,13 +84,13 @@ mexp_delayed(
 
 \item{q}{A numeric vector of quantile values.}
 
-\item{grad}{logical. Should the gradient be calculated at the given quantile values (and not the cumulative probabilities)?}
-
-\item{p}{A numeric vector of probabilities.}
-
 \item{lower.tail}{logical. Give cumulative probability of lower tail?}
 
 \item{log.p}{logical. P-value on log-sclae?}
+
+\item{grad}{logical. Should the gradient be calculated at the given quantile values (and not the cumulative probabilities)?}
+
+\item{p}{A numeric vector of probabilities.}
 
 \item{n}{integer. Number of random observations requested.}
 

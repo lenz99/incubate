@@ -16,15 +16,20 @@ as_percent <- function(x, digits = 1) {
 }
 
 #' Minimize an objective function with PORT routine (nlminb)
+#'
+#' This is a thin wrapper function.
 #' @param objFun objective function
 #' @param start numeric vector of parameter values to start optimization
 #' @param lower numeric. lower bound for parameters (boxed constraint)
 #' @param upper numeric. upper bound for parameters (boxed constraint)
 #' @param verbose numeric. Verbosity level.
+#' @return optimization object or `NULL` in case of failure
 minObjFunPORT <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0) {
   optObj <- NULL
   try({
-    optObj <- stats::nlminb(start = start, objective = objFun, lower = lower, upper = upper, control = list(trace = verbose))
+    optObj <- stats::nlminb(start = start, objective = objFun,
+                            lower = lower, upper = upper,
+                            control = list(trace = verbose))
     optObj$counts <- optObj$evaluations
     optObj$methodOpt <- "PORT"
   }, silent = TRUE)

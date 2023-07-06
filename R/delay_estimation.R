@@ -816,9 +816,9 @@ objFunFactory <- function(x, y = NULL,
                               if (length(x) <= 1L) x else
                                 if (isOpt) (x[[1L]] + x[[2L]])/2L else #mean(x)
                                   sqrt(x[[1L]] * x[[2L]]) #prod(x)**(1/length(x))
-                            },
-                            simplify = TRUE))
-    # .. only for delay1 we use minimum as aggregation function (in this case first entry in exParInd$x and exParInd$y is 1!)
+                            }, simplify = TRUE))
+    # .. only for delay1 we use minimum as aggregation function
+    #+(in this case first entry in exParInd$x and exParInd$y is 1!)
     if (exParInd$x[[1L]] + exParInd$y[[1L]] == 2){
       res[[1L]] <- min(parx[[1L]], pary[[1L]])
     }
@@ -906,7 +906,7 @@ objFunFactory <- function(x, y = NULL,
 
   # optimization arguments -----
 
-  # get optimization start values and upper limits based on observations from a single group
+  # Get optimization start values and upper limits based on observations from a single group
   # for `twoPhase=TRUE` there will be more parameters
   # with profiling no scale parameter is returned (as it is not optimized)
   # @return list with transformed par for single group and upper limits for delay parameters, in canonical order (bind has no effect here!)
@@ -930,7 +930,7 @@ objFunFactory <- function(x, y = NULL,
                    # min(obs) = obs[1L]
                    exponential = {
                      parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
-                                 mean(obs - obs[[1L]] + 2/length(obs))**-1L )
+                                 mean(obs - obs[[1L]] + 2 / length(obs))**-1L )
 
                      # two extra parameters when exponential with *two* phases
                      if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]])
@@ -947,6 +947,7 @@ objFunFactory <- function(x, y = NULL,
                      parV0
                    },
                    weibull = {
+
                      # start values from 'Weibull plot'
                      #+using the empirical distribution function
                      ## in MASS::fitdistr they simplify:
@@ -955,20 +956,26 @@ objFunFactory <- function(x, y = NULL,
                      # v <- var(lx)
                      # shape <- 1.2/sqrt(v)
                      # scale <- exp(m + 0.572/shape)
-                     # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
-                     # and then ordinate is log(1/(1-F)) = -log(1-F) on log-scale
-                     start_y <- log(-log(1-stats::ppoints(obs, a=.3)))
-                     # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
-                     # weighted version with more weight in the middle:
-                     # w <- seq_along(obs); w <- w * (max(w)+1-w) #or use plogis-weights to downweight the early obs
-                     # lm.wfit(x = cbind(1, log(obs)), y = start_y, w = plogis(-2:(length(obs)-3)))$coefficients
-                     start_shape <- stats::cor(log(obs), start_y) * stats::sd(start_y) / stats::sd(log(obs))
-                     start_scale <- exp(mean(log(obs)) - mean(start_y) / start_shape) # scale from intercept
 
+                     parV0 <- local({
+                       start_delay <- max(DELAY_MIN, obs[[1L]] - 2 / (length(obs)+1))
+                       # log of centred observations
+                       # avoid negative values (as DELAY_MIN is positive)
+                       lobs0 <- log(pmax.int(DELAY_MIN, obs-start_delay))
 
-                     parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/(length(obs)+3)),
-                                 start_shape,
-                                 start_scale )
+                       # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
+                       # and then ordinate is log(1/(1-F)) = -log(1-F) on log-scale
+                       start_y <- log(-log(1-stats::ppoints(n = length(obs), a=.3)))
+                       # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
+                       # weighted version with more weight in the middle:
+                       # w <- seq_along(obs); w <- w * (max(w)+1-w) #or use plogis-weights to downweight the early obs
+                       # lm.wfit(x = cbind(1, log(obs)), y = start_y, w = plogis(-2:(length(obs)-3)))$coefficients
+                       start_shape <- stats::cor(lobs0, start_y) * stats::sd(start_y) / stats::sd(lobs0)
+                       start_scale <- exp(mean(lobs0) - mean(start_y) / start_shape) # scale from intercept
+
+                       c(start_delay, start_shape, start_scale)
+                     })
+
 
                      # support 2-phase with additional start parameters
                      if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[-1L])
@@ -1010,10 +1017,11 @@ objFunFactory <- function(x, y = NULL,
                      rate  = c(lower = -Inf, upper = +Inf),
                      # shape lower bound for MLEnp (actually for shape1)
                      #shape = c(lower = if (profiled && method == 'MLEn' && !profiled_llik_directly) 1.49e-8 else -Inf, upper = +Inf),
-                     shape = c(lower = -Inf, upper = 4.5), # exp(4.5) = 90 is already huge for shape
+                     shape = c(lower = -Inf, upper = 3.5), # exp(3.5) = 33, exp(4.5) = 90 is already huge for shape, exp(1.6) = 5
                      scale = c(lower = -Inf, upper = +Inf))
 
 
+  # set bounds from lookup table PAR_BOUNDS
   # alas, purrr::iwalk did not work for me here
   for (nam in names(PAR_BOUNDS)) {
     idx <- startsWith(trNamesFull, prefix = nam)
@@ -1069,7 +1077,7 @@ objFunFactory <- function(x, y = NULL,
             upperB['delay2_tr.x'] <- par0_x[['delay2_upper']]
             upperB['delay2_tr.y'] <- par0_y[['delay2_upper']]
           }
-        }
+        } #fi twoPhase
 
         # return start value
         if (is.null(bind)) { # two groups unbound

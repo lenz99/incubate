@@ -17,6 +17,9 @@ minObjFunPORT(objFun, start, lower = -Inf, upper = +Inf, verbose = 0)
 
 \item{verbose}{numeric. Verbosity level.}
 }
+\value{
+optimization object or \code{NULL} in case of failure
+}
 \description{
-Minimize an objective function with PORT routine (nlminb)
+This is a thin wrapper function.
 }

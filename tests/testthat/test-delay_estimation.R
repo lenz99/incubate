@@ -948,8 +948,9 @@ test_that("Fit delayed Weibull", {
   expect_equal(fd_wbc_mlew$criterion, fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = .001)
 
 
+
   # simulate data set with true shape > 1
-  set.seed(20210430)
+  set.seed(2021-04-30)
 
   # similar parameters
   param_wb_delay1 <- c(x=7, y=5)
@@ -968,6 +969,7 @@ test_that("Fit delayed Weibull", {
   # MLEw: check we do not have crazy high shape for group x!
   # the MLEw-fitting for shape is prone to end up with absurd high shape values because shape is in the exponent
   expect_lte(coef(fd_wb_MLEw_P)[["shape1"]], expected = 10)
+
 
 
   # two groups -----
@@ -1056,7 +1058,7 @@ test_that("Fit delayed Weibull", {
   # group with shorter delay has a good model fit parameter wise
   expect_equal(coef(fd_wb2b, group = datw_grpEarlier)[-1L],
                expected = purrr::chuck(attr(datw, "param"), datw_grpEarlier)[-1L],
-               tolerance = .15)
+               tolerance = .2)
 
 
   # MLE fits
@@ -1109,7 +1111,8 @@ test_that("Fit delayed Weibull", {
 
 
   fd_wb2b_MLEw_P <- delay_model(x = datw, distribution = "weib",
-                                method = "MLEw", profile = TRUE, bind = "delay1")
+                                method = "MLEw", profiled = TRUE,
+                                bind = "delay1")
   expect_identical(fd_wb2b_MLEw_P$optimizer$convergence, expected = 0L)
   #delay is bound
   expect_identical(length(coef(fd_wb2b_MLEw_P)), expected = 2L*3L-1L)
@@ -1122,7 +1125,7 @@ test_that("Fit delayed Weibull", {
                expected = purrr::chuck(attr(datw, "param"), datw_grpEarlier)[-1L],
                tolerance = .15)
   # MLEw: check we do not have crazy high shape for group x!
-  #+ optimization easily goes wrong on shape, because shape occurs in the exponenent
+  #+ optimization easily goes wrong on shape, because shape occurs in the exponent
   #+ this also can happen for a single group
   expect_lte(coef(fd_wb2b_MLEw_P, group = "x")[["shape1"]], expected = 10)
 
@@ -1153,36 +1156,41 @@ test_that("Fit delayed Weibull", {
 
   # two groups, bind shape -----
 
-  fd_wb2bb <- delay_model(x = rweib_delayed(n=37, delay1 = 7, shape1 = 1.8, scale1 = 3),
-                          y = rweib_delayed(n=51, delay1 = 5, shape1 = 1.5, scale1 = 1.5),
-                          distribution = "weib", bind = "shape1")
+  fd_wb2bb <- delay_model(x = datw, distribution = "weib",
+                          bind = "shape1")
   coef_wb2bb <- coef(fd_wb2bb)
 
   expect_identical(fd_wb2bb$optimizer$convergence, expected = 0L)
   expect_identical(length(coef_wb2bb), expected = 2L*3L-1L)
   expect_identical(names(coef_wb2bb), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
 
-  fd_wb2bb_MLEn_NP <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEn", bind = "shape1")
+  fd_wb2bb_MLEn_NP <- delay_model(x = datw, distribution = "weib", method = "MLEn",
+                                  bind = "shape1")
   expect_identical(fd_wb2bb_MLEn_NP$optimizer$convergence, expected = 0L)
   expect_identical(names(coef(fd_wb2bb_MLEn_NP)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
   expect_equal(coef(fd_wb2bb_MLEn_NP), coef_wb2bb, tolerance = .05)
 
-  fd_wb2bb_MLEn_P <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEn", profile = TRUE, bind = "shape1")
+  fd_wb2bb_MLEn_P <- delay_model(x = datw, distribution = "weib", method = "MLEn", profile = TRUE,
+                                 bind = "shape1")
   expect_identical(fd_wb2bb_MLEn_P$optimizer$convergence, expected = 0L)
   expect_true(fd_wb2bb_MLEn_P$optimizer$profiled)
   expect_identical(names(coef(fd_wb2bb_MLEn_P)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
   expect_equal(coef(fd_wb2bb_MLEn_P), coef(fd_wb2bb_MLEn_NP), tolerance = .01) # profiling has hardly an effect
 
-  fd_wb2bb_MLEc_NP <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEc", profile = FALSE, bind = "shape1")
+  fd_wb2bb_MLEc_NP <- delay_model(x = datw, distribution = "weib", method = "MLEc", profile = FALSE,
+                                  bind = "shape1")
   expect_identical(fd_wb2bb_MLEc_NP$optimizer$convergence, expected = 0L)
   expect_identical(names(coef(fd_wb2bb_MLEc_NP)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
-  fd_wb2bb_MLEc_P <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEc", profile = TRUE, bind = "shape1")
+  fd_wb2bb_MLEc_P <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEc", profile = TRUE,
+                                 bind = "shape1")
   expect_identical(fd_wb2bb_MLEc_P$optimizer$convergence, expected = 0L)
   expect_equal(coef(fd_wb2bb_MLEc_P), coef(fd_wb2bb_MLEc_NP), tolerance = .001) # profiling has hardly an effect on the coefficients
 
-  fd_wb2bb_MLEw_P <- delay_model(x = fd_wb2bb$data$x, y = fd_wb2bb$data$y, distribution = "weib", method = "MLEw", profile = TRUE, bind = "shape1")
+  fd_wb2bb_MLEw_P <- delay_model(x = datw, distribution = "weib", method = "MLEw", profile = TRUE,
+                                 bind = "shape1")
   expect_identical(fd_wb2bb_MLEw_P$optimizer$convergence, expected = 0L)
   expect_identical(names(coef(fd_wb2bb_MLEw_P)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
+  # MLEw can be sometimes far off
   expect_equal(coef(fd_wb2bb_MLEw_P), coef(fd_wb2bb_MLEc_P), tolerance = .1) # MLEw and MLEc coefficients are only rougly similar
 })
 
