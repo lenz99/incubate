@@ -333,7 +333,7 @@ objFunFactory <- function(x, y = NULL,
 
 
   # kmFit and rcens have same number of rows
-  stopifnot( length(kmFit$surv) == length(cens$rcens$surv) )
+  stopifnot(length(kmFit$surv) == length(cens$rcens$surv))
 
   # indices of first two relevant observations (for MLEc)
   indForefront <- if (method != "MLEc") NULL else local({
@@ -518,8 +518,8 @@ objFunFactory <- function(x, y = NULL,
                  }
                  # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
                  # floor(n.event + n.censor) = n
-                 stopifnot( sum(as.integer(kmFit$n.event[ind_evKM]),
-                                if (twoGroup) kmFit$n.censor[(if (group == "x") 1 else -1) * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]] )
+                 stopifnot(sum(as.integer(kmFit$n.event[ind_evKM]),
+                               if (twoGroup) kmFit$n.censor[(if (group == "x") 1 else -1) * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]])
 
                  # estimated survival probabilities for event times, replicated
                  # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
@@ -529,7 +529,7 @@ objFunFactory <- function(x, y = NULL,
                  # Benard-style median-rank estimation (avoid 0 and 1)
                  -log(1-((1-kmSurvProb) * n_ev - a) / (n_ev + 1 - 2*a))
                },
-               stop("This type of censoring is not handled here!", call. = FALSE)
+               stop("This Surv-type is not handled here!", call. = FALSE)
         )
       } #fn zF
 
@@ -929,7 +929,7 @@ objFunFactory <- function(x, y = NULL,
     parV <- switch(EXPR = distribution,
                    # min(obs) = obs[1L]
                    exponential = {
-                     parV0 <- c( max(DELAY_MIN, obs[[1L]] - 2/length(obs)),
+                     parV0 <- c( max(DELAY_MIN, obs[[1L]] - 3 / (length(obs)+1)),
                                  mean(obs - obs[[1L]] + 2 / length(obs))**-1L )
 
                      # two extra parameters when exponential with *two* phases
@@ -958,14 +958,17 @@ objFunFactory <- function(x, y = NULL,
                      # scale <- exp(m + 0.572/shape)
 
                      parV0 <- local({
-                       start_delay <- max(DELAY_MIN, obs[[1L]] - 2 / (length(obs)+1))
-                       # log of centred observations
-                       # avoid negative values (as DELAY_MIN is positive)
-                       lobs0 <- log(pmax.int(DELAY_MIN, obs-start_delay))
+                       start_delay <- max(DELAY_MIN, obs[[1L]] - 3 / (length(obs)+1))
 
                        # use median rank approximation for empirical Weibull CDF: F(i,n) = (i - 0.3) / (n + 0.4)
                        # and then ordinate is log(1/(1-F)) = -log(1-F) on log-scale
                        start_y <- log(-log(1-stats::ppoints(n = length(obs), a=.3)))
+
+                       # log of centred observations
+                       # avoid negative values (as DELAY_MIN is positive)
+                       lobs0 <- log(pmax.int(DELAY_MIN, obs-start_delay))
+
+                       # simple linear regression of Y=start_y vs X=log-obs
                        # cf. lm.fit(x = cbind(1, log(obs)), y = start_y)$coefficients
                        # weighted version with more weight in the middle:
                        # w <- seq_along(obs); w <- w * (max(w)+1-w) #or use plogis-weights to downweight the early obs
@@ -976,6 +979,12 @@ objFunFactory <- function(x, y = NULL,
                        c(start_delay, start_shape, start_scale)
                      })
 
+                     if (verbose > 3) {
+                       cat("Start values 1st phase (a single group): ",
+                           paste(c("delay", "shape", "scale"),
+                                 round(parV0, 2), sep = ": ", collapse = ", "),
+                           "\n")
+                     } #fi verbose
 
                      # support 2-phase with additional start parameters
                      if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[-1L])
@@ -1034,6 +1043,8 @@ objFunFactory <- function(x, y = NULL,
 
 
   par0_x <- getParSetting.gr(x)
+  if (verbose > 2) cat("Start parameters for opt, group x: ",
+                       paste(round(par0_x$par, 3), collapse = ", "), "\n")
   parV <-
     if (! twoGroup) {
       # set parameter vector for group 1 and finish upper bound: match delay1 and delay2
@@ -1045,7 +1056,7 @@ objFunFactory <- function(x, y = NULL,
     } else { #twoGroup
 
       # all parameters are bound
-      if ( length(bind) == length(oNames) ) {
+      if (length(bind) == length(oNames)) {
 
         # treat x and y as a single group for upper limit & start value heuristic
         par0_xy <- getParSetting.gr(c(x,y))
@@ -1071,7 +1082,7 @@ objFunFactory <- function(x, y = NULL,
         } # fi
 
         if (twoPhase) {
-          if ('delay2' %in% bind){
+          if ('delay2' %in% bind) {
             upperB[['delay2_tr']] <- max(par0_x[['delay2_upper']], par0_y[['delay2_upper']])
           } else {
             upperB['delay2_tr.x'] <- par0_x[['delay2_upper']]
@@ -1092,10 +1103,14 @@ objFunFactory <- function(x, y = NULL,
   # ensure we have names of transformed parameters
   parV <- rlang::set_names(parV, nm = trNamesFull)
 
-  stopifnot( ! any(is.na(lowerB), is.na(upperB)) )
+  stopifnot(! any(is.na(lowerB), is.na(upperB)))
   # clean up env. # use local() more???
   remove(list=c("PAR_BOUNDS", "par0_x"))
 
+  if (verbose > 1L) {
+    cat("Start values for opt: ",
+        paste(names(parV), round(parV, 3), sep = "=", collapse = ", "), "\n")
+  }
 
   optim_args <- list(
     par = parV,
@@ -1185,6 +1200,8 @@ objFunFactory <- function(x, y = NULL,
                  obs_c <- obs - pars.gr[[1L]]
                  #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
 
+                 # return early when we have too high delay parameter
+                 if (obs_c[[1L]] < 0) return(NA_real_)
                  # objective function to maximize:
                  # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
                  # 2nd & 3rd summand could also be: - log(sum(obs_c**k)) + log(n*k)
@@ -1258,7 +1275,8 @@ objFunFactory <- function(x, y = NULL,
                cat(glue("W1 = {round(weights$W1[[group]],2)}, ",
                         "W2 = {round(weights$W2[[group]],2)}, ",
                         "W3 = {round(weights$W3[[group]](k),4)} for {group}. ",
-                        "Candidate values: delay {round(pars.gr[[1L]],3)} shape {round(k,3)} => {round(retVal, 3)}"),
+                        "Candidate values: delay {round(pars.gr[[1L]],3)} shape {round(k,3)} ",
+                        "=> LLval: {round(retVal, 3)}"),
                    "\n")
              }
 
@@ -1367,11 +1385,11 @@ objFunFactory <- function(x, y = NULL,
     }
 
     # check for ties to fix cumDiffs for observed event times
-    tig <- tieInfo[[group]]
+    tig <- tieInfo[[group]] # tie info group (tig)
     nTigs <- NROW(tig[["tieGrp"]])
 
     if (nTigs) {
-      stopifnot( all(cumDiffs[tig[["cumDiffInd"]]] == 0)) # all spacings for tied observed event times are 0
+      stopifnot(all(cumDiffs[tig[["cumDiffInd"]]] == 0)) # all spacings for tied observed event times are 0
 
       obsVals <- if (isSurv) obs[tig$tieGrp[, "startInd"], 1L] else obs[tig$tieGrp[, "startInd"]]
 
@@ -1384,14 +1402,14 @@ objFunFactory <- function(x, y = NULL,
                                                   #tig$tieGrp[, "len"]-1L # number of repeats per tie group
                                                   times = tig$tieGrp[, "len"]-1L)
                                               },
-                                              # ties = "equispaced" for CDF-backtransformed using given parameters, then equispaced spacings across tie groups
-                                              #we keep using a standard density strategy for fitting, but can request another tie-strategy for evaluating the MPSE-criterion (e.g., for Moran's test)
+                                              # "equispaced" for CDF-backtransformed using given parameters, then equispaced spacings across tie groups
+                                              # we keep using a standard density strategy for fitting, but can request another tie-strategy for evaluating the MPSE-criterion,
+                                              #e.g., for Moran's test
                                               equispaced = {
-                                                rep.int(
-                                                  # per tie group, use equal spacings in transformed space
-                                                  diff(rlang::exec(getDist(distribution, type = "cdf"),
-                                                                   !!! c(list(q = rep(obsVals, each = 2L) + c(-1, 1) * tig$numPrecision[["rRad"]]), pars.gr)))[seq.int(from = 1, by = 2, length.out = nTigs)] / (tig$tieGrp[, "len"]-1L),
-                                                  times = tig$tieGrp[, "len"]-1L)
+                                                # per tie group, use equal spacings in transformed space
+                                                rep.int(diff(rlang::exec(getDist(distribution, type = "cdf"),
+                                                                         !!! c(list(q = rep(obsVals, each = 2L) + c(-1, 1) * tig$numPrecision[["rRad"]]), pars.gr)))[seq.int(from = 1, by = 2, length.out = nTigs)] / (tig$tieGrp[, "len"]-1L),
+                                                        times = tig$tieGrp[, "len"]-1L)
 
                                               },
                                               # for what it's worth: tie-strategy "error" should have already quit
@@ -1411,15 +1429,18 @@ objFunFactory <- function(x, y = NULL,
   }# fn getCumDiffs
 
 
-  # Objective function like negative mean log-spacings for MPSE or negative log-likelihood for MSE0
-  # Estimate parameters by minimizing this function.
+  # Objective function to be minimized.
+  #
+  # Depending on method, it is negative mean log-spacings for MPSE or negative log-likelihood for MLEn
+  # One can estimate parameters by minimizing this objective function.
+  #
   # param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
   # param `criterion` a logical flag. If requested, give the original criterion to minimize. Then, the parameters are on original scale
   # param `aggregated` a logical flag. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
   # param `ties.` how to handle ties for the MPSE-function. Default value is 'density'.
   objFun <- function(pars, criterion = FALSE, aggregated = TRUE, ties. = ties) {
 
-    switch(method,
+    retVal <- switch(method,
            MPSE = {
              - if (! twoGroup) {
                mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.))
@@ -1449,6 +1470,11 @@ objFunFactory <- function(x, y = NULL,
            },
            stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
     )
+
+    if (verbose > 2) {
+      cat("Objfun value: ", retVal, "\n")
+    }
+    retVal
   } #fn objFun
 
   # attach analytical solution for MLE
@@ -1501,9 +1527,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     # numeric optimization
     if (verbose > 0L) message("Start with numeric optimiziation of objective function.")
 
-    if (is.null(optim_args)) optim_args <- objFunObjs[["optim_args"]]
+    if (is.null(optim_args)) {
+      # set standard optim-args
+      optim_args <- objFunObjs[["optim_args"]]
+    }
+
     stopifnot(is.list(optim_args), "par" %in% names(optim_args),
               is.numeric(optim_args$par), length(optim_args$par) == length(objFunObjs$trNamesFull))
+    # ensure that transformed parameters are named
     if (!rlang::is_named(optim_args$par)) rlang::names2(optim_args$par) <- objFunObjs$trNamesFull
     stopifnot(identical(names(optim_args$par), objFunObjs$trNamesFull))
     # set objective function (overwrite entry 'fn' if it is already present)
@@ -1511,6 +1542,9 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
 
     # optim: first attempts ----
+
+    # initial start values for optimization
+    par0 <- optim_args$par
 
     try({
       optObj <- rlang::exec(stats::optim, !!! optim_args)
@@ -1527,11 +1561,12 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
       # Use parameter values of non-converged fit as new start values (and adapt parscale accordingly)
       #+The objFun is to be minimized, smaller is better!
-      if (isTRUE(is.numeric(optObj$par) && all(is.finite(optObj$par)) && optObj$value < objFun(optim_args$par))) {
+      if (isTRUE(is.numeric(optObj$par) && all(is.finite(optObj$par)) && optObj$value < objFun(par0))) {
+        if (verbose > 1L) cat("Set new start values for 2nd attempt\n")
         optim_args[["par"]] <- optObj$par  # purrr::assign_in(where = "par", value = optObj$par)
 
         if ("parscale" %in% names(optim_args[["control"]])) {
-          optim_args[['control']][['parscale']] <- scalePars(optim_args[['par']])
+          optim_args[["control"]][["parscale"]] <- scalePars(optim_args[["par"]])
         }
 
         # optim: 2nd attempt --
@@ -1552,11 +1587,27 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     # nlminb (PORT): last attempt ----
 
     if (is.null(optObj) || optObj$convergence > 0L) {
-      if (verbose > 1L) message("Do another final attempt with PORT-optimizer.")
+      if (verbose > 0L) cat("Do another final attempt with PORT-optimizer.\n")
 
+      # choose best start values for PORT:
+      # if there are shape parameters, go for start value that is reasonably small
+      par1 <- local({
+        shapeInd <- which(startsWith(names(par0), prefix = "shape"))
+        keep0 <- length(shapeInd) && sum(pmax.int(par0[shapeInd]-2,0)^2) < sum(pmax.int(optim_args$par[shapeInd]-2,0)^2)
+        if (keep0) {
+          if (verbose > 1) cat("Keep initial start parameters for final PORT-optimizer attempt.\n")
+          par0
+        } else {
+          if (verbose > 1) cat("Use updated start parameters for final PORT-optimizer attempt.\n")
+          optim_args$par
+        } #esle
+      })
+
+      optim_args$par <- par1 #update optim_args
       optObj <- minObjFunPORT(objFun = objFun, start = optim_args$par,
-                              lower = optim_args$lower, upper = optim_args$upper, verbose = verbose)
-    }
+                              lower = optim_args$lower, upper = optim_args$upper,
+                              verbose = verbose)
+    } #fi
 
 
     # post-process optObj -----
@@ -1574,7 +1625,9 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
     # add par_orig
     optObj <- append(optObj,
-                     values = list(par_orig = objFunObjs$extractPars(parV = optObj$par, group = NULL, isOpt = TRUE, transform = TRUE, named = TRUE)))
+                     values = list(par_orig = objFunObjs$extractPars(parV = optObj$par, group = NULL,
+                                                                     isOpt = TRUE, transform = TRUE, named = TRUE))
+    )
   } #esle numeric optimization
 
   optObj

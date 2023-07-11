@@ -1,6 +1,10 @@
 # test cases for significance tests for delay
 
-test_that('Structure of test objects.', {
+suppressPackageStartupMessages(library("future.callr"))
+suppressPackageStartupMessages(library("future.apply"))
+suppressPackageStartupMessages(library("survival"))
+
+test_that('Structure of test objects.', code = {
   set.seed(123)
 
   x <- rexp_delayed(n = 131L, delay1 = 5, rate1 = .1)
@@ -16,20 +20,28 @@ test_that('Structure of test objects.', {
   expect_gte( ted_d$P$bootstrap, expected = 0L)
 })
 
-test_that('GOF-test on single-group exponentials', {
+
+test_that('GOF-test on single-group exponentials', code = {
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
   future::plan(future.callr::callr, workers = 5L)
 
   # GOF-tests on true exponential data with varying sample size, delay and rate
   # results in a matrix of dimension #scenarios x #replications
-  fitting_expos <- future.apply::future_replicate(n = 467L, simplify = FALSE, expr = {
-    scenarios <- expand.grid(n = c(10, 25, 50), delay1 = c(0, 5, 15), rate1 = c(.01, .2, .4, 1, 1.5, 4))
-    # fit exponential models with varying n, delay and rate
-    purrr::pmap(.l = scenarios,
-                .f = ~ delay_model(x = rexp_delayed(n = ..1, delay1 = ..2, rate1 = ..3),
-                                   distribution = 'exponential'))
-  }) %>% purrr::transpose() # get a list of scenarios, each containing its models of replicated data
+  scenarios <- expand.grid(n = c(10, 25, 50),
+                           delay1 = c(0, 5, 15),
+                           rate1 = c(.01, .2, .4, 1, 1.5, 4))
+  fitting_expos <- future_replicate(n = 467L, simplify = FALSE,
+                                    expr = {
+                                      # fit exponential models with varying n, delay and rate
+                                      purrr::pmap(.l = scenarios,
+                                                  .f = ~ delay_model(x = rexp_delayed(n = ..1,
+                                                                                      delay1 = ..2,
+                                                                                      rate1 = ..3),
+                                                                     distribution = 'exponential'))
+                                    })
+  # get a list of scenarios, each containing its models of replicated data
+  fitting_expos <- purrr::transpose(fitting_expos)
 
   # list: for each scenario, the vector of Moran's GOF-test p-value
   GOF_pvals <- list(
@@ -70,7 +82,8 @@ test_that('GOF-test on single-group exponentials', {
 })
 
 
-test_that("Test difference in delay for two exponential fits", {
+
+test_that("Bootstrap test on difference in delay for two exponential fits", code = {
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
 
@@ -118,7 +131,7 @@ test_that("Test difference in delay for two exponential fits", {
 
 
 
-test_that("Test difference in delay when H0 is true (no difference in delay)", {
+test_that("Bootstrap test for difference in delay under H0 (no difference in delay)", code = {
 
   testthat::skip_on_cran()
   testthat::skip(message = 'Too long to run every time!')
@@ -127,8 +140,8 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
 
   set.seed(20210506)
 
-  testres_P_H0 <- future.apply::future_vapply(X = seq_len(21L), FUN.VALUE = double(1L),
-                                              FUN = function(dummy) {
+  testres_P_H0 <- future.apply::future_vapply(X = seq_len(21L),
+                                              function(dummy) {
                                                 x <- rexp_delayed(13, delay1 = 4, rate1 = .07)
                                                 y <- rexp_delayed(11, delay1 = 4, rate1 = .1)
 
@@ -140,7 +153,8 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
                                                     silent = TRUE)
 
                                                 Pval
-                                              }, future.seed = TRUE)
+                                              }, FUN.VALUE = double(1L),
+                                              future.seed = TRUE)
 
   testres_P_H0 <- testres_P_H0[is.finite(testres_P_H0)]
 
@@ -151,3 +165,233 @@ test_that("Test difference in delay when H0 is true (no difference in delay)", {
 
 })
 
+
+
+test_that("Moran GOF-test", code = {
+
+  testthat::skip_on_cran()
+
+  future::plan(future.callr::callr, workers = 5L)
+  # testres1: all observed events
+  testres1 <- future.apply::future_vapply(X = seq_len(219L),
+                                          function(dummy) {
+                                            x <- rexp_delayed(n = 23, delay1 = 3, rate1 = .7)
+
+                                            fm <- delay_model(x = x, method = "MPSE")
+
+                                            unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")])
+                                          }, FUN.VALUE = double(2L),
+                                          future.seed = TRUE)
+
+  # all test statistics are positive
+  expect_gt(min(testres1[1L,]), expected = 0)
+  # p-values are not too far off from uniform
+  expect_gt(mean(testres1[2L,]), expected = .3)
+  expect_lt(mean(testres1[2L,]), expected = .8)
+
+
+  # testres2: right-censored events
+  testres2 <- future.apply::future_vapply(X = seq_len(219L),
+                                          function(dummy) {
+                                            x <- rexp_delayed(n = 29, delay1 = 3, rate1 = .7)
+                                            evStatus <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
+
+                                            fm <- delay_model(x = Surv(x, event = evStatus),
+                                                              method = "MPSE")
+
+                                            c(
+                                              unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
+                                              unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
+                                            )
+                                          }, FUN.VALUE = double(4L),
+                                          future.seed = TRUE)
+
+  # all test statistics are positive
+  expect_gt(min(testres2[1L,]), expected = 0) #stat moran
+  expect_gt(min(testres2[3L,]), expected = 0) #stat pearson
+  # p-values are not too far off from uniform
+  expect_gt(mean(testres2[2L,]), expected = .33)
+  # P-values are highly skewed upwards, median close to .9
+  expect_lte(mean(testres2[2L,]), expected = .95)
+
+  expect_gt(mean(testres2[4L,]), expected = .33)
+  # P-values are highly skewed upwards, median close to .9
+  expect_lte(mean(testres2[4L,]), expected = .95)
+
+
+
+  # testres3: GOF-tests, nonSurv, two group scenario
+  testres3 <- future.apply::future_vapply(X = seq_len(257L),
+                                          function(dummy) {
+                                            x <- rexp_delayed(n = 29, delay1 = 3, rate1 = 1.1)
+                                            y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
+                                            #evStatus <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
+
+                                            fm <- delay_model(x = x, y = y,
+                                                              method = "MPSE")
+
+                                            c(
+                                              unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
+                                              unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
+                                            )
+                                          }, FUN.VALUE = double(4L),
+                                          future.seed = TRUE)
+
+
+  # all test statistics are positive
+  expect_gt(min(testres3[1L,]), expected = 0) #stat moran
+  expect_gt(min(testres3[3L,]), expected = 0) #stat pearson
+
+  # p-values are not too far off from uniform
+  expect_gt(mean(testres3[2L,]), expected = .33)
+  # P-values are highly skewed upwards, median close to .9
+  expect_equal(mean(testres3[2L,]), expected = .5, tolerance = .22)
+  expect_equal(mean(testres3[4L,]), expected = .5, tolerance = .38)
+  # P-values are rather lower than expected
+  expect_lte(mean(testres3[4L,]), expected = .8)
+  #boxplot(list(moran=testres3[2L,], pearson = testres3[4L,]), main = "H0, non-Surv, two-group")
+
+  # data from Poisson model (HA), many ties
+  fm0 <- delay_model(x = c(8, 8, 8, 8, 9, 9, 9, 10, 10, 11, 12, 12, 12, 14, 14, 14, 16), method = "MPSE")
+  tieInfo <- env_get(fn_env(fm0$objFun), "tieInfo")
+  expect_gte(test_GOF(delayFit = fm0, method = "moran")$statistic, expected = 0)
+  try(rm(list="fm0"), silent = TRUE)
+
+  # GOF-moran tests on tied data from poisson (HA), noSurv, two group, many ties
+  testres3a <- future.apply::future_vapply(X = seq_len(237L),
+                                           function(dymmy) {
+
+                                             yObs <- 8 + rpois(23, lambda = 3)
+                                             #yEv <- sample(x = c(0, 1, 1, 1), size = length(yObs), replace = T)
+                                             fm <- delay_model(x = 5 + rpois(17, lambda = 5), y = yObs,
+                                                               distribution = "expon", method = "MPSE")
+
+                                             c(
+                                               moran = test_GOF(delayFit = fm, method = "mo")[["statistic"]],
+                                               pearson = test_GOF(delayFit = fm, method = "pearson")[["statistic"]]
+                                             )
+                                           },
+                                           FUN.VALUE = double(2L),
+                                           future.seed = TRUE)
+
+  expect_gte(min(testres3a[1L,]), expected = 0) #stat moran
+  expect_gte(min(testres3a[2L,]), expected = 0) #stat pearson
+  #boxplot(list(mo = testres3a[1L,], pe = testres3a[2L,]), main = "H0, nonSurv, two group", sub = "many ties", ylab = "Moran test stat")
+
+
+  # testres4: GOF-tests H0, Surv, two group
+  testres4 <- future.apply::future_vapply(X = seq_len(237L),
+                                          function(dummy) {
+                                            x <- rexp_delayed(n = 29, delay1 = 3, rate1 = 1.1)
+                                            y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
+                                            evStatus_x <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
+
+                                            fm <- delay_model(x = Surv(x, evStatus_x), y = y,
+                                                              distribution = "expon",
+                                                              method = "MPSE")
+
+                                            c(
+                                              unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
+                                              unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
+                                            )
+                                          }, FUN.VALUE = double(4L),
+                                          future.seed = TRUE)
+
+  # all test statistics are positive
+  expect_gt(min(testres4[1L,]), expected = 0) #stat moran
+  expect_gt(min(testres4[3L,]), expected = 0) #stat pearson
+
+  # p-values are not too far off from uniform
+  expect_gt(mean(testres4[2L,]), expected = .33)
+  # P-values are highly skewed upwards, median close to .9
+  expect_equal(mean(testres4[2L,]), expected = .5, tolerance = .33) #moran
+  expect_equal(mean(testres4[4L,]), expected = .5, tolerance = .33) #pearson
+  # P-values are rather lower than expected
+  expect_lte(mean(testres4[4L,]), expected = .85)
+  #boxplot(list(moran=testres4[2L,], pearson = testres4[4L,]), main = "H0, Surv, two group")
+
+
+  # GOF-moran tests on tied data from Poisson (HA), Surv, two group, many ties
+  testres4a <- future.apply::future_vapply(X = seq_len(237L),
+                                           function(dymmy) {
+
+                                             yObs <- 8 + rpois(23, lambda = 3)
+                                             yEv <- sample(x = c(0, 1, 1, 1), size = length(yObs), replace = T)
+                                             fm <- delay_model(x = 5 + rpois(17, lambda = 5), y = survival::Surv(yObs, event = yEv), method = "MPSE")
+
+                                             c(
+                                               moran = test_GOF(delayFit = fm, method = "mo")[["statistic"]],
+                                               pearson = test_GOF(delayFit = fm, method = "pearson")[["statistic"]]
+                                             )
+                                           },
+                                           FUN.VALUE = double(2L),
+                                           future.seed = TRUE)
+
+  expect_gte(min(testres4a[1L,]), expected = 0) #stat moran
+  expect_gte(min(testres4a[2L,]), expected = 0) #stat pearson
+  #boxplot(list(mo = testres4a[1L,], pe = testres4a[2L,]), main = "H0, Surv, two group", sub = "many ties", ylab = "Moran test stat")
+
+
+
+  # testres5: GOF-tests for H0, bind delay1, Surv, two group scenario
+  testres5 <- future.apply::future_vapply(X = seq_len(217L),
+                                          function(dummy) {
+                                            x <- rexp_delayed(n = 29, delay1 = 5, rate1 = 1.1)
+                                            y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
+                                            evStatus_x <- sample(x = c(0, 1, 1),
+                                                                 size = length(x),
+                                                                 replace = TRUE)
+
+                                            fm <- delay_model(x = Surv(x, evStatus_x), y = y,
+                                                              bind = "delay1",
+                                                              method = "MPSE")
+
+                                            c(
+                                              unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
+                                              unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
+                                            )
+                                          }, FUN.VALUE = double(4L),
+                                          future.seed = TRUE)
+
+  # all test statistics are positive
+  expect_gt(min(testres5[1L,]), expected = 0) #stat moran
+  expect_gt(min(testres5[3L,]), expected = 0) #stat pearson
+
+  # p-values are not too far off from uniform
+  expect_equal(mean(testres5[2L,]), expected = .5, tolerance = .43) #moran
+  expect_equal(mean(testres5[4L,]), expected = .5, tolerance = .43) #pearson
+  #boxplot(list(moran=testres5[2L,], pearson = testres5[4L,]), main = "H0, bind=delay1")
+
+
+
+  # testres6: GOF-tests for two group scenario with censored observations, bind delay1 (HA)
+  testres6 <- future.apply::future_vapply(X = seq_len(217L),
+                                          function(dummy) {
+                                            x <- rexp_delayed(n = 29, delay1 = 5, rate1 = 1.1)
+                                            y <- rexp_delayed(n = 23, delay1 = 8, rate1 = .4)
+                                            evStatus_x <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
+
+                                            fm <- delay_model(x = Surv(x, evStatus_x), y = y, bind = "delay1",
+                                                              method = "MPSE")
+
+                                            c(
+                                              unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
+                                              unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
+                                            )
+                                          }, FUN.VALUE = double(4L),
+                                          future.seed = TRUE)
+
+
+  # all test statistics are positive
+  expect_gt(min(testres6[1L,]), expected = 0) #stat moran
+  expect_gt(min(testres6[3L,]), expected = 0) #stat pearson
+
+  # p-values tend to small P-values
+  expect_lte(mean(testres6[2L,]), expected = .4) #moran
+  expect_lte(mean(testres6[4L,]), expected = .4) #pearson
+  #boxplot(list(moran=testres6[2L,], pearson = testres6[4L,]))
+
+
+  # teardown
+  future::plan(future::sequential)
+})

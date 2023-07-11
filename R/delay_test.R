@@ -38,27 +38,32 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
            EUL_MAS <- -digamma(1L)
 
            # Moran test statistic is negative sum of logged spacings, see Cheng & Stephens (1989)
-           # @param mseCrit: the negative avg logged cumulative spacings, length 1 or 2
+           #
+           # The provided MPSE-criterion is the negative average value, hence, before being used, it is multiplied by (n+1) to transform it as sum (so it matches the definition of Cheng & Stephens)
+           # @param mpseCrit: the negative avg logged cumulative spacings, length 1 or 2.
            # @param n nbr of observations, length 1 or 2
            # @param k nbr of parameters to be estimated
            # @return Moran's test statistic, length 1 or 2
            testStat_mo <- function(mpseCrit, n, k) {
+             # factor (n+1) takes -avg to -sum
+             mpseCrit <- mpseCrit * (n+1L)
+
              mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - 1/(12L*(n + 1L))
              mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - 1/(6L*(n + 1L))
 
              C1 <- mo_m - sqrt(.5 * n * mo_v)
              C2 <- sqrt(mo_v / (2L*n))
 
-             # factor (n+1) takes -avg to -sum
-             (mpseCrit * (n+1L) + .5 * k - C1) / C2
+             (mpseCrit + .5 * k - C1) / C2
            } # fn
 
 
            # we resolve ties in the back-transformed 0-1 space via equal spacing (see Cheng & Stephens)
            statist <- if (twoGroup) { ##  && length(delayFit$bind) < length(oNames) # not needed!?
-             c(`X^2` = sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE, ties. = "equispaced"), #criterion per group
-                                       n = nObs, k = k/2)) )
-             #XXX can be negative, example for instance, happened for the call
+             c(`X^2` = sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE,
+                                                                  ties. = "equispaced"), #criterion per group
+                                       n = nObs, k = k/2)))
+             #XXX can be negative, when many ties (example for instance, happened for the call:)
              #delay_model(x = 5 + rpois(17, lambda = 5), y = survival::Surv(8 + rpois(23, lambda = 3), event = sample(x = c(0, 1, 1, 1), size = 23, replace = T)))
            } else {
              # single group
