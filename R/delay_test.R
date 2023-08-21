@@ -8,13 +8,14 @@
 #'
 #' @param delayFit delay_model fit object
 #' @param method character(1). which method to use for GOF. Default is 'moran'.
+#' @param verbose integer. Verbosity level. The higher the more verbose debugging output.
 #' @return An `htest`-object containing the GOF-test result
 #' @export
-test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR")) {
+test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"), verbose = 0) {
 
-  stopifnot( inherits(delayFit, what = 'incubate_fit') )
-  if (delayFit$method != 'MPSE') {
-    stop('Goodness-of-fit test only supported for models that are fit with maximum product of spacings estimation (MPSE)!', call. = FALSE)
+  stopifnot(inherits(delayFit, what = "incubate_fit"))
+  if (delayFit$method != "MPSE") {
+    stop("Goodness-of-fit test only supported for models that are fit with maximum product of spacings estimation (MPSE)!", call. = FALSE)
   }
 
   method <- match.arg(method)
@@ -264,7 +265,9 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
                for (ind_b in 2L:nCl) {
                  #used before: which(cumsum(nEvGr[srvIdxGrpEv][seq.int(from = j, to = length(srvIdxGrpEv))]) > nbrAvgEv_Cl)
                  ind_shift <- which.min(abs(cumsum(nEvGr[srvIdxGrpEv][seq.int(from = j, to = length(srvIdxGrpEv))]) - nbrAvgEv_Cl))
-                 cat("j =", j, "and best ind_shift is", ind_shift, "with nbr events", sum(nEvGr[srvIdxGrpEv][j:(j+ind_shift-1)]), "\t") ##DEBUG
+                 if (verbose > 1) {
+                  cat("j =", j, "and best ind_shift is", ind_shift, "with nbr events", sum(nEvGr[srvIdxGrpEv][j:(j+ind_shift-1)]), "  ")
+                 }
                  # min() establish upper bound for ind_shift:
                  # we need at least one event more than 0s in boundary-vector still to fill after this current (pending) one
                  # nbr of events still free after smallest pending boundary update (i.e., ind_shift = 1) - 0s in boundary still to fill after this one
@@ -273,13 +276,15 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
                  # length(srvIdxGrpEv) - j + 1: still free event counts (before choosing boundaries[ind_b])
                  # nCl - ind_b
                  ind_shift <- min(ind_shift, length(srvIdxGrpEv) - j + 1 - (nCl-1-(ind_b-1)+1))
-                 cat("... new ind_shift ", ind_shift, "\n") ##DEBUG
+                 if (verbose > 1) {
+                  cat("... new ind_shift ", ind_shift, "\n")
+                 }
                  if (length(ind_shift) != 1L || ind_shift < 1L) {
                    stop("Choosing boundaries at ", ind_b," failed! Think of using a simple heuristic instead.", call. = FALSE)
                    break
                  }
                  # update idx within srvIdxGrpEv
-                 if (j+ind_shift > length(srvIdxGrpEv)) stop("j bigger than length(srvIdxGrpEv)!") #never?!
+                 if (j+ind_shift > length(srvIdxGrpEv)) stop("j bigger than length(srvIdxGrpEv)!", call. = FALSE) #never?!
                  #j <- min(j + ind_shift, length(srvIdxGrpEv)) # at most last event time idx #+not needed?
                  j <- j + ind_shift
                  # choose boundary which lies betw (j-1)th and j-th observed time
@@ -322,13 +327,13 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
                                            lower = c(0, rep_len(TOL_NUM, length(parStart)-1L)),
                                            upper = c(boundaries[[1L]], rep_len(+Inf, length(parStart)-1L)),
                                            control = list(
-                                             factr = 1.5e7 # less stringent for convergence than default factor 1e7
+                                             factr = 3e7 # less stringent for convergence than default factor 1e7
                                              #trace = 1, REPORT = 5))
                                            )
                )
                # minimum X2-estimate for parameter vector theta
                coef_minX2 <- if (minChisqOpt$convergence > 0) {
-                 warning("minimum chi^2 parameter estimate for group ", group, " did not converge!", call. = FALSE)
+                 if (verbose > 0) warning("minimum chi^2 parameter estimate for group ", group, " did not converge!", call. = FALSE)
                  # fall back to start value
                  parStart
                } else minChisqOpt$par

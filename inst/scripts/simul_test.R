@@ -6,7 +6,9 @@
 
 # init -----
 
-library('incubate')
+cat("It is ***", toString(Sys.time()), "***\n")
+
+library("incubate")
 # minimal version check:
 #+ 0.7.6 for GOF-Pvalues for restricted & unrestricted model: e.g. gof_mo0 (was gof_mo) and gof_mo1 (new)
 #+ 0.9.8 for names for P-values have changed: boot => bootstrap, gof_mo0 => moran, etc
@@ -125,7 +127,7 @@ if (!myAllN){
     dplyr::filter(n_x == min(n_x))
 }
 
-if (myScaleSimple){
+if (myScaleSimple) {
   simSetting <- simSetting %>%
     dplyr::filter(dplyr::near(scale_x, 10), dplyr::near(scale_ratio, 1))
 }
@@ -193,9 +195,9 @@ if (myPrint) {
 }
 
 # set up parallel computing ----
-if (myWorkers > 1L){
-  library('future.callr')
-  library('future.apply')
+if (myWorkers > 1L) {
+  library("future.callr")
+  library("future.apply")
 
   future::plan(strategy = future.callr::callr, workers = myWorkers)
   # two level future
@@ -214,7 +216,7 @@ if (myWorkers > 1L){
 #' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
 #' @param xx numeric. parameters that specify the simulation model for both groups
 #' @return dataframe. P-values in the different Monte-Carlo runs.
-doMCSim_OLD <- function(xx){
+doMCSim_OLD <- function(xx) {
   n_x <- xx[[1]]
   n_y <- xx[[2]]
   delay_x <- xx[[3]]
@@ -280,24 +282,25 @@ doMCSim_OLD <- function(xx){
 
 }
 
-#' Run Monte-Carlo simulations to test difference in delay using an exponential model for a given simulation setting.
+#' Run Monte-Carlo simulations to test difference in delay using an exponential model for a given simulation setting
+#'
 #' A fixed set of estimation methods are used.
 #' Uses parallel computation (future_replicate) to go through the (=nrep) MC-simulations.
 #' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
-#' @param xx numeric. parameters that specify the simulation model for both groups
+#' @param DGPsetting numeric. parameters that specify the data generating process for both groups
 #' @return dataframe. P-values in the different Monte-Carlo runs.
-doMCSim <- function(xx){
+doMCSim <- function(DGPsetting) {
   # settings from the environment:
   stopifnot( exists("isExpon"), exists("myMCNrep"), exists("myR") )
 
-  n_x <- xx[[1]]
-  n_y <- xx[[2]]
-  delay_x <- xx[[3]]
-  delay_y <- xx[[4]]
+  n_x <- DGPsetting[[1]]
+  n_y <- DGPsetting[[2]]
+  delay_x <- DGPsetting[[3]]
+  delay_y <- DGPsetting[[4]]
 
-  scale_x <- xx[[5]]
-  scale_ratio <- xx[[6]]
-  shape <- xx[[7]]
+  scale_x <- DGPsetting[[5]]
+  scale_ratio <- DGPsetting[[6]]
+  shape <- DGPsetting[[7]]
 
   # do we test for parameters combined?
   testParamCombined <- scale_ratio != 1
@@ -356,9 +359,10 @@ doMCSim <- function(xx){
   dplyr::bind_rows(testDiffList, .id = "run")
 }
 
-#' run MC-simulations for each scenario sequentially (row-by-row)
-#' @return tibble of simulations settings where results tibble has been added
-applyMCSims <- function(simSetDF){
+#' Run MC-simulations for each scenario sequentially (row-by-row)
+#' @param simSetDF
+#' @returns tibble of simulations settings where results tibble has been added
+applyMCSims <- function(simSetDF) {
   simSetDF %>%
     dplyr::mutate(., results = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim))
 }
@@ -370,7 +374,7 @@ addMetaData <- function(da, timeTag) {
   comment(da) <- list(seed = mySeed, R = myR, mcnrep = myMCNrep, workers = myWorkers, chnkSize = myChnkSize,
                       host = Sys.info()[["nodename"]],
                       rversion = R.version.string,
-                      incubate = as.character(packageVersion('incubate')),
+                      incubate = as.character(packageVersion("incubate")),
                       date = TODAY,
                       time = timeTag) %>%
     #paste(names(.), ., sep = '=', collapse = ',')
@@ -445,7 +449,10 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
 cat("\n+++\nThese are warnings from the script:\n+++\n")
 warnings()
 
-if (myWorkers > 1L && isNamespaceLoaded('future')) future::plan(strategy = future::sequential)
+if (myWorkers > 1L && isNamespaceLoaded("future")) {
+  future::plan(strategy = future::sequential)
+}
 
+cat("It is ***", toString(Sys.time()), "***\n")
 cat('\n\n~fine~\n')
 

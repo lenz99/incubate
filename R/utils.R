@@ -57,7 +57,7 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
 
   # non-log parameters get scaling depending on their initial value
   idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
-  scVect[idx.nonLog] <- parV[idx.nonLog]^.2 #5th root pushes towards 1
+  scVect[idx.nonLog] <- parV[idx.nonLog]^.1 #10th root pushes towards 1
 
   # enforce upper and lower bounds
   pmax.int(lowerB, pmin.int(upperB, scVect))

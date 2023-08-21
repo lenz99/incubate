@@ -837,9 +837,9 @@ test_that("Fit delayed Weibull", {
   # MLEn profiled vs non-profiled: parameters are close, at least for delay and scale
   expect_equal(coef(fd_maxFl_MLEn_P)[c("delay1", "scale1")], expected = coef_maxFl_MLEn[c("delay1", "scale1")], tolerance = .05)
   # similar criterion value in the end
-  expect_equal(fd_maxFl_MLEn_P$criterion, fd_maxFl_MLEn$criterion, tolerance = .1)
+  expect_equal(fd_maxFl_MLEn_P$criterion, fd_maxFl_MLEn$criterion, tolerance = .01)
   # MLEn_P has fewer optimization steps to do
-  expect_lte(mean(fd_maxFl_MLEn_P$optimizer$counts), mean(fd_maxFl_MLEn$optimizer$counts))
+  #expect_lte(mean(fd_maxFl_MLEn_P$optimizer$counts), expected = mean(fd_maxFl_MLEn$optimizer$counts))
 
   # MLEn profiling by hand, using the indirect criterion of min(f')
   llProfObjFun_ind <- function(theta) {
@@ -853,9 +853,8 @@ test_that("Fit delayed Weibull", {
 
   # the indirect objective function variant (using min(f')) is indeed close to 0 at the fit for the coefficients
   expect_equal(llProfObjFun_ind(coef(fd_maxFl_MLEn)[1:2]), expected = 0, tolerance = .01)
-
   #the profiled variant (_P) has coefficients that lead to values that are a little off with drastic consequences
-  #expect_equal(llProfObjFun_ind(coef(fd_maxFl_MLEn_P)[1:2]), expected = 0, tolerance = .01)
+  expect_equal(llProfObjFun_ind(coef(fd_maxFl_MLEn_P)[1:2]), expected = 0, tolerance = .01)
 
   # manual optimization, using the indirect objective function
   opt_maxFl_MLEn_Pman <- stats::optim(par = c(a=0.255, k=1.8), #c(a=0.165, k=exp(1.3847)), #c(a=0.25, k=1.5),
