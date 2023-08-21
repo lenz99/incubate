@@ -10,8 +10,7 @@
   level = 0.95,
   R = 199L,
   bs_data,
-  bs_infer = c("logquantile", "lognormal", "quantile", "quantile0", "normal",
-    "normal0"),
+  bs_infer = c("logquantile", "lognormal", "quantile", "quantile0", "normal", "normal0"),
   useBoot = FALSE,
   ...
 )

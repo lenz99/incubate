@@ -1,4 +1,4 @@
-#' Incubate Package
+#' Incubate package for parametric time-to-event analysis with delay
 #'
 #' Estimation and statistical tests on parameters in parametric time-to-event analyses with delay.
 #'
@@ -13,4 +13,5 @@
 #' @importFrom tibble tibble
 #' @name incubate
 #' @docType package
-NULL
+#' @keywords internal
+"_PACKAGE"

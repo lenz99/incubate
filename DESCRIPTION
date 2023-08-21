@@ -1,7 +1,7 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.2.0
-Date: 2022-07-25
+Version: 1.2.1
+Date: 2023-08-21
 Authors@R: 
     person(given = "Matthias",
            family = "Kuhn",
@@ -10,7 +10,7 @@ Authors@R:
            comment = c(ORCID = "0000-0003-2868-5155"))
 Description: Fit parametric models for time-to-event data that show an initial
     'incubation period', i.e., a variable delay phase where the hazard is zero. The
-    delayed Weibull distribution serves as the foundational data model. The
+    delayed Weibull distribution serves as foundational data model. The
     specific method of 'MPSE' (maximum product of spacings estimation) is used for parameter
     estimation. Bootstrap confidence intervals for parameters and significance
     tests in a two group setting are provided.
@@ -36,7 +36,7 @@ Suggests:
     testthat (>= 3.0.0)
 URL: https://gitlab.com/imb-dev/incubate/
 BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
-RoxygenNote: 7.2.0
+RoxygenNote: 7.2.3
 Config/testthat/edition: 3
 Depends: 
     R (>= 2.10)

@@ -1,3 +1,5 @@
+# incubate 1.2.1
+* fix package help: due to changes in roxygen
 
 # incubate 1.2.0
 * check for minimal number of observations and fail early if not enough observations
