@@ -21,7 +21,7 @@ cat('incubate version ', incubate_ver, '\n')
 # mkuhn, 2022-06-??: v1.1.9 new meaning for SMD_factor
 # mkuhn, 2022-07-02: v1.2.1.9001 is first to have name-change MPSE
 # mkuhn, 2022-07-13: v1.2.1.9010 sets ties='density' as new default for single group fits
-stopifnot(utils::compareVersion(incubate_ver, "1.2.1.9010") >= 0L)
+stopifnot(utils::compareVersion(incubate_ver, "1.3.1.9010") >= 0L)
 
 
 library('dplyr', warn.conflicts = FALSE)

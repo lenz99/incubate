@@ -17,7 +17,7 @@ library("incubate")
 #+ 1.1.9.9016 avoid attributes, use transform() for Pearson/AD GOF tests
 #+ 1.2.1.9025: rename logrank P-values to logrank and logrank_pp (to avoid confusion with likelihood ratio (=LR) tests)
 #+ 1.2.1.9037: allow profiling for MPSE and all MLE-methods, at least with single group..
-stopifnot(packageVersion("incubate") >= "1.2.1.9038")
+stopifnot(packageVersion("incubate") >= "1.3.1.9038")
 cat('incubate package version: ', toString(packageVersion("incubate")), '\n')
 
 library('dplyr', warn.conflicts = FALSE)
