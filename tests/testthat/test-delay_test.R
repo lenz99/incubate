@@ -306,7 +306,7 @@ test_that("Moran GOF-test", code = {
                                           future.seed = TRUE)
 
   # all test statistics are positive
-  # XXX test statistic of Moran GOF looks normal
+  # XXX test statistic of Moran GOF looks rather "normal", not chi-squared
   expect_gt(min(testres4[1L,]), expected = 0) #stat moran
   expect_gt(min(testres4[3L,]), expected = 0) #stat pearson
 
@@ -315,8 +315,8 @@ test_that("Moran GOF-test", code = {
   expect_gt(mean(testres4[4L,]), expected = .33)
   # P-values are strongly skewed upwards, median close to .9
   # we expected more small P-values (by chance)
-  expect_equal(mean(testres4[2L,]), expected = .5, tolerance = .3) #moran
-  expect_equal(mean(testres4[4L,]), expected = .5, tolerance = .3) #pearson
+  expect_equal(mean(testres4[2L,]), expected = .5, tolerance = .3) #P-values moran
+  expect_equal(mean(testres4[4L,]), expected = .5, tolerance = .3) #P-values pearson
   #expect_lte(mean(testres4[4L,]), expected = .85)
   #boxplot(list(moran=testres4[2L,], pearson = testres4[4L,]), main = "H0, Surv, two group")
 
@@ -326,12 +326,12 @@ test_that("Moran GOF-test", code = {
                                            function(dymmy) {
 
                                              yObs <- 8 + rpois(23, lambda = 3)
-                                             yEv <- sample(x = c(0, 1, 1, 1), size = length(yObs), replace = T)
+                                             yEv <- sample(x = c(0, 1, 1, 1), size = length(yObs), replace = TRUE)
                                              fm <- delay_model(x = 5 + rpois(17, lambda = 5),
                                                                y = survival::Surv(yObs, event = yEv), method = "MPSE")
 
                                              c(
-                                               moran = test_GOF(delayFit = fm, method = "mo")[["statistic"]],
+                                               moran = test_GOF(delayFit = fm, method = "moran")[["statistic"]],
                                                pearson = test_GOF(delayFit = fm, method = "pearson")[["statistic"]]
                                              )
                                            },

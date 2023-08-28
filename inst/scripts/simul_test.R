@@ -40,7 +40,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
 
 
 if (any(c('help', 'h') %in% names(cmdArgs))){
-  cat('Run Monte-Carlo simulations with delayed Exponential or Weibull data in a two group setting.\n')
+  cat('Run Monte-Carlo simulations with delayed exponential or Weibull data in a two group setting.\n')
   cat('A test for difference in delay (and sometimes delay+rate) is performed.\n')
   cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values (see code in this script).\n')
   cat('Command line parameter options allow to adjust what this script actually does:\n')
@@ -122,7 +122,7 @@ simSetting <- simSetting %>%
 
 
 # default is to use only the smallest sample size
-if (!myAllN){
+if (!myAllN) {
   simSetting <- simSetting %>%
     dplyr::filter(n_x == min(n_x))
 }
@@ -314,18 +314,19 @@ doMCSim <- function(DGPsetting) {
     dplyr::rowwise()
 
   testDiffList <- future.apply::future_replicate(n = myMCNrep,
-                                                 future.packages = c("dplyr", "incubate"), future.seed = TRUE,
+                                                 future.packages = c("dplyr", "incubate"),
+                                                 future.seed = TRUE,
                                                  expr = {
                                                    # generate data
                                                    x <- y <- 1 #dummy init
                                                    if (isExpon) {
-                                                     stopifnot( dplyr::near(shape, 1L) )
-                                                     x <- rexp_delayed(n = n_x, delay = delay_x, rate = 1/scale_x)
-                                                     y <- rexp_delayed(n = n_y, delay = delay_y, rate = 1/scale_y)
+                                                     stopifnot(dplyr::near(shape, 1L))
+                                                     x <- rexp_delayed(n = n_x, delay1 = delay_x, rate1 = 1/scale_x)
+                                                     y <- rexp_delayed(n = n_y, delay1 = delay_y, rate1 = 1/scale_y)
                                                    } else {
                                                      # weibull
-                                                     x <- rweib_delayed(n = n_x, delay = delay_x, scale = scale_x, shape = shape)
-                                                     y <- rweib_delayed(n = n_y, delay = delay_y, scale = scale_y, shape = shape)
+                                                     x <- rweib_delayed(n = n_x, delay1 = delay_x, scale1 = scale_x, shape1 = shape)
+                                                     y <- rweib_delayed(n = n_y, delay1 = delay_y, scale1 = scale_y, shape1 = shape)
                                                    }
 
                                                    estimMethods %>%
@@ -333,23 +334,26 @@ doMCSim <- function(DGPsetting) {
                                                        te_diff <- NULL
                                                        # test_diff might also use parallel computations depending on future-settings
                                                        try(expr = {
-                                                         te_diff <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay1', method = method, profiled = profiled, R = R, type = "all", doLogrank = method == 'MPSE' && !profiled)
-                                                         # get bootstrap P-value for combined test: delay+rate (we request it only if the scale (=1/rate for exponential) is indeed different)
-                                                         if (testParamCombined){
-                                                           te_diff2 <- test_diff(x = x, y = y, distribution = 'expon', param = c('delay1', 'rate1'), method = method, profiled = profiled, R = R, type = 'bootstrap')
+                                                         te_diff <- test_diff(x = x, y = y, distribution = "expon", param = "delay1",
+                                                                              method = method, profiled = profiled, R = R, type = "all", doLogrank = method == "MPSE" && !profiled)
+                                                         # get bootstrap P-value for combined test: delay+rate only if the scale (=1/rate for exponential) is indeed different betw groups
+                                                         if (testParamCombined) {
+                                                           te_diff2 <- test_diff(x = x, y = y, distribution = "expon", param = c("delay1", "rate1"),
+                                                                                 method = method, profiled = profiled, R = R, type = "bootstrap")
                                                            # store P-value of delay+rate in original test_diff-object
-                                                           te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, 'P', 'bootstrap', .default = NA_real_)
+                                                           te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, "P", "bootstrap", .default = NA_real_)
                                                          }#fi
                                                        }, silent = TRUE)
                                                        te_diff
                                                      })) %>%
                                                      # compact testDiff-list column: drop entries that did not work out!
                                                      dplyr::filter(! is.null(testDiffObj)) %>%
-                                                     # extract P-values via dplyr::reframe (beta v1.1.0):
-                                                     #+it generates all P-values/R_eff in long format from each row!
+                                                     # extract all P-values/R_eff in long format from each row!
+                                                     #+dplyr::reframe (beta v1.1.0) allows to summarize with more than one row
                                                      dplyr::reframe(method, profiled, R,
                                                                     R_eff = length(testDiffObj$testDist),
-                                                                    tibble::enframe(unlist(testDiffObj$P), name = "test", value = "pvalue"))
+                                                                    tibble::enframe(unlist(testDiffObj$P),
+                                                                                    name = "test", value = "pvalue"))
                                                  }, simplify = FALSE)
 
   # drop NULLs (just in case)
@@ -357,7 +361,8 @@ doMCSim <- function(DGPsetting) {
 
   # bind together into a single long tibble
   dplyr::bind_rows(testDiffList, .id = "run")
-}
+} #fn doMCSim
+
 
 #' Run MC-simulations for each scenario sequentially (row-by-row)
 #' @param simSetDF
@@ -378,7 +383,7 @@ addMetaData <- function(da, timeTag) {
                       date = TODAY,
                       time = timeTag) %>%
     #paste(names(.), ., sep = '=', collapse = ',')
-    deparse
+    deparse()
   da
 }
 
@@ -386,7 +391,7 @@ DATETIME_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%Mm%Ss")
 rdsBaseName <- paste0("simRes_test_", DATETIME_TAG)
 rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 
-if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
+if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize) {
   # no chunking
   simSetting <- applyMCSims(simSetDF = simSetting) %>%
     addMetaData(timeTag = DATETIME_TAG)
@@ -410,7 +415,7 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
   # merge chunked output!
   chnkFileNames <- list.files(path = myResultsDir, pattern = paste0('^', rdsBaseName, '_[[:digit:]]+[.]rds$'),
              full.names = TRUE)
-  if ( length(chnkFileNames) ){
+  if (length(chnkFileNames)) {
     chnkFiles <- purrr::map(.x = chnkFileNames, .f = readRDS)
 
     saveRDS(chnkFiles %>%

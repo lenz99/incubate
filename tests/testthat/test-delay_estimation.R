@@ -980,7 +980,7 @@ test_that("Fit delayed Weibull", {
   expect_identical(fd_wb_MLEw_P$optimizer$convergence, expected = 0L)
   # MLEw: check we do not have crazy high shape for group x!
   # the MLEw-fitting for shape is prone to end up with absurd high shape values because shape is in the exponent
-  expect_lte(coef(fd_wb_MLEw_P)[["shape1"]], expected = 10)
+  expect_lte(coef(fd_wb_MLEw_P)[["shape1"]], expected = 5)
 
 
 
@@ -1137,10 +1137,10 @@ test_that("Fit delayed Weibull", {
   # group with shorter delay has a good model fit parameter wise
   expect_equal(coef(fd_wb2b_MLEw_P, group = datw_grpEarlier)[-1L],
                expected = purrr::chuck(attr(datw, "param"), datw_grpEarlier)[-1L],
-               tolerance = .15)
+               tolerance = .125)
   # MLEw: check we do not have crazy high shape for group x!
   #+ optimization easily goes wrong on shape, because shape occurs in the exponent
-  #+ this also can happen for a single group
+  #+ this can also happen for a single group
   expect_lte(coef(fd_wb2b_MLEw_P, group = "x")[["shape1"]], expected = 10)
 
   # MLE-weights:
@@ -1170,8 +1170,7 @@ test_that("Fit delayed Weibull", {
 
   # two groups, bind shape -----
 
-  fd_wb2bb <- delay_model(x = datw, distribution = "weib",
-                          bind = "shape1")
+  fd_wb2bb <- delay_model(x = datw, distribution = "weib", bind = "shape1")
   coef_wb2bb <- coef(fd_wb2bb)
 
   expect_identical(fd_wb2bb$optimizer$convergence, expected = 0L)
