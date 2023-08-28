@@ -5,8 +5,11 @@
 
 
 # init -----
-library('incubate')
-incubate_ver <- toString(packageVersion('incubate'))
+
+cat("It is ***", toString(Sys.time()), "***\n")
+
+library("incubate")
+incubate_ver <- toString(packageVersion("incubate"))
 cat('incubate version ', incubate_ver, '\n')
 # mkuhn, 2021-12-09: v0.7.2 is needed for new name of bs_data: 'ordinary' instead of 'simple' and boot-package implementation
 # mkuhn, 2021-12-15: v0.7.3 is needed for bs_infer = 't'
@@ -16,9 +19,9 @@ cat('incubate version ', incubate_ver, '\n')
 # mkuhn, 2022-03-24: v0.9.5 logshift internally redefined (should not have impact here, though)
 # mkuhn, 2022-03-31: v0.9.6 is needed for smoothing for delay
 # mkuhn, 2022-06-??: v1.1.9 new meaning for SMD_factor
-# mkuhn, 2022-07-02: v1.1.9.9001 is first to have name-change MPSE
-# mkuhn, 2022-07-13: v1.1.9.9010 sets ties='density' as new default for single group fits
-stopifnot( utils::compareVersion(incubate_ver, '1.1.9.9010') >= 0L )
+# mkuhn, 2022-07-02: v1.2.1.9001 is first to have name-change MPSE
+# mkuhn, 2022-07-13: v1.2.1.9010 sets ties='density' as new default for single group fits
+stopifnot(utils::compareVersion(incubate_ver, "1.2.1.9010") >= 0L)
 
 
 library('dplyr', warn.conflicts = FALSE)
@@ -408,4 +411,6 @@ warnings()
 
 if (myWorkers > 1L) future::plan(strategy = future::sequential)
 
-cat('\n\n~fine~\n')
+
+cat("It is ***", toString(Sys.time()), "***\n")
+cat("\n\n~fine~\n")

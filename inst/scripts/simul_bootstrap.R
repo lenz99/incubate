@@ -6,7 +6,7 @@
 
 # command line arguments --------------------------------------------------
 
-suppressPackageStartupMessages(library(R.utils))
+suppressPackageStartupMessages(library("R.utils"))
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
@@ -89,6 +89,7 @@ shift_delay <-  c(.00001, .0001, .001, .01, .1, 1, 2, 5, 10, 20, 40)
 lbdVct <- seq(-4, 4, .1)
 
 cat('\n', NROW(simScenarios), "scenarios to make simulations for.\n")
+
 
 # simulation --------------------------------------------------------------
 

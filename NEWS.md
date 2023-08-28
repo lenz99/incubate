@@ -1,3 +1,5 @@
+# incubate 1.3.1.9051
+* implement censoring
 
 # incubate 1.3.0
 * implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter
@@ -8,7 +10,7 @@
 * update simulation R-scripts (in `inst/scripts/`) to also use ML-based estimation and LR-tests
 
 # incubate 1.2.1
-* fix package help: due to changes in roxygen
+* fix package help after changes in roxygen
 
 # incubate 1.2.0
 * check for minimal number of observations and fail early if not enough observations
