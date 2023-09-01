@@ -40,7 +40,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                                 chnkSize=0, workers=5, R=150, mcnrep=100))
 
 
-if (any(c('help', 'h') %in% names(cmdArgs))){
+if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('Run Monte-Carlo simulations with delayed exponential or Weibull data in a two group setting.\n')
   cat('A test for difference in delay (and sometimes delay+rate) is performed.\n')
   cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values (see code in this script).\n')

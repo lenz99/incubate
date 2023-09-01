@@ -56,8 +56,8 @@ comparisons in a two group setting.
 # confidence interval for delay-parameters
 confint(fm, parm = c('delay1.x', 'delay1.y'))
 #>               2.5%    97.5%
-#> delay1.x 0.8060324 1.094331
-#> delay1.y 1.3505534 1.753090
+#> delay1.x 0.8060091 1.094329
+#> delay1.y 1.3504833 1.753120
 
 # test on difference in delay
 # for real applications use R>=1000 bootstrap draws
@@ -80,10 +80,10 @@ library("future")
 plan(multisession, workers = 4)
 ```
 
-That’s it. You do *not* have to change any function calls. `incubate` is
-`future`-aware. Consult the [`future`-package on
+That’s it. You do *not* have to change any function calls as `incubate`
+is `future`-aware. Consult the documentation of the [`future`-package on
 CRAN](https://CRAN.R-project.org/package=future) for more information
-about futures and about supported computation plans.
+about this framework and its supported computation plans.
 
 When you are done with the heavy computing, it is best practice to
 release the parallel connections via `plan(sequential)`.
