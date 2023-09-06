@@ -6,7 +6,7 @@
 
 # init -----
 
-cat("MC-simulations for test for difference in delay parameters.\n")
+cat("\nMC-simulations for test for difference in delay parameters.\n")
 cat("It is ***", toString(Sys.time()), "***\n")
 
 library("incubate")
@@ -21,14 +21,13 @@ library("incubate")
 stopifnot(packageVersion("incubate") >= "1.3.1.9038")
 cat('incubate package version: ', toString(packageVersion("incubate")), '\n')
 
-library('dplyr', warn.conflicts = FALSE)
-library('purrr')
-library('tidyr', warn.conflicts = FALSE)
-library('tibble')
+library("dplyr", warn.conflicts = FALSE)
+stopifnot(packageVersion("dplyr") > "1.0.10")
+library("purrr")
+library("tidyr", warn.conflicts = FALSE)
+library("tibble")
+suppressPackageStartupMessages(library("R.utils"))
 
-suppressPackageStartupMessages(library('R.utils'))
-
-stopifnot( packageVersion("dplyr") > "1.0.10")
 TODAY <- Sys.Date()
 
 
@@ -36,8 +35,14 @@ TODAY <- Sys.Date()
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
-                                defaults = list(resultsDir = getwd(), dist='exponential', scenario='MS', slice=0, seed=as.integer(TODAY),
-                                                chnkSize=0, workers=5, R=150, mcnrep=100))
+                                defaults = list(
+                                  # simulation settings
+                                  dist='exponential', scenario='MS',
+                                  R=150, mcnrep=100,
+                                  # technical settings
+                                  resultsDir = getwd(),
+                                  slice=0, seed=as.integer(TODAY),
+                                  chnkSize=0, workers=3))
 
 
 if (any(c('help', 'h') %in% names(cmdArgs))) {
@@ -52,6 +57,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
   cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
   cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
+  cat('  --cens\t apply also random right-censoring during the simulation study\n')
   cat('  --slice=\t if given, pick only this number of first scenarios for simulations. If negative, scenarios taken from the tail.\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent.\n')
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios. Default is no chunking (=0).\n')
@@ -73,7 +79,8 @@ isExpon <- isTRUE(myDist == "exponential")
 stopifnot( isExpon || isTRUE(myDist == "weibull"))
 
 myWorkers <- cmdArgs[["workers"]]
-stopifnot( is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L )
+stopifnot(is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L)
+USE_FUTURE <- myWorkers > 1L
 
 myChnkSize <- cmdArgs[["chnkSize"]]
 stopifnot( is.numeric(myChnkSize), length(myChnkSize) == 1L )
@@ -98,6 +105,8 @@ myScenario <- match.arg(arg = toupper(myScenario), choices = c("DELAYEQ", "DELAY
 myPrint <- isTRUE(any(c("print", "p") %in% tolower(names(cmdArgs))))
 myAllN <- isTRUE(any(c("alln", "a") %in% tolower(names(cmdArgs))))
 myScaleSimple <- isTRUE(any(c("scalesimple", "scale", "scales") %in% tolower(names(cmdArgs))))
+myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
+
 
 
 
@@ -112,15 +121,23 @@ simSetting <- tidyr::expand_grid(n_x = c(8, 10, 12, 15, 20, 30, 50, 100),
                                  scale_ratio = c(2, 1, .5),
                                  # shape values according to distribution
                                  #+effectively filter for distribution
-                                 shape = if (isExpon) 1 else c(.5, 2))
+                                 shape = if (isExpon) 1 else c(.5, 2),
+                                 cens = c(0, 0.1, 0.2, 0.3))
 
 # avoid duplicates:
 # by convention, group y is not less delayed than group x
 simSetting <- simSetting %>%
   dplyr::filter(delay_y >= delay_x) %>%
+  # enough expected number of observations
+  dplyr::filter(cens >= 0, cens < 1, n_x * (1-cens) > 5) %>%
   # use equally sized groups
   dplyr::mutate(n_y = n_x, .after = n_x)
 
+# default: no censoring (cens = 0)
+if (!myCens) {
+  simSetting <- simSetting %>%
+    dplyr::slice_min(cens)
+}
 
 # default is to use only the smallest sample size
 if (!myAllN) {
@@ -133,7 +150,6 @@ if (myScaleSimple) {
     dplyr::filter(dplyr::near(scale_x, 10),
                   dplyr::near(scale_ratio, 1))
 }
-
 
 
 # filter for target scenario!
@@ -189,7 +205,7 @@ simSetting <- switch (myScenario,
 
 
 
-if (! dplyr::near(mySlice, 0)) {
+if (!dplyr::near(mySlice, 0)) {
   simSetting <- local({
 
     sliceF <- if (mySlice > 0) dplyr::slice_head else dplyr::slice_tail
@@ -204,15 +220,15 @@ if (myPrint) {
   cat('\n')
   cat(NROW(simSetting), 'simulation scenarios in total.\n')
   cat('Each scenario is covered by ', myMCNrep, 'MC-data replications.\n')
-  cat('A bootstrap test has R=', myR, 'parametric bootstrap samples (P-value resolution).\n')
+  cat('Bootstrap tests with R=', myR, 'parametric bootstrap samples (P-value resolution).\n')
   cat('Seed set initially is: ', if (mySeed>0) mySeed else '-not set-', '\n')
   cat('Results directory is set to ', myResultsDir, '\n')
-  cat("~fine~\n")
+
   quit(save = 'no')
 }
 
 # set up parallel computing ----
-if (myWorkers > 1L) {
+if (USE_FUTURE) {
   library("future.callr")
   library("future.apply")
 
@@ -233,11 +249,12 @@ if (myWorkers > 1L) {
 #' A fixed set of estimation methods are used.
 #' Uses parallel computation (future_replicate) to go through the (=nrep) MC-simulations.
 #' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
-#' @param DGPsetting numeric. parameters that specify the data generating process for both groups
+#' @param DGPsetting numeric. a row from `simSetting`. It encodes parameters that specify the data generating process for both groups
 #' @return dataframe. P-values in the different Monte-Carlo runs.
 doMCSim <- function(DGPsetting) {
   # settings from the environment:
   stopifnot(exists("isExpon"), exists("myMCNrep"), exists("myR"))
+  stopifnot(is.numeric(DGPsetting), length(DGPsetting) == 8L)
 
   n_x <- DGPsetting[[1]]
   n_y <- DGPsetting[[2]]
@@ -247,11 +264,13 @@ doMCSim <- function(DGPsetting) {
   scale_x <- DGPsetting[[5]]
   scale_ratio <- DGPsetting[[6]]
   shape <- DGPsetting[[7]]
+  cens <- DGPsetting[[8]]
 
   # do we test for parameters combined?
   testParamCombined <- scale_ratio != 1
   scale_y <- scale_x * scale_ratio
 
+  # different estimation methods
   estimMethods <- tidyr::expand_grid(method = c("MPSE", "MLEn", "MLEc", "MLEw"),
                                      profiled = c(FALSE, TRUE),
                                      R = as.integer(myR)) %>%
@@ -260,7 +279,7 @@ doMCSim <- function(DGPsetting) {
     dplyr::rowwise()
 
   testDiffList <- future.apply::future_replicate(n = myMCNrep,
-                                                 future.packages = c("dplyr", "incubate"),
+                                                 future.packages = c("dplyr", "incubate", if (cens > 0) "survival"),
                                                  future.seed = TRUE,
                                                  expr = {
                                                    # generate data
@@ -274,6 +293,35 @@ doMCSim <- function(DGPsetting) {
                                                      x <- rweib_delayed(n = n_x, delay1 = delay_x, scale1 = scale_x, shape1 = shape)
                                                      y <- rweib_delayed(n = n_y, delay1 = delay_y, scale1 = scale_y, shape1 = shape)
                                                    }
+
+                                                   # apply censoring
+                                                   if (cens > 0) {
+                                                     # numbers per 10 observations
+                                                     cens10 <- round(cens * 10L)
+                                                     event10 <- c(rep_len(0, cens10), rep_len(1, 10-cens10))
+                                                     #sample(event10, size = n_x, replace = TRUE)
+
+                                                     # number of censorings
+                                                     censDigit_x <- (cens * n_x) %% 1
+                                                     censDigit_y <- (cens * n_y) %% 1
+
+                                                     censNbr_x <- if (censDigit_x == 0) {
+                                                       cens * n_x
+                                                     } else {
+                                                       c(floor(cens * n_x), ceiling(cens * n_x))[[1L+stats::rbinom(n=1, size = 1, prob = censDigit_x)]]
+                                                       #max(0, min(round(stats::rnorm(n=1L, mean = cens * n_x, sd = .2)), n_x - 4))
+                                                     }
+                                                     censNbr_y <- if (censDigit_y == 0) {
+                                                       cens * n_y
+                                                     } else {
+                                                       c(floor(cens * n_y), ceiling(cens * n_y))[[1L+stats::rbinom(n=1, size = 1, prob = censDigit_y)]]
+                                                     }
+                                                     event_x <- c(rep_len(0, censNbr_x), rep_len(1, n_x - censNbr_x))
+                                                     event_y <- c(rep_len(0, censNbr_y), rep_len(1, n_y - censNbr_y))
+
+                                                     x <- survival::Surv(x, event = event_x, type = "right")
+                                                     y <- survival::Surv(y, event = event_y, type = "right")
+                                                   } #fi
 
                                                    estimMethods %>%
                                                      dplyr::mutate(testDiffObj = list({
@@ -423,7 +471,7 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize) {
 cat("\n+++\nThese are warnings from the script:\n+++\n")
 warnings()
 
-if (myWorkers > 1L && isNamespaceLoaded("future")) {
+if (USE_FUTURE && isNamespaceLoaded("future")) {
   future::plan(strategy = future::sequential)
 }
 

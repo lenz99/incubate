@@ -1,13 +1,14 @@
-# incubate 1.3.1.9051
-* implement censoring
+# incubate 1.3.0.9053
+* work on censoring
 
 # incubate 1.3.0
 * implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter
+* allow for random right-censoring
 * use some log-transformed parameters internally for more stable and less constrained optimization
 * `test_diff`: allow for likelihood-ratio test
 * include restricted mean survival time function for delayed exponential and Weibull
 * [experimental] implement two delay phases for exponential and for Weibull
-* update simulation R-scripts (in `inst/scripts/`) to also use ML-based estimation and LR-tests
+* update simulation R-scripts (in `inst/scripts/`) to also use ML-based estimation and LR-tests, with and without censoring
 
 # incubate 1.2.1
 * fix package help after changes in roxygen

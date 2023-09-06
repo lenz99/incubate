@@ -4,12 +4,18 @@
 \alias{test_GOF}
 \title{Goodness-of-fit (GOF) test statistic.}
 \usage{
-test_GOF(delayFit, method = c("moran", "pearson", "nikulin", "NRR"))
+test_GOF(
+  delayFit,
+  method = c("moran", "pearson", "nikulin", "NRR"),
+  verbose = 0
+)
 }
 \arguments{
 \item{delayFit}{delay_model fit object}
 
 \item{method}{character(1). which method to use for GOF. Default is 'moran'.}
+
+\item{verbose}{integer. Verbosity level. The higher the more verbose debugging output.}
 }
 \value{
 An \code{htest}-object containing the GOF-test result
