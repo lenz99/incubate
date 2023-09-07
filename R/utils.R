@@ -15,6 +15,17 @@ as_percent <- function(x, digits = 1) {
   sprintf(fmt = paste0('%.', as.integer(digits),'f%%', x*100))
 }
 
+#' Checks if arguments are numerically close.
+#'
+#' The function is vectorized and R's recycling rules apply.
+#' @param x numeric first vector
+#' @param y numeric second vector
+#' @return logical vector if arguments from x and y are close
+#' @seealso [dplyr::near()]
+near <- function(x, y) {
+  abs(x-y) < TOL_NUM
+}
+
 #' Minimize an objective function with PORT routine (nlminb)
 #'
 #' This is a thin wrapper function.

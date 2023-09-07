@@ -37,7 +37,7 @@
 #'
 #' The length of the result is determined by `n` for `rexp_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions,
 #' R's recycling rules apply when only single initial delay phase is used.
-#' @seealso stats::Exponential
+#' @seealso [stats::Exponential]
 #' @keywords distribution
 #' @name DelayedExponential
 NULL
@@ -204,17 +204,20 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
-  stopifnot( all(is.finite(delay1), is.finite(rate1)) )
+  stopifnot(all(is.finite(delay1), is.finite(rate1)))
 
   # single phase
   # check for easy case: only a single delay
-  if ( is.null(delay2) ){
+  if (is.null(delay2)) {
     if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
     return(delay1 + stats::rexp(n = n, rate = rate1))
   }
 
+
   # two phases
-  if ( length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L ){
+  stopifnot(!is.null(delay2))
+
+  if (length(delay1) > 1L || length(rate1) > 1L || length(delay2) > 1L || length(rate2) > 1L) {
     warning("In two-phase setting we do not recycle parameters. Only the 1st value of the parameter arguments is used!", call. = FALSE)
   }
   delay1 <- delay1[[1L]]
@@ -222,12 +225,26 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
   # we need both delay2 AND rate2
   delay2 <- delay2[[1L]]
   rate2 <- rate2[[1L]]
-  stopifnot( is.finite(delay2), is.finite(rate2) )
+
 
   # check delay constraint
   if (delay1 >= delay2) {
     stop("First delay phase must antedate the second delay phase!", call. = FALSE)
   }
+
+  if (is.null(rate2)) {
+    stop("Argument rate2= is null but a finite numeric argument is needed!", call. = FALSE)
+  }
+
+  if (!is.finite(delay2) || !is.finite(rate2)) {
+    stop("Please provide finite numeric arguments for delay2= and rate2=!")
+  }
+
+  # check if rate changes noticeably
+  if (isTRUE(near(rate1, rate2))) {
+    return(delay1 + stats::rexp(n = n, rate = rate1))
+  }
+
 
   # use inverse CDF-method
   qexp_delayed(p = stats::runif(n = n), delay1 = delay1, rate1 = rate1, delay2 = delay2, rate2 = rate2)

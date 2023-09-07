@@ -122,6 +122,6 @@ With two phases, the arguments are \strong{not} recycled. Only the first element
 Generally, only the first elements of the logical arguments are used.
 }
 \seealso{
-stats::Exponential
+\link[stats:Exponential]{stats::Exponential}
 }
 \keyword{distribution}
