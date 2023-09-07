@@ -52,7 +52,8 @@ rexp_delayed(
   delay2 = NULL,
   rate2 = NULL,
   delay = delay1,
-  rate = rate1
+  rate = rate1,
+  cens = 0
 )
 
 mexp_delayed(
@@ -93,6 +94,8 @@ mexp_delayed(
 \item{p}{A numeric vector of probabilities.}
 
 \item{n}{integer. Number of random observations requested.}
+
+\item{cens}{numeric. Expected proportion of random right-censored observations.}
 
 \item{t}{A numeric vector of times that restrict the mean survival. Default is \code{+Inf}, i.e., the unrestricted mean survival time.}
 }

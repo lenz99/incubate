@@ -28,6 +28,7 @@
 #' @param log logical. Return value on log-scale?
 #' @param lower.tail logical. Give cumulative probability of lower tail?
 #' @param log.p logical. P-value on log-sclae?
+#' @param cens numeric. Expected proportion of random right-censored observations.
 #' @return Functions pertaining to the delayed exponential distribution:
 #' * `dexp_delayed` gives the density
 #' * `pexp_delayed` gives the vector of cumulative probabilities or the gradient matrix (nbr parameters x quantile times)
@@ -45,15 +46,15 @@ NULL
 #' @rdname DelayedExponential
 #' @export
 dexp_delayed <- function(x, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1, log = FALSE) {
-  stopifnot( length(log) >= 1L, is.logical(log) )
+  stopifnot(length(log) >= 1L, is.logical(log))
   log <- log[[1L]] # only first value of log is used
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
-  stopifnot( all(is.finite(delay1), is.finite(rate1)) )
+  stopifnot(all(!is.null(delay1), !is.null(rate1), is.finite(delay1), is.finite(rate1)))
 
   # check for easy case: only a single phase
-  if ( is.null(delay2) ) {
+  if (is.null(delay2)) {
     if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
     return(stats::dexp(x = x - delay1, rate = rate1, log = log))
   }
@@ -200,7 +201,7 @@ qexp_delayed <- function(p, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL,
 
 #' @rdname DelayedExponential
 #' @export
-rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1) {
+rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, delay = delay1, rate = rate1, cens=0) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(rate)) if (missing(rate1)) rate1 <- rate else warning("Argument rate= is ignored as rate1= is given!", call. = FALSE)
 
@@ -210,7 +211,17 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
   # check for easy case: only a single delay
   if (is.null(delay2)) {
     if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
-    return(delay1 + stats::rexp(n = n, rate = rate1))
+
+    evTime <- delay1 + stats::rexp(n = n, rate = rate1)
+    if (near(cens, 0)) {
+      return(evTime)
+    } else {
+      # independent uniform censoring process U(0, Z) where Z is chosen as to give expected proportion of right-censoring
+      censTime <- stats::runif(n = n, max = (delay1 + 1/rate1)/cens)
+      evStatus <- rep_len(1, length.out = n)
+      evStatus[which(censTime < evTime)] <- 0
+      return(survival::Surv(evTime, event = evStatus, type = "right"))
+    }
   }
 
 
@@ -238,6 +249,10 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 
   if (!is.finite(delay2) || !is.finite(rate2)) {
     stop("Please provide finite numeric arguments for delay2= and rate2=!")
+  }
+
+  if (is.list(cens) || !near(cens, 0)) {
+    stop("Censoring is not supported for two-phase exponential with delay.", call. = FALSE)
   }
 
   # check if rate changes noticeably
