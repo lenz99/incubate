@@ -465,7 +465,7 @@ objFunFactory <- function(x, y = NULL,
             stats::qbeta(p=.5, shape1 = seq_len(nObs), shape2 = rev(seq_len(nObs)))
           } else { # Benard-style approximation for long observation vectors
             # 1st and last entry are still exact median rank values
-            z_n <- .5**(1/nObs)
+            z_n <- .5^(1/nObs)
             c(1-z_n, stats::ppoints(n, a=a)[1L+seq_len(nObs-2L)], z_n)
           }
 
@@ -585,7 +585,7 @@ objFunFactory <- function(x, y = NULL,
         # cf. Cousineau's simulation results for median of W2's sampling distribution
         #+"Nearly unbiased estimators.." (2009), Table 3, column J_2
         # W2-approximation via asymptotic regression model SSasymp on log(n):
-        # We hence model: W2 = 1 + (R0 - 1) * n**(-r)
+        # We hence model: W2 = 1 + (R0 - 1) * n^(-r)
 
         switch(EXPR = method,
                sample = {
@@ -815,7 +815,7 @@ objFunFactory <- function(x, y = NULL,
                               stopifnot(length(x) <= 2L)
                               if (length(x) <= 1L) x else
                                 if (isOpt) (x[[1L]] + x[[2L]])/2L else #mean(x)
-                                  sqrt(x[[1L]] * x[[2L]]) #prod(x)**(1/length(x))
+                                  sqrt(x[[1L]] * x[[2L]]) #prod(x)^(1/length(x))
                             }, simplify = TRUE))
     # .. only for delay1 we use minimum as aggregation function
     #+(in this case first entry in exParInd$x and exParInd$y is 1!)
@@ -930,7 +930,7 @@ objFunFactory <- function(x, y = NULL,
                    # min(obs) = obs[1L]
                    exponential = {
                      parV0 <- c( max(DELAY_MIN, obs[[1L]] - 3 / (length(obs)+1)),
-                                 mean(obs - obs[[1L]] + 2 / length(obs))**-1L )
+                                 mean(obs - obs[[1L]] + 2 / length(obs))^-1L )
 
                      # two extra parameters when exponential with *two* phases
                      if (twoPhase) parV0 <- c(parV0, obs[[floor(.5 + length(obs)/2L)]], parV0[[2L]])
@@ -1169,8 +1169,8 @@ objFunFactory <- function(x, y = NULL,
 
     # !criterion
     # calculate the objective function which depends on
-    #+ method
-    #+ profiled
+    #+method
+    #+profiled
     n <- length(obs)
     stopifnot(n > 1L)
     # shape parameter (candidate)
@@ -1186,7 +1186,7 @@ objFunFactory <- function(x, y = NULL,
 
                           # objective function to maximize:
                           # we use 1st derivative to profile out scale parameter, but otherwise, use log-likelihood function directly
-                          (n - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) +
+                          (n - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) +
                             # contribution of right censorings
                             sum(rlang::exec(cdfFun, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
                                 # optional penalty term for large values of shape
@@ -1204,16 +1204,16 @@ objFunFactory <- function(x, y = NULL,
                  if (obs_c[[1L]] < 0) return(NA_real_)
                  # objective function to maximize:
                  # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
-                 # 2nd & 3rd summand could also be: - log(sum(obs_c**k)) + log(n*k)
-                 n * ((k-1) * mean(log(obs_c)) - log(mean(obs_c**k)) + log(k) - 1) - penF(k)
+                 # 2nd & 3rd summand could also be: - log(sum(obs_c^k)) + log(n*k)
+                 n * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) - penF(k)
 
                  # alternative:
                  #indirect way: ! profiled_llik_directly
                  #consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
                  #We would need to check that we have indeed an local **maximum** for the log-likelihood (as we have only found candidate values by looking for roots of f')
-                 #   - (1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 -
+                 #   - (1/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c^k) / sum(obs_c^k))^2 -
                  #     # 1st factor is inverse of harmonic mean
-                 #     (mean(1/obs_c) * sum(obs_c**k)/sum(obs_c**(k-1)) - k/(k-1))**2 -
+                 #     (mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)) - k/(k-1))^2 -
                  #     # optional penalization term
                  #     penalize_shape*log(k+1)
                }
@@ -1247,9 +1247,9 @@ objFunFactory <- function(x, y = NULL,
                         obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
 
                         # objective function to maximize
-                        -(weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc**k) / sum(obs_evc**k))**2 +
+                        -(weights$W2[[group]] / k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc^k) / sum(obs_evc^k))^2 +
                           # 1st factor is inverse of harmonic mean
-                          -(mean(1/obs_evc) * sum(obs_evc**k) / sum(obs_evc**(k-1)) - weights$W3[[group]](k))**2 +
+                          -(mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)) - weights$W3[[group]](k))^2 +
                           # contribution of right-censored obs
                           rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
                           # optional penalization term for big shape
@@ -1263,9 +1263,9 @@ objFunFactory <- function(x, y = NULL,
 
 
                # objective function to maximize
-               -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c**k) / sum(obs_c**k))**2 +
+               -(weights$W2[[group]] / k + mean(log(obs_c)) - sum(log(obs_c) * obs_c^k) / sum(obs_c^k))^2 +
                  # 1st factor is inverse of harmonic mean
-                 -(mean(1/obs_c) * sum(obs_c**k) / sum(obs_c**(k-1)) - weights$W3[[group]](k))**2 +
+                 -(mean(1/obs_c) * sum(obs_c^k) / sum(obs_c^(k-1)) - weights$W3[[group]](k))^2 +
                  # optional penalization term
                  -penF(k)
 
@@ -1653,7 +1653,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x = stop('Specify observations for first group x=!', call. = FALSE), y = NULL,
+delay_model <- function(x = stop("Specify observations for first group x=!", call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull"), twoPhase = FALSE,
                         bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
                         method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profiled = method == 'MLEw',
@@ -1662,7 +1662,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   # setup -------------------------------------------------------------------
 
   if (is.logical(verbose)) verbose <- as.numeric(verbose)
-  if ( is.null(verbose) || ! is.numeric(verbose) || ! is.finite(verbose) ) verbose <- 0L
+  if (is.null(verbose) || !is.numeric(verbose) || !is.finite(verbose) ) verbose <- 0L
   verbose <- verbose[[1L]]
 
 
@@ -1676,27 +1676,30 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   }
 
   # enforce that the first argument x= is properly instantiated
-  stopifnot(!is.null(x) && is.numeric(x) && length(x))
+  stopifnot(!is.null(x), is.numeric(x), length(x) > 0)
 
   distribution <- match.arg(distribution)
 
   method <- if (length(method) == 1L && toupper(method) == 'MSE') {
     message("The method name 'MPSE' is prefered over the previously used name 'MSE'!")
-    'MPSE'
+    "MPSE"
   } else method[1L]
   method <- match.arg(method)
   ties <- match.arg(ties)
 
   if (is.character(bind)) {
     if (any(endsWith(bind, suffix = "_tr"))) {
-      stop("Parameter names to bind= refer to the distribution parameters and not to the transformed parameters of the objective function.", call. = FALSE)
+      stop("Parameter names to bind= refer to the distribution parameters and not to the transformed parameters of the objective function.",
+           call. = FALSE)
     }
 
     # translate convenience names (for single phase) to canonical names
     unNmbrdIdx <- !grepl(pattern = "[12]", bind, fixed = FALSE)
-    if (any(unNmbrdIdx)){
+    if (any(unNmbrdIdx)) {
       bind[unNmbrdIdx] <- paste0(bind[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
-      if (verbose > 0L) cat("The unnumbered parameter names in bind= are translated to canonical parameter names (=phase 1).\n")
+      if (verbose > 0L) {
+        cat("The unnumbered parameter names in bind= are translated to canonical parameter names (=phase 1).\n")
+      }
     }
   }#fi bind=
 
@@ -1723,6 +1726,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   structure(
     list(
       data = if (twoGroup) list(x = x, y = y) else x,
+      nobs = c(x = NROW(x), y = if (twoGroup) NROW(y) else 0),
       distribution = distribution,
       twoPhase = twoPhase,
       twoGroup = twoGroup,
@@ -1744,7 +1748,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 print.incubate_fit <- function(x, ...) {
   coe <- coef(x)
   rangeTime <- if (x[["twoGroup"]]) {
-    ns <- lengths(x[["data"]])
+    ns <- x[["nobs"]]
     paste(
       round(sort(c(x[["data"]]$x[[1L]], x[["data"]]$y[[1L]]))[[1L]], 4),
       round(sort(c(x[["data"]]$x[[ns[["x"]]]], x[["data"]]$y[[ns[["y"]]]]))[[2L]], 4),
@@ -1757,7 +1761,7 @@ print.incubate_fit <- function(x, ...) {
                       MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
                       MLEw = 'weighted Maximum Likelihood Estimation (MLEw)',
                       MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
-                      "Data: {if (twoGroup) paste(lengths(data), collapse = ' and ') else length(data)} observations, ranging from {rangeTime}",
+                      "Data: {if (twoGroup) paste(nobs, collapse = ' and ') else nobs[[1L]]} observations, ranging from {rangeTime}",
                       "Criterion: {signif(criterion,3)}",
                       "Fitted coefficients: {if (is.null(coe)) '-' else paste(paste('\n  ', names(coe)), signif(coe,5L), sep = ': ', collapse = ' ')}"),
       "\n")
@@ -1779,21 +1783,22 @@ coef.incubate_fit <- function(object, transformed = FALSE, group = NULL, ...) {
 }
 
 #' @export
-summary.incubate_fit <- function(object, ...){
+summary.incubate_fit <- function(object, ...) {
   print(object)
 }
 
 #' Refit an `incubate_fit`-object with specified optimization arguments.
+#' This function is useful when only an optimization argument is to be changed.
 #' If more things need to be changed go back to `delay_model` and start from scratch.
 #' @param object `incubate_fit`-object
 #' @param optim_args optimization arguments
 #' @param verbose integer flag. Requested verbosity during `delay_fit`
 #' @param ... further arguments, currently not used.
-#' @return The updated fitted object of class `incubate_fit`
+#' @return The updated fitted object of class `incubate_fit` or `NULL` in case of failure.
 #' @export
-update.incubate_fit <- function(object, optim_args = NULL, verbose = 0, ...){
+update.incubate_fit <- function(object, optim_args = NULL, verbose = 0, ...) {
 
-  stopifnot( all(c("data", "distribution", "method", "objFun", "twoPhase", "twoGroup", "par", "criterion", "optimizer") %in% names(object)) )
+  stopifnot(all(c("data", "distribution", "method", "objFun", "twoPhase", "twoGroup", "par", "criterion", "optimizer") %in% names(object)))
 
   ## fit model with given optim_args
   objFun <- object[["objFun"]]
@@ -1801,9 +1806,6 @@ update.incubate_fit <- function(object, optim_args = NULL, verbose = 0, ...){
 
   if (is.null(optObj)) return(invisible(NULL))
 
-
-  x <- if (object[["twoGroup"]]) object[["data"]]["x"] else object[["data"]]
-  y <- if (object[["twoGroup"]]) object[["data"]]["y"] else NULL
 
   # update all relevant fields in the list
   # /!\ keep in sync with delay_model() /!\
@@ -1817,10 +1819,11 @@ update.incubate_fit <- function(object, optim_args = NULL, verbose = 0, ...){
   object
 }
 
+
 #' @export
-plot.incubate_fit <- function(x, y, title, subtitle, ...){
+plot.incubate_fit <- function(x, y, title, subtitle, ...) {
   # parameter y comes from the plot-generic. y is not used here.
-  stopifnot( inherits(x, "incubate_fit") )
+  stopifnot(inherits(x, "incubate_fit"))
 
   rlang::check_installed(pkg = 'ggplot2', reason = 'to draw plots', version = '3.3')
 
@@ -1879,27 +1882,30 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
 
 
 #' @export
-simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...){
-  stopifnot(inherits(object, 'incubate_fit'))
+simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...) {
+  stopifnot(inherits(object, "incubate_fit"))
 
   ranFun <- getDist(object$distribution, type = "r")
-  nObs <- if (isTRUE(object$twoGroup)) lengths(object$data) else length(object$data)
 
+  #XXX add option to mirror cens= setting in observed data?
   # arguments to the random function generation
-  ranFunArgsX <- as.list(c(n=nObs[[1L]], coef(object, group = "x")))
-  ranFunArgsY <- if (isTRUE(object$twoGroup)) as.list(c(n=nObs[[2L]], coef(object, group = "y")))
+  ranFunArgsX <- as.list(c(n=object$nobs[[1L]], coef(object, group = "x")))
+  ranFunArgsY <- if (object$twoGroup) as.list(c(n=object$nobs[[2L]], coef(object, group = "y")))
 
-  simExpr <- if (isTRUE(object$twoGroup))
+  simExpr <- if (object$twoGroup) {
     expression(list(x=rlang::exec(ranFun, !!! ranFunArgsX),
-                    y=rlang::exec(ranFun, !!! ranFunArgsY))) else
-                      expression(rlang::exec(ranFun, !!! ranFunArgsX))
+                    y=rlang::exec(ranFun, !!! ranFunArgsY)))
+  } else {
+    expression(rlang::exec(ranFun, !!! ranFunArgsX))
+  }
 
-  if (nsim > 1000L){
+  if (nsim > 1000L) {
     future.apply::future_replicate(n = nsim, expr = eval(simExpr), simplify = FALSE, future.seed = TRUE)
   } else {
     replicate(n = nsim, expr = eval(simExpr), simplify = FALSE)
   }
 }
+
 
 #' Generate bootstrap distribution of model parameters to fitted incubate model.
 #'
@@ -1920,7 +1926,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
   ranFun <- getDist(object$distribution, type = "r")
   dFun <- getDist(object$distribution, type = "d")
   twoGroup <- isTRUE(object$twoGroup)
-  nObs <- if (twoGroup) lengths(object$data) else length(object$data)
+  nObs <- object$nobs
   # full untransformed parameter vector
   coefVect <- coef.incubate_fit(object, group = NULL, transformed = FALSE)
   del1_ind <- grep('delay1', names(coefVect)) # indices of coefficients that involve delay1, e.g. 'delay1' or 'delay1.y'
@@ -1996,7 +2002,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     delayCandDF$objValInv <- delayCandDF$objValInv - min(delayCandDF$objValInv, na.rm = TRUE)
     # scale to be between 0 and 1.
     # small smd_factor => high exponent => peaked distribution
-    delayCandDF$objValInv <- (delayCandDF$objValInv / (max(delayCandDF$objValInv, na.rm = TRUE) + .001))**(1L/(smd_factor+.01))
+    delayCandDF$objValInv <- (delayCandDF$objValInv / (max(delayCandDF$objValInv, na.rm = TRUE) + .001))^(1L/(smd_factor+.01))
     delayCandDF$cumSum0 <- cumsum(delayCandDF$objValInv)
     # scale cumSum0 to 1.
     delayCandDF$cumSum <- delayCandDF$cumSum0 / max(delayCandDF$cumSum0)
@@ -2115,7 +2121,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   logTransform <- isTRUE(startsWith(bs_infer, 'log'))
 
   twoGroup <- isTRUE(object$twoGroup)
-  nObs <- if (twoGroup) lengths(object$data) else length(object$data)
+  nObs <- object$nobs
 
   useBoot <- isTRUE(useBoot) || inherits(bs_data, 'boot')
 
