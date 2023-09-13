@@ -1,0 +1,69 @@
+---
+title: "Distributions with Delay"
+output: rmarkdown::html_vignette
+date: 2023-09-13
+vignette: >
+  %\VignetteIndexEntry{Distributions with Delay}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library("incubate")
+```
+
+The delayed exponential distribution and the delayed Weibull distribution
+are the foundational data models in the `incubate`-package.
+
+
+## Random right censoring
+The functions for random generation of data `rexp_delayed()` and `rweib_delayed()`
+have an option to produce data under a random right censoring scheme.
+Currently, only random right censoring under a uniform censoring distribution is supported.
+The censoring process $C$ is independent of the event process $X$.
+You provide the desired expected proportion of right censoring π via parameter `cens=`.
+This information determines the upper limit `Z` for the censoring process `U(0,Z)`.
+The expected proportion of censorings is $P(C<X)$. Due to the independence we get
+\[
+P(C<X) = ∫_0^∞ ∫_0^x f_{X,C}(x,c)dc dx = ∫_0^∞ ∫_0^x f_X(x) f_C(c) dc dx = ∫_0^∞ F_C(x) f_X(x)dx
+\]
+
+For a uniform censoring process with lower bound 0 and upper bound $Z$
+we have $F_C(x) = \frac{x-0}{Z-0} = \frac{x}{Z}$.
+
+### Exponential
+Substituting the density $f_X(x) = 𝟙_{x≥α} · λ \exp(-λ·(x-α))$ and using integration by parts
+we can solve for $Z$:
+\[
+π = P(C<X) = \frac{α + λ^{-1}}{Z} \qquad ⇔ \qquad Z = \frac{α + λ^{-1}}{π}
+\]
+
+As an example, to draw a random sample from a delayed exponential that on average has 30% right censorings,
+we can use the following call:
+```{r}
+#| label: rcens_exp_exmpl
+
+(x <- rexp_delayed(n = 20, delay1 = 3, rate1 = .2, cens = .3))
+class(x)
+sum(x[,2] == 0)/length(x)
+```
+
+
+### Weibull
+The density of delayed Weibull is
+$f_X(x) = 𝟙_{x≥α} · \frac{k}{σ} · (\frac{x-α}{σ})^{k-1} \exp(-(\frac{x-α}{σ})^k)$
+with shape parameter $k$ and scale parameter $σ$.
+Then, using integration by parts and using 
+$∫_0^∞ \exp(-a · x^b) dx = \frac{1}{b} a^{-1/b} · Γ(\frac{1}{b})$
+for $a=1$ and $b=k$, the shape parameter,
+we get
+\[
+π = P(C<X) = \frac{α + \frac{σ}{k}·Γ(\frac{1}{k})}{Z} \qquad ⇔ \qquad Z = \frac{α + \frac{σ}{k}·Γ(\frac{1}{k})}{π}
+\]
