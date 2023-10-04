@@ -1,7 +1,8 @@
 ---
 title: "Distributions with Delay"
-output: rmarkdown::html_vignette
+author: matthias.kuhn@tu-dresden.de
 date: 2023-09-13
+output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Distributions with Delay}
   %\VignetteEngine{knitr::rmarkdown}
