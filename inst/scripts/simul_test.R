@@ -16,9 +16,10 @@ library("incubate")
 #+ 1.1.9.9000 script is developed as part of the incubate package (not separate as part of the MS)
 #+ 1.1.9.9014 ties='density' as default now also for tests
 #+ 1.1.9.9016 avoid attributes, use transform() for Pearson/AD GOF tests
-#+ 1.2.1.9025: rename logrank P-values to logrank and logrank_pp (to avoid confusion with likelihood ratio (=LR) tests)
-#+ 1.2.1.9037: allow profiling for MPSE and all MLE-methods, at least with single group..
-stopifnot(packageVersion("incubate") >= "1.3.1.9038")
+#+ 1.3.0.9025: rename logrank P-values to logrank and logrank_pp (to avoid confusion with likelihood ratio (=LR) tests)
+#+ 1.3.0.9037: allow profiling for MPSE and all MLE-methods, at least with single group..
+#+ 1.3.0.9055: support random right-censoring in rexp_delayed() and rweib_delayed()
+stopifnot(packageVersion("incubate") >= "1.3.0.9055")
 cat('incubate package version: ', toString(packageVersion("incubate")), '\n')
 
 library("dplyr", warn.conflicts = FALSE)
@@ -286,42 +287,14 @@ doMCSim <- function(DGPsetting) {
                                                    x <- y <- 1 #dummy init
                                                    if (isExpon) {
                                                      stopifnot(dplyr::near(shape, 1L))
-                                                     x <- rexp_delayed(n = n_x, delay1 = delay_x, rate1 = 1/scale_x)
-                                                     y <- rexp_delayed(n = n_y, delay1 = delay_y, rate1 = 1/scale_y)
+                                                     x <- rexp_delayed(n = n_x, delay1 = delay_x, rate1 = 1/scale_x, cens = cens)
+                                                     y <- rexp_delayed(n = n_y, delay1 = delay_y, rate1 = 1/scale_y, cens = cens)
                                                    } else {
                                                      # weibull
-                                                     x <- rweib_delayed(n = n_x, delay1 = delay_x, scale1 = scale_x, shape1 = shape)
-                                                     y <- rweib_delayed(n = n_y, delay1 = delay_y, scale1 = scale_y, shape1 = shape)
+                                                     x <- rweib_delayed(n = n_x, delay1 = delay_x, scale1 = scale_x, shape1 = shape, cens = cens)
+                                                     y <- rweib_delayed(n = n_y, delay1 = delay_y, scale1 = scale_y, shape1 = shape, cens = cens)
                                                    }
 
-                                                   # apply censoring
-                                                   if (cens > 0) {
-                                                     # numbers per 10 observations
-                                                     cens10 <- round(cens * 10L)
-                                                     event10 <- c(rep_len(0, cens10), rep_len(1, 10-cens10))
-                                                     #sample(event10, size = n_x, replace = TRUE)
-
-                                                     # number of censorings
-                                                     censDigit_x <- (cens * n_x) %% 1
-                                                     censDigit_y <- (cens * n_y) %% 1
-
-                                                     censNbr_x <- if (censDigit_x == 0) {
-                                                       cens * n_x
-                                                     } else {
-                                                       c(floor(cens * n_x), ceiling(cens * n_x))[[1L+stats::rbinom(n=1, size = 1, prob = censDigit_x)]]
-                                                       #max(0, min(round(stats::rnorm(n=1L, mean = cens * n_x, sd = .2)), n_x - 4))
-                                                     }
-                                                     censNbr_y <- if (censDigit_y == 0) {
-                                                       cens * n_y
-                                                     } else {
-                                                       c(floor(cens * n_y), ceiling(cens * n_y))[[1L+stats::rbinom(n=1, size = 1, prob = censDigit_y)]]
-                                                     }
-                                                     event_x <- c(rep_len(0, censNbr_x), rep_len(1, n_x - censNbr_x))
-                                                     event_y <- c(rep_len(0, censNbr_y), rep_len(1, n_y - censNbr_y))
-
-                                                     x <- survival::Surv(x, event = event_x, type = "right")
-                                                     y <- survival::Surv(y, event = event_y, type = "right")
-                                                   } #fi
 
                                                    estimMethods %>%
                                                      dplyr::mutate(testDiffObj = list({
@@ -333,7 +306,8 @@ doMCSim <- function(DGPsetting) {
                                                                               method = method, profiled = profiled, R = R, type = "all",
                                                                               # log-rank test only once
                                                                               doLogrank = method == "MPSE" && !profiled)
-                                                         # bootstrap P-value for combined test: delay+rate only if the scale (=1/rate for exponential) is indeed different betw groups
+                                                         # bootstrap P-value for combined test for difference in parameters delay+rate
+                                                         #+only if the scale (=1/rate for exponential) is indeed different betw groups
                                                          if (testParamCombined) {
                                                            te_diff2 <- test_diff(x = x, y = y, distribution = "expon", param = c("delay1", "rate1"),
                                                                                  method = method, profiled = profiled, R = R, type = "bootstrap")
@@ -341,10 +315,10 @@ doMCSim <- function(DGPsetting) {
                                                            te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, "P", "bootstrap", .default = NA_real_)
                                                          }#fi
                                                        }, silent = TRUE)
-                                                       te_diff
-                                                     })) %>%
+
+                                                       te_diff })) %>%
                                                      # compact testDiff-list column: drop entries that did not work out!
-                                                     dplyr::filter(! is.null(testDiffObj)) %>%
+                                                     dplyr::filter(!is.null(testDiffObj)) %>%
                                                      # extract all P-values/R_eff in long format from each row in estimMethods-df!
                                                      #+dplyr::reframe (beta in v1.1.0) allows to summarize with more than one row
                                                      dplyr::reframe(method, profiled, R,

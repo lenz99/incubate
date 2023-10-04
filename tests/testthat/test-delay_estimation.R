@@ -2,7 +2,7 @@
 # testing the delay estimation,
 # in particular parameter estimates, convergence etc. from the model fit object
 
-test_that('Parameter extraction and transformation', {
+test_that("Parameter extraction and transformation", {
 
   # test getDist for parameter names:
   # on transformed scale (for optimization)
@@ -671,6 +671,54 @@ test_that("Fit delayed Exponentials", {
 })
 
 
+test_that("MLEw weights", {
+  #x <- rweib_delayed(n=17, delay1=3, shape1 = 1.8, scale1 = 2)
+  x <- c(4.45131763598452, 3.91106387305183, 4.73422157027539, 3.5065323295733,
+         4.50685111984981, 5.41220233600125, 3.80280886136814, 6.58136664599287,
+         4.8571880011661, 4.73014445686303, 3.37456255179424, 7.58997290636633,
+         4.78486514263335, 4.52811892646271, 4.18308346365633, 3.63462043493189,
+         5.63133255416355)
+  #y <- rexp_delayed(n=27, delay1 = 5, rate1 = .2)
+  y <- c(14.9259423460336, 5.58983775696809, 7.65058459481224, 8.1183247056364,
+    10.211537615186, 7.20604692585766, 7.14108166052029, 7.2677096282132,
+    6.35810405284824, 15.790747636299, 10.8565749412165, 18.2515582901644,
+    5.0227449974524, 6.52370074531063, 6.28239889163524, 21.7967405534329,
+    9.54569350907063, 29.3441420126904, 5.00232847640291, 7.13232375215739,
+    7.75123107712716, 5.29344607556392, 6.73610597383231, 6.61256539868191,
+    6.80225579068065, 5.86656556464732, 36.9164144135734)
+
+  # check MLEw-fits in 1- and 2-group setting:
+  # depending on slight minute changes in the data the fit can deteriorte
+  testMLEwFits <- function(x, y) {
+    fmw1x <- delay_model(x = x, method = "MLEw")
+    fmw1y <- delay_model(x = y, method = "MLEw")
+    fmw2 <- delay_model(x = x, y = y, method = "MLEw")
+
+    expect_equal(coef(fmw2, group = "x"), expected = coef(fmw1x), tolerance = 1e-4)
+    expect_equal(coef(fmw2, group = "y"), expected = coef(fmw1y), tolerance = 1e-4)
+
+    # weights function W3 coincides when used alone or when used in two group setting
+    purrr::walk(.x = c(.1, .5, 1, 1.5, 2, 5),
+                .f = ~ expect_equal(
+                  rlang::env_get(rlang::fn_env(fmw2$objFun), nm = "weights")$W3[["x"]](.x),
+                  expected = rlang::env_get(rlang::fn_env(fmw1x$objFun), nm = "weights")$W3[["x"]](.x)
+                ))
+    purrr::walk(.x = c(.1, .5, 1, 1.5, 2, 5),
+                .f = ~expect_equal(
+                  rlang::env_get(rlang::fn_env(fmw2$objFun), nm = "weights")$W3[["y"]](.x),
+                  expected = rlang::env_get(rlang::fn_env(fmw1y$objFun), nm = "weights")$W3[["x"]](.x)
+                ))
+  }
+
+  # tiny changes can have an impact on the fit under MLEw
+  testMLEwFits(x = x, y = y)
+  testMLEwFits(x = x, y = y + rnorm(length(y), sd = .000001))
+  testMLEwFits(x = x, y = y + rnorm(length(y), sd = .00001))
+  testMLEwFits(x = x, y = y + rnorm(length(y), sd = .0001))
+
+})
+
+
 test_that("Fit delayed exponentials with censoring", {
 
 
@@ -696,18 +744,17 @@ test_that("Fit delayed exponentials with censoring", {
   #plot(fmCR1_mlewp)
 
 
-  expect_named(fmCR1_mpse, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
-                                        "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+  slotNames <- c("data", "nobs", "distribution", "twoPhase", "twoGroup", "method", "bind",
+                 "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer")
+  expect_named(fmCR1_mpse, expected = slotNames)
   expect_named(fmCR1_mpse$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1_mpse$cens$isSurv)
 
-  expect_named(fmCR1_mlec, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
-                                        "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+  expect_named(fmCR1_mlec, expected = slotNames)
   expect_named(fmCR1_mlec$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1_mlec$cens$isSurv)
 
-  expect_named(fmCR1_mlewp, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
-                                         "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+  expect_named(fmCR1_mlewp, expected = slotNames)
   expect_named(fmCR1_mlewp$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1_mlewp$cens$isSurv)
 
@@ -732,8 +779,7 @@ test_that("Fit delayed exponentials with censoring", {
   expect_equal(coef(fmCR1w_mlenp), expected = coef(fmCR1w_mlen), tolerance = 1e-3)
   expect_equal(fmCR1w_mlenp$criterion, expected = fmCR1w_mlen$criterion, tolerance = 1e-4)
 
-  expect_named(fmCR1w_mlewp, expected = c("data", "distribution", "twoPhase", "twoGroup", "method", "bind",
-                                          "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+  expect_named(fmCR1w_mlewp, expected = slotNames)
   expect_named(fmCR1w_mlewp$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1w_mlewp$cens$isSurv)
 

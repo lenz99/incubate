@@ -8,7 +8,7 @@
 #' @importFrom MASS boxcox
 #' @importFrom purrr chuck
 #' @importFrom rlang .data `%||%`
-#' @importFrom survival Surv
+#' @importFrom survival Surv is.Surv
 #' @importFrom stats coef simulate update
 #' @importFrom tibble tibble
 #' @name incubate

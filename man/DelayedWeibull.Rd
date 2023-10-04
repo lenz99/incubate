@@ -64,7 +64,8 @@ rweib_delayed(
   scale2 = 1,
   delay = delay1,
   shape = shape1,
-  scale = scale1
+  scale = scale1,
+  cens = 0
 )
 
 mweib_delayed(

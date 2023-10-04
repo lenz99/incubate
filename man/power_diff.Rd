@@ -16,7 +16,7 @@ power_diff(
   power = NULL,
   nPowerSim = 1600,
   R = 201,
-  nRange = c(5, 50),
+  nRange = c(5, 150),
   verbose = 0
 )
 }

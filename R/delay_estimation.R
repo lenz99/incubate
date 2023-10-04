@@ -652,7 +652,7 @@ objFunFactory <- function(x, y = NULL,
   } else {
     # two group!
     #XXX exponential && profiled: indices are not correct for two groups, yet!!
-    #XXX continue here!! (this would allow to run simul_test.R!) #YYY already done?!
+    #(this would allow to run simul_test.R!) #YYY already done?!
     if (is.null(bind)) {
       if (distribution == 'exponential') {
         if (profiled) list(x = c(1L), y = c(2L)) else list(x = c(1L, 2L), y = c(3L, 4L))

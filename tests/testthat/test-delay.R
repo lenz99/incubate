@@ -256,7 +256,7 @@ test_that('(restricted) mean survival time of delayed distributions', {
 })
 
 
-test_that("Partial derivatives of CDF", {
+test_that("Partial derivatives of CDF of delayed distribution", {
 
   tVec <- c(4, 4.5, seq.int(from = 5, to = 8))
 
@@ -294,4 +294,52 @@ test_that("Partial derivatives of CDF", {
   expect_equal(unname(pweib_delayed(q = tVec, delay1 = delay1, shape1 = shape1, scale1 = scale1, grad = TRUE)),
                expected = t(attr(nd_wb, which = "gradient")),
                tolerance = 1e-6)
+})
+
+
+test_that("Censored random samples from delayed distributions", {
+  set.seed(12345)
+  settingsDF <- expand.grid(delay1 = c(0, 2, 5, 10, 25), rate1 = c(0.001, .5, 1, 2, 5), cens = c(0, .1, .2, .3))
+  settingsDF$censObs <- purrr::pmap_dbl(.l = settingsDF,
+                                        .f = function(...) {
+                                          ds <- rexp_delayed(n = 13500, ...)
+                                          if (survival::is.Surv(ds)) {
+                                            1L - sum(ds[,2]) / length(ds)
+                                          } else {
+                                            stopifnot(is.numeric(ds))
+                                            0
+                                          }
+                                        })
+  settingsDF$censDiff <- settingsDF$cens - settingsDF$censObs
+
+  # all random draws with cens=0 have no observed censorings
+  expect_identical(settingsDF[settingsDF$cens == 0, "censObs"], expected = rep_len(0, length.out = sum(settingsDF$cens == 0)))
+  sDFAgg <- stats::aggregate(settingsDF, by = censDiff ~ rate1 + cens, FUN = mean)
+  for (i in seq_len(NROW(sDFAgg))) {
+    expect_equal(sDFAgg$censDiff[i], expected = 0, tolerance = sDFAgg$cens[i]/20)
+  }
+
+
+  # Weibull with censorings
+  settingsDF <- expand.grid(delay1 = c(0, 2, 5, 10, 25), shape1 = c(0.1, 0.25, .5, 1, 2), scale1 = c(.1, .5, 1, 5), cens = c(0, .1, .2, .3))
+  settingsDF$censObs <- purrr::pmap_dbl(.l = settingsDF,
+                                        .f = function(...) {
+                                          ds <- rweib_delayed(n = 17500, ...)
+                                          if (survival::is.Surv(ds)) {
+                                            1L - sum(ds[,2]) / length(ds)
+                                          } else {
+                                            stopifnot(is.numeric(ds))
+                                            0
+                                          }
+                                        })
+  # deviation from expected censoring proportion
+  settingsDF$censDiff <- settingsDF$cens - settingsDF$censObs
+
+  # all random draws with cens=0 have no observed censorings
+  expect_identical(settingsDF[settingsDF$cens == 0, "censObs"], expected = rep_len(0, length.out = sum(settingsDF$cens == 0)))
+
+  sDFAgg <- stats::aggregate(settingsDF, by = censDiff ~ shape1 + scale1 + cens, FUN = mean)
+  for (i in seq_len(NROW(sDFAgg))) {
+    expect_equal(sDFAgg$censDiff[i], expected = 0, tolerance = sDFAgg$cens[i]/17 + exp(-(sDFAgg$shape1[i]*7.1)))
+  }
 })

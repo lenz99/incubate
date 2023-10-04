@@ -124,8 +124,8 @@ prepResponseVar <- function(x0, y0=NULL, simplify = TRUE) {
   if (missing(x0)) stop("Input for x0 is mandatory!", call. = FALSE)
   stopifnot(is.numeric(x0),  is.null(y0) || is.numeric(y0))
 
-  isSurv.x <- inherits(x0, what = "Surv")
-  isSurv.y <- inherits(y0, what = "Surv")
+  isSurv.x <- is.Surv(x0)
+  isSurv.y <- is.Surv(y0)
 
   # check if both are numeric, non-Surv (also y0=NULL)
   if (! isSurv.x && ! isSurv.y) {
@@ -136,10 +136,10 @@ prepResponseVar <- function(x0, y0=NULL, simplify = TRUE) {
   # from here on: there are some Surv-objects
 
   # check if all are observed
-  allobsvd.x <- ! isSurv.x || all(x0[, "status"] == 1)
-  allobsvd.y <- ! isSurv.y || all(y0[, "status"] == 1)
+  allobsvd.x <- !isSurv.x || all(x0[, "status"] == 1)
+  allobsvd.y <- !isSurv.y || all(y0[, "status"] == 1)
 
-  if (simplify && allobsvd.x && allobsvd.y){
+  if (simplify && allobsvd.x && allobsvd.y) {
     return(list(x=if (isSurv.x) x0[,1L] else x0, y=if (isSurv.y) y0[,1L] else y0))
   }
 
@@ -177,7 +177,8 @@ prepResponseVar <- function(x0, y0=NULL, simplify = TRUE) {
     stopifnot( is.character(survType.y), nzchar(survType.y) )
     if (! survType.y %in% SURV_TYPES_ALLOWED ){
       stop("Survival-objects must be of type {",
-           paste(SURV_TYPES_ALLOWED, collapse = ", "), "}!", call. = FALSE)
+           paste(SURV_TYPES_ALLOWED, collapse = ", "), "}!",
+           call. = FALSE)
     }
 
     return(list(x = switch(survType.y,

@@ -207,10 +207,20 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 
   stopifnot(all(is.finite(delay1), is.finite(rate1)))
 
+  if (!is.numeric(cens) || length(cens) > 1L) {
+    stop("cens= is expected proportion of right censored observations!", call. = FALSE)
+  }
+
+  if (!is.finite(cens) || cens >= 1 || cens < 0) {
+    stop("cens= argument invalid!", call. = FALSE)
+  }
+
   # single phase
   # check for easy case: only a single delay
   if (is.null(delay2)) {
-    if (!is.null(rate2)) warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
+    if (!is.null(rate2)) {
+      warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
+    }
 
     evTime <- delay1 + stats::rexp(n = n, rate = rate1)
     if (near(cens, 0)) {
@@ -220,7 +230,7 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
       censTime <- stats::runif(n = n, max = (delay1 + 1/rate1)/cens)
       evStatus <- rep_len(1, length.out = n)
       evStatus[which(censTime < evTime)] <- 0
-      return(survival::Surv(evTime, event = evStatus, type = "right"))
+      return(Surv(evTime, event = evStatus, type = "right"))
     }
   }
 
@@ -407,19 +417,26 @@ pweib_delayed <- function(q, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
   if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
   if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
 
-  grad <- isTRUE(grad)
+  lower.tail <- isTRUE(lower.tail[1L])
+  log.p <- isTRUE(log.p[1L])
+  grad <- isTRUE(grad[1L])
 
-  if (!all(is.finite(delay1), is.finite(shape1), is.finite(scale1))) {
+
+  if (any(is.null(delay1), is.null(shape1), is.null(scale1)) || !all(is.finite(delay1), is.finite(shape1), is.finite(scale1))) {
     stop("All arguments for delay1=, shape1= and scale1= must be finite!", call. = FALSE)
   }
 
   # check for easy case when only a single delay is given
   if (is.null(delay2)) {
-    if (!is.null(shape2) || ! missing(scale2)) warning("Arguments shape2= and/or scale2= are ignored, as argument delay2= is not set.", call. = FALSE)
+    if (!is.null(shape2) || ! missing(scale2)) {
+      warning("Arguments shape2= and/or scale2= are ignored, as argument delay2= is not set.", call. = FALSE)
+    }
 
     return(
       if (grad) {
-        if (log.p) warning("Argument 'log.p=TRUE' is ignored here for gradient.", call. = FALSE)
+        if (log.p) {
+          warning("Argument 'log.p=TRUE' is ignored here for gradient.", call. = FALSE)
+        }
 
         local({
           qValidInd <- -which(q <= delay1 | shape1 <= 0 | scale1 <= 0) #negative ind of invalid
@@ -537,18 +554,42 @@ qweib_delayed <- function(p, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
 #' @rdname DelayedWeibull
 #' @export
 rweib_delayed <- function(n, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 = NULL, scale2 = 1,
-                          delay = delay1, shape = shape1, scale = scale1){
+                          delay = delay1, shape = shape1, scale = scale1, cens = 0) {
   if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
   if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
   if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
 
-  stopifnot( all(is.finite(delay1), is.finite(shape1), is.finite(scale1)) )
+  stopifnot(all(is.finite(delay1), is.finite(shape1), is.finite(scale1)))
+
+
+  if (!is.numeric(cens) || length(cens) > 1L) {
+    stop("cens= is expected proportion of right censored observations!", call. = FALSE)
+  }
+
+  if (!is.finite(cens) || cens >= 1 || cens < 0) {
+    stop("cens= argument invalid!", call. = FALSE)
+  }
 
   # single phase
   # check for easy case: only a single delay phase
-  if ( is.null(delay2) ){
-    if (!is.null(shape2) || ! missing(scale2)) warning("Arguments shape2= and/or scale2= are ignored, as argument delay2= is not set.", call. = FALSE)
-    return(delay1 + stats::rweibull(n = n, shape = shape1, scale = scale1))
+  if (is.null(delay2)) {
+    if (!is.null(shape2) || ! missing(scale2)) {
+      warning("Arguments shape2= and/or scale2= are ignored, as argument delay2= is not set.", call. = FALSE)
+    }
+
+    evTime <- delay1 + stats::rweibull(n = n, shape = shape1, scale = scale1)
+    if (near(cens, 0)) {
+      return(evTime)
+    } else {
+      # independent uniform censoring process U(0, Z) where Z is chosen as to give expected proportion of right-censoring
+      # with shape1 minute the upper bound of the uniform support explodes and hence few censorings
+      #+little bias upward for shape1 parameter helps to prop up censoring level in these cases
+      censTime <- stats::runif(n = n, max = (delay1 + scale1/max(.05, shape1) * gamma(1/max(.05, shape1)))/cens)
+      evStatus <- rep_len(1, length.out = n)
+      evStatus[which(censTime < evTime)] <- 0
+      return(Surv(evTime, event = evStatus, type = "right"))
+    }
+
   }
 
   # two phases

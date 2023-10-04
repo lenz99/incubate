@@ -4,6 +4,7 @@ suppressPackageStartupMessages(library("future.callr"))
 suppressPackageStartupMessages(library("future.apply"))
 suppressPackageStartupMessages(library("survival"))
 
+
 test_that('Structure of test objects.', code = {
   set.seed(123)
 
@@ -95,12 +96,13 @@ test_that("Bootstrap test on difference in delay for two exponential fits", code
 
   # increasing effect
   te_diff_delays <- purrr::map(purrr::set_names(c(0, 9, 19)),
-                               ~ test_diff(x = x + .x, y = y, param = "delay1", type = 'bootstrap', R = 399))
+                               .f = ~ test_diff(x = x + .x, y = y, param = "delay1", type = 'bootstrap', R = 399))
 
-  te_diff_delays_P_bs <- purrr::map_dbl(te_diff_delays, ~ purrr::chuck(., "P", "bootstrap"))
+  te_diff_delays_P_bs <- purrr::map_dbl(te_diff_delays,
+                                        .f = ~ purrr::chuck(., "P", "bootstrap"))
 
   # null model (no effect) has a high P-value
-  expect_gt(te_diff_delays_P_bs[['0']], expected = .1)
+  expect_gt(te_diff_delays_P_bs[["0"]], expected = .1)
 
   # the bigger the effect (=difference in delay) the smaller the P-value
   expect_true(all(diff(te_diff_delays_P_bs) < 0L))
@@ -109,19 +111,21 @@ test_that("Bootstrap test on difference in delay for two exponential fits", code
                 y = te_diff_delays_P_bs),
             expected = -.67)
 
+
   #test effect of sample size: increase n and power goes up.
   set.seed(123456)
-  # data with difference in delay by 2.5 time units
+  # data with difference in delay by 2 time units
   #+but different sample sizes
-  xs <- purrr::map(purrr::set_names(c(9, 20, 32, 37)),
-                   ~ rexp_delayed(., delay1 = 6.5, rate1 = .07))
+  xs <- purrr::map(purrr::set_names(c(13, 20, 32, 37)),
+                   .f = ~ rexp_delayed(.x, delay1 = 7, rate1 = .07))
 
-  ys <- purrr::map(purrr::set_names(c(10, 19, 30, 38)),
-                   ~ rexp_delayed(., delay1 = 9, rate1 = .07))
+  ys <- purrr::map(purrr::set_names(c(13, 20, 32, 37)),
+                   .f = ~ rexp_delayed(.x, delay1 = 9, rate1 = .07))
 
   te_diff_delays_n <- purrr::map2(.x = xs, .y = ys,
-                                  .f = ~ suppressWarnings(test_diff(x = .x, y = .y, param = "delay1", type = 'bootstrap', R = 399)))
+                                  .f = ~ suppressWarnings(test_diff(x = .x, y = .y, param = "delay1", type = "bootstrap", R = 403)))
 
+  # sample size goes up and P-values for difference in delay1 go down (true difference is 2)
   expect_lt(cor(x = as.integer(names(te_diff_delays_n)),
                 y = purrr::map_dbl(te_diff_delays_n, ~ purrr::chuck(., "P", "bootstrap"))),
             expected = -.67)
@@ -130,11 +134,24 @@ test_that("Bootstrap test on difference in delay for two exponential fits", code
 })
 
 
+test_that("Bootstrap test: sensitive to chosen method", code = {
+  x <- rexp_delayed(n=37, delay1 = 5, rate1 = .63)
+  y <- rexp_delayed(n=39, delay1 = 7, rate1 = .51)
+
+  teDiffs <- purrr::map(.x = c("MPSE", "MLEn", "MLEc"), #, "MLEw"),
+                       .f = ~test_diff(x = x, y = y, param="delay1", type = "bootstrap", method = .x, profiled = TRUE))
+
+  # bootstrap P-values vary depending on chosen method
+  expect_gt(stats::sd(purrr::map_dbl(teDiffs, c("P", "bootstrap"))), expected = 0)
+
+})
+
+
 
 test_that("Bootstrap test for difference in delay under H0 (no difference in delay)", code = {
 
   testthat::skip_on_cran()
-  testthat::skip(message = 'Too long to run every time!')
+  testthat::skip(message = "Too long to run every time!")
 
   future::plan(future.callr::callr, workers = 3L)
 
@@ -158,7 +175,7 @@ test_that("Bootstrap test for difference in delay under H0 (no difference in del
 
   testres_P_H0 <- testres_P_H0[is.finite(testres_P_H0)]
 
-  # KS-test does not reject H0: uniform distribution
+  # KS-test does not reject H0 at sig.level = 0.2: uniform distribution
   expect_gt(suppressWarnings(stats::ks.test(x = testres_P_H0, y = "punif")$p.value), expected = .2)
 
   future::plan(future::sequential)
@@ -168,7 +185,6 @@ test_that("Bootstrap test for difference in delay under H0 (no difference in del
 
 
 test_that("Moran GOF-test", code = {
-  library("survival")
 
   testthat::skip_on_cran()
 
