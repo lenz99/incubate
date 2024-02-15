@@ -39,7 +39,7 @@ test_diff(
 
 \item{type}{character. Which type of tests to perform?}
 
-\item{doLogrank}{logical. In any case do log-rank based tests?}
+\item{doLogrank}{logical. Do log-rank tests?}
 
 \item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 

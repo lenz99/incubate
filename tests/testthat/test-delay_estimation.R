@@ -671,7 +671,7 @@ test_that("Fit delayed Exponentials", {
 })
 
 
-test_that("MLEw weights", {
+test_that("MLEw weights", code = {
   #x <- rweib_delayed(n=17, delay1=3, shape1 = 1.8, scale1 = 2)
   x <- c(4.45131763598452, 3.91106387305183, 4.73422157027539, 3.5065323295733,
          4.50685111984981, 5.41220233600125, 3.80280886136814, 6.58136664599287,
@@ -688,7 +688,7 @@ test_that("MLEw weights", {
     6.80225579068065, 5.86656556464732, 36.9164144135734)
 
   # check MLEw-fits in 1- and 2-group setting:
-  # depending on slight minute changes in the data the fit can deteriorte
+  # depending on slight minute changes in the data the fit can deteriorate
   testMLEwFits <- function(x, y) {
     fmw1x <- delay_model(x = x, method = "MLEw")
     fmw1y <- delay_model(x = y, method = "MLEw")
@@ -697,7 +697,7 @@ test_that("MLEw weights", {
     expect_equal(coef(fmw2, group = "x"), expected = coef(fmw1x), tolerance = 1e-4)
     expect_equal(coef(fmw2, group = "y"), expected = coef(fmw1y), tolerance = 1e-4)
 
-    # weights function W3 coincides when used alone or when used in two group setting
+    # weights function W3 coincides betw. when used alone or when used in two group setting
     purrr::walk(.x = c(.1, .5, 1, 1.5, 2, 5),
                 .f = ~ expect_equal(
                   rlang::env_get(rlang::fn_env(fmw2$objFun), nm = "weights")$W3[["x"]](.x),
@@ -708,7 +708,7 @@ test_that("MLEw weights", {
                   rlang::env_get(rlang::fn_env(fmw2$objFun), nm = "weights")$W3[["y"]](.x),
                   expected = rlang::env_get(rlang::fn_env(fmw1y$objFun), nm = "weights")$W3[["x"]](.x)
                 ))
-  }
+  }#fn
 
   # tiny changes can have an impact on the fit under MLEw
   testMLEwFits(x = x, y = y)
@@ -1249,12 +1249,13 @@ test_that("Fit delayed Weibull", {
                                  bind = "shape1")
   expect_identical(fd_wb2bb_MLEw_P$optimizer$convergence, expected = 0L)
   expect_identical(names(coef(fd_wb2bb_MLEw_P)), c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
+  # check that MLEw and MLEc coefficients are "roughly" similar
   # MLEw can be sometimes far off
-  expect_equal(coef(fd_wb2bb_MLEw_P), coef(fd_wb2bb_MLEc_P), tolerance = .1) # MLEw and MLEc coefficients are only rougly similar
+  expect_equal(coef(fd_wb2bb_MLEw_P), coef(fd_wb2bb_MLEc_P), tolerance = .1)
 })
 
 
-test_that("Confidence intervals", {
+test_that("Confidence intervals", code = {
   testthat::skip_on_cran()
   set.seed(1234)
 

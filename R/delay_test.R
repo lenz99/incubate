@@ -626,22 +626,23 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 #' @param param character. Names of parameters to test difference for. Default value is `'delay1'`.
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param type character. Which type of tests to perform?
-#' @param doLogrank logical. In any case do log-rank based tests?
+#' @param doLogrank logical. Do log-rank tests?
 #' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param chiSqApprox logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
-test_diff <- function(x, y = stop('Provide data for group y!'), distribution = c("exponential", "weibull"), twoPhase = FALSE,
-                      method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profiled = method == 'MLEw',
-                      ties = c('density', 'equidist', 'random', 'error'),
+test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c("exponential", "weibull"), twoPhase = FALSE,
+                      method = c("MPSE", "MLEn", "MLEw", "MLEc"), profiled = method == "MLEw",
+                      ties = c("density", "equidist", "random", "error"),
                       param = "delay1",
-                      type = c('all', 'bootstrap', 'GOF', 'moran', 'pearson', 'logrank', 'LR'), doLogrank = TRUE,
+                      type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LR"), doLogrank = TRUE,
                       R = 400,
                       chiSqApprox = FALSE, verbose = 0) {
 
   # the bootstrap P-value is identical for different methods!
   #XXX continue here: all use criterion=TRUE which is the same for MLEx fits
+
   # setup ----
   distribution <- match.arg(arg = distribution)
   type <- match.arg(arg = type)
@@ -715,8 +716,8 @@ test_diff <- function(x, y = stop('Provide data for group y!'), distribution = c
          stop("This type of test is not supported!", call. = FALSE)
   )
 
-  # separate control for logrank-based tests
-  testMask['logrank'] <- doLogrank
+  # separate switch for logrank flag
+  testMask["logrank"] <- isTRUE(doLogrank[1L])
 
 
   # test statistic ----

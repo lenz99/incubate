@@ -18,7 +18,6 @@ Description: Fit parametric models for time-to-event data that show an initial
 License: LGPL (>= 3)
 Encoding: UTF-8
 LazyData: true
-Roxygen: list(markdown = TRUE)
 Imports:
     future (>= 1.21),
     future.apply (>= 1.6),
@@ -41,7 +40,8 @@ Suggests:
     withr
 URL: https://gitlab.com/imb-dev/incubate/
 BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
-RoxygenNote: 7.3.2
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
 Config/testthat/edition: 3
 Depends: 
     R (>= 3.5.0)
