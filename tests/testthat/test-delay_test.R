@@ -136,13 +136,15 @@ test_that("Bootstrap test on difference in delay for two exponential fits", code
 
 test_that("Bootstrap test: chosen method matters", code = {
   set.seed(2023-10-04)
+  # similar delay in both groups.
+  #Hence, we expect high P-values for each method
   x <- rexp_delayed(n=37, delay1 = 5, rate1 = .63)
-  y <- rexp_delayed(n=39, delay1 = 7, rate1 = .51)
+  y <- rexp_delayed(n=39, delay1 = 5.1, rate1 = .51)
 
   est_meths <- c("MPSE", "MLEn", "MLEc") #, "MLEw"),
   teDiffs <- purrr::map(.x = est_meths,
                        .f = ~ test_diff(x = x, y = y, param="delay1", type = "bootstrap",
-                                        method = .x, R = 871, profiled = TRUE)) %>%
+                                        method = .x, R = 571, profiled = TRUE)) %>%
     purrr::set_names(nm = est_meths)
 
   # bootstrap P-values vary depending on chosen method

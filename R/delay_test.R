@@ -640,9 +640,6 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                       R = 400,
                       chiSqApprox = FALSE, verbose = 0) {
 
-  # the bootstrap P-value is identical for different methods!
-  #XXX continue here: all use criterion=TRUE which is the same for MLEx fits
-
   # setup ----
   distribution <- match.arg(arg = distribution)
   type <- match.arg(arg = type)
@@ -737,12 +734,14 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     fit1 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase,
                         method = method, profiled = profiled, ties = ties)
 
-    if (is.null(fit0) || is.null(fit1)) return(invisible(NULL))
+    if (is.null(fit0) || is.null(fit1) ||
+        is.null(fit0$optimizer) || is.null(fit1$optimizer) ||
+        is.null(fit0$optimizer$valOpt) || is.null(fit1$optimizer$valOpt)) return(invisible(NULL))
 
-    # if the more restricted model (fit0) yields better fit (=lower criterion) than the more general model (fit1)
+    # if the more restricted model (fit0) yields better fit (=lower criterion in optimization) than the more general model (fit1)
     #+we are in trouble, possibly due to non-convergence, e.g., optim's convergence code 52
     #+we re-fit the general fit1 again using parameter-values from fit0
-    if (fit0[["criterion"]] + TOL_CRIT < fit1[["criterion"]] &&
+    if (fit0[["optimizer"]][["valOpt"]] + TOL_CRIT < fit1[["optimizer"]][["valOpt"]] &&
         !is.null(fit1oa <- purrr::pluck(fit1, "optimizer", "optim_args"))) {
       if (verbose > 0) warning("Restricted model with better fit (=smaller criterion) than unrestricted model.",
                                call. = FALSE)
@@ -758,8 +757,8 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       fit1oa[['control']][['parscale']] <- scalePars(parV = fit1oa[["par"]])
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
-      if (is.null(fit1) || fit0[["criterion"]] + TOL_CRIT < fit1[["criterion"]]) {
-        warning("Restricted model with better fit (=smaller criterion) than unrestricted model even after refit of the unrestricted model!",
+      if (is.null(fit1) || fit0[["optimizer"]][["valOpt"]] + TOL_CRIT < fit1[["optimizer"]][["valOpt"]]) {
+        warning("Restricted model with better fit (=smaller criterion in optimization) than unrestricted model even after refit of the unrestricted model!",
                 call. = FALSE)
         return(invisible(NULL))
       }
@@ -773,7 +772,11 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
     #   2. fit1 has low value (=good fit)
-    list(val = 2L * max(0L, fit0[["criterion"]] - fit1[["criterion"]]),
+    #
+    # we evaluate the fit with the criterion (e.g., MLE for all MLE-methods)
+    # could also think about the optimization criterion
+    # max(0L, fit0[["optimizer"]][["valOpt"]] - fit1[["optimizer"]][["valOpt"]]),
+    list(val = 2 * max(0, fit0[["criterion"]] - fit1[["criterion"]]),
          fit0 = fit0, fit1 = fit1)
   }#fn testStat
 
