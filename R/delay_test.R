@@ -663,7 +663,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   ties <- match.arg(arg = ties)
 
   if (method != "MPSE" && type %in% c("moran", "pearson", "GOF")) {
-    warning("Goodness-of-fit (GOF) tests are only supported with MPSE currently!")
+    warning("Goodness-of-fit (GOF) tests are only supported with MPSE currently!", call. = FALSE)
     return(invisible(NULL))
   }
 
@@ -680,7 +680,8 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
   # parameters to test differences
   if (any(grepl(pattern = "_tr", param, fixed = TRUE))) {
-    stop("Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.", call. = FALSE)
+    stop("Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.",
+         call. = FALSE)
   }
 
   # translate convenience names (for single phase) to canonical names
@@ -740,7 +741,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
     # if the more restricted model (fit0) yields better fit (=lower criterion) than the more general model (fit1)
     #+we are in trouble, possibly due to non-convergence, e.g., optim's convergence code 52
-    #+we refit the general fit1 again using parameter-values from fit0
+    #+we re-fit the general fit1 again using parameter-values from fit0
     if (fit0[["criterion"]] + TOL_CRIT < fit1[["criterion"]] &&
         !is.null(fit1oa <- purrr::pluck(fit1, "optimizer", "optim_args"))) {
       if (verbose > 0) warning("Restricted model with better fit (=smaller criterion) than unrestricted model.",
@@ -859,7 +860,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                "Proportion of conv = 52: {as_percent(length(which(fit0_conv == 52))/length(fit0_conv))}", .sep = "\n"),
           "\n")
       t0_dist <- t0_dist[1L, , drop=TRUE] #retain only ts_boot[['val']]
-    }
+    } #fi
     t0_dist <- t0_dist[is.finite(t0_dist)]
 
     if (chiSqApprox && length(t0_dist) > 7L) {

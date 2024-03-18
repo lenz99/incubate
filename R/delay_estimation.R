@@ -826,16 +826,17 @@ objFunFactory <- function(x, y = NULL,
     res
   }
 
-  # extract parameter vector for a specified group
+  # Extract parameter vector for a specified group
   # if parameters are for optimization and transformation is requested, profiling is undone (if relevant)
   # @param group character. Extract parameters for the given group. If NULL, keep all parameters.
   # @param isOpt logical. Are the given parameters on optimization function scale?
+  # @param transform logical. Transform parameters?
   # @param named logical. Extract parameters as named vector?
   # @return parameter vector
   extractPars <- function(parV, group = NULL, isOpt = TRUE, transform = FALSE, named = FALSE) {
     if (is.null(parV)) return(NULL)
     # result is on optimization scale?
-    resIsOpt <- xor(isOpt, transform)
+    resIsOpt <- xor(isOpt, transform) #TRUE if different
 
     # basically, ignore group= when single group: use always canonical "x" then
     if (!twoGroup) group <- "x"
@@ -1126,7 +1127,7 @@ objFunFactory <- function(x, y = NULL,
 
   # calculate the log-likelihood, either naive, weighted or in corrected form.
   # What precisely is calculated depends on method but also on the profiled-flag.
-  # @param criterion logical. if `criterion=TRUE`, then pars are on original scale and the proper log-likelihood is returned
+  # @param criterion logical. If `TRUE`, then pars are on original scale and the proper log-likelihood is returned
   getLogLik <- function(pars, group, criterion = FALSE) {
 
     # access observations of group
@@ -1149,21 +1150,20 @@ objFunFactory <- function(x, y = NULL,
 
     if (criterion) {
       # criterion = proper log-likelihood
-      return(
-        if (isSurv) {
-          #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
-          switch (attr(obs, which = "type", exact = TRUE),
-                  right = {
-                    sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
-                        rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) )
-                  },
-                  stop("This type of censoring is not supported!", call. = FALSE)
-          )
-        } else {
-          # numeric response, non-Surv
-          sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
-        } #esle
-      )
+      retV <- if (isSurv) {
+        #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
+        switch (attr(obs, which = "type", exact = TRUE),
+                right = {
+                  sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
+                      rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) )
+                },
+                stop("This type of censoring is not supported!", call. = FALSE)
+        )
+      } else {
+        # numeric response, non-Surv
+        sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+      } #esle
+      return(retV)
     } #fi criterion
 
 
@@ -1172,7 +1172,7 @@ objFunFactory <- function(x, y = NULL,
     #+method
     #+profiled
     n <- length(obs)
-    stopifnot(n > 1L)
+    stopifnot(!criterion, n > 1L)
     # shape parameter (candidate)
     k <- if (distribution == 'weibull') pars.gr[[2L]] else 1L
 
@@ -1234,7 +1234,7 @@ objFunFactory <- function(x, y = NULL,
                  sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)),
                      -penF(k))
                } #esle
-             }
+             } #esle
            },
 
            # weighted MLE
@@ -1375,7 +1375,7 @@ objFunFactory <- function(x, y = NULL,
                                        yleft = NA, yright = NA,
                                        # values where to interpolate
                                        xout = ind_hrcens)$y
-      } #fi
+      } #fi hrcens
 
       diff(c(0L, h, 1L))
 
@@ -1393,31 +1393,32 @@ objFunFactory <- function(x, y = NULL,
 
       obsVals <- if (isSurv) obs[tig$tieGrp[, "startInd"], 1L] else obs[tig$tieGrp[, "startInd"]]
 
-      cumDiffs[tig[["cumDiffInd"]]] <- switch(ties.,
-                                              density = {
-                                                # use density instead of diff of CDF for tied observation pairs
-                                                rep.int(
-                                                  # take first observation per tie-group
-                                                  rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obsVals), pars.gr)),
-                                                  #tig$tieGrp[, "len"]-1L # number of repeats per tie group
-                                                  times = tig$tieGrp[, "len"]-1L)
-                                              },
-                                              # "equispaced" for CDF-backtransformed using given parameters, then equispaced spacings across tie groups
-                                              # we keep using a standard density strategy for fitting, but can request another tie-strategy for evaluating the MPSE-criterion,
-                                              #e.g., for Moran's test
-                                              equispaced = {
-                                                # per tie group, use equal spacings in transformed space
-                                                rep.int(diff(rlang::exec(getDist(distribution, type = "cdf"),
-                                                                         !!! c(list(q = rep(obsVals, each = 2L) + c(-1, 1) * tig$numPrecision[["rRad"]]), pars.gr)))[seq.int(from = 1, by = 2, length.out = nTigs)] / (tig$tieGrp[, "len"]-1L),
-                                                        times = tig$tieGrp[, "len"]-1L)
+      cumDiffs[tig[["cumDiffInd"]]] <- switch(
+        ties.,
+        density = {
+          # use density instead of diff of CDF for tied observation pairs
+          rep.int(
+            # take first observation per tie-group
+            rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obsVals), pars.gr)),
+            #tig$tieGrp[, "len"]-1L # number of repeats per tie group
+            times = tig$tieGrp[, "len"]-1L)
+        },
+        # "equispaced" for CDF-backtransformed using given parameters, then equispaced spacings across tie groups
+        # we keep using a standard density strategy for fitting, but can request another tie-strategy for evaluating the MPSE-criterion,
+        #e.g., for Moran's test
+        equispaced = {
+          # per tie group, use equal spacings in transformed space
+          rep.int(diff(rlang::exec(getDist(distribution, type = "cdf"),
+                                   !!! c(list(q = rep(obsVals, each = 2L) + c(-1, 1) * tig$numPrecision[["rRad"]]), pars.gr)))[seq.int(from = 1, by = 2, length.out = nTigs)] / (tig$tieGrp[, "len"]-1L),
+                  times = tig$tieGrp[, "len"]-1L)
 
-                                              },
-                                              # for what it's worth: tie-strategy "error" should have already quit
-                                              error = {
-                                                stop("getCumDiffs: ties are not allowed!", call. = FALSE)
-                                              },
-                                              # handle exception
-                                              stop("Unknown strategy to handle ties here.", call. = FALSE)
+        },
+        # for what it's worth: tie-strategy "error" should have already quit
+        error = {
+          stop("getCumDiffs: ties are not allowed!", call. = FALSE)
+        },
+        # handle exception
+        stop("Unknown strategy to handle ties here.", call. = FALSE)
       )
     } #fi
 
@@ -1435,14 +1436,14 @@ objFunFactory <- function(x, y = NULL,
   # One can estimate parameters by minimizing this objective function.
   #
   # param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
-  # param `criterion` a logical flag. If requested, give the original criterion to minimize. Then, the parameters are on original scale
-  # param `aggregated` a logical flag. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
+  # param `criterion` logical. If `TRUE`, give the original criterion to minimize. In this case, the parameters must be on original scale.
+  # param `aggregated` logical. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
   # param `ties.` how to handle ties for the MPSE-function. Default value is 'density'.
   objFun <- function(pars, criterion = FALSE, aggregated = TRUE, ties. = ties) {
 
     retVal <- switch(method,
            MPSE = {
-             - if (! twoGroup) {
+             - if (!twoGroup) {
                mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.))
              } else {
                #twoGroup:
@@ -1461,7 +1462,7 @@ objFunFactory <- function(x, y = NULL,
              stopifnot(!twoPhase) #XXX not implemented yet!
 
              if (verbose > 1) cat("pars:", pars, "\n")
-             - if (! twoGroup) getLogLik(pars, group = "x", criterion = criterion) else {
+             - if (!twoGroup) getLogLik(pars, group = "x", criterion = criterion) else {
                res <- c(getLogLik(pars, group = "x", criterion = criterion), getLogLik(pars, group = "y", criterion = criterion))
 
                if (aggregated) sum(res) else res
@@ -1510,7 +1511,7 @@ objFunFactory <- function(x, y = NULL,
 delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
   if (is.null(objFun)) return(invisible(NULL))
-  stopifnot( is.function(objFun) )
+  stopifnot(is.function(objFun))
   objFunEnv <- rlang::fn_env(objFun)
 
   # gather information from objective function environment
@@ -1520,7 +1521,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
   # check if there is already a solution provided by the objective function
   optObj <- attr(objFun, which = "opt", exact = TRUE)
 
-  if ( is.list(optObj) && all( c("par", "par_orig", "value", "convergence") %in% names(optObj)) ){
+  if (is.list(optObj) && all(c("par", "par_orig", "value", "convergence") %in% names(optObj))) {
     if (verbose > 0L) message("Using provided (analytical) solution to objective function.")
   } else {
     optObj <- NULL #start from scratch

@@ -712,8 +712,8 @@ test_that("MLEw weights", code = {
 
   # tiny changes can have an impact on the fit under MLEw
   testMLEwFits(x = x, y = y)
-  testMLEwFits(x = x, y = y + rnorm(length(y), sd = .000001))
-  testMLEwFits(x = x, y = y + rnorm(length(y), sd = .00001))
+  testMLEwFits(x = x, y = y + rnorm(length(y), sd = .000001)) #raise error
+  testMLEwFits(x = x, y = y + rnorm(length(y), sd = .00001))  #raise error
   testMLEwFits(x = x, y = y + rnorm(length(y), sd = .0001))
 
 })
@@ -1012,7 +1012,7 @@ test_that("Fit delayed Weibull", {
 
   # similar parameters
   param_wb_delay1 <- c(x=7, y=6)
-  stopifnot(var(param_wb_delay1) > 0)
+  stopifnot(stats::var(param_wb_delay1) > 0)
   datw <- list(x = rweib_delayed(n=39, delay1 = param_wb_delay1[["x"]], shape1 = 1.8, scale1 = 3),
                y = rweib_delayed(n=51, delay1 = param_wb_delay1[["y"]], shape1 = 1.2, scale1 = 1.5))
   attr(datw, which = "param") <- list(x = c(delay1 = param_wb_delay1[["x"]], shape1 = 1.8, scale1 = 3),
@@ -1186,7 +1186,7 @@ test_that("Fit delayed Weibull", {
                tolerance = .125)
   # MLEw: check we do not have crazy high shape for group x!
   #+ optimization easily goes wrong on shape, because shape occurs in the exponent
-  #+ this can also happen for a single group
+  #+ this can also happen for a single group (see above)
   expect_lte(coef(fd_wb2b_MLEw_P, group = "x")[["shape1"]], expected = 10)
 
   # MLE-weights:
