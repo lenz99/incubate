@@ -1844,9 +1844,9 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...) {
   p <- if (x[["twoGroup"]]) {
     ggplot2::ggplot(data = kmFit0,
                     mapping = ggplot2::aes(x = .data$time, y = .data$evrate, col = .data$group)) +
-      ggplot2::geom_function(mapping = ggplot2::aes(col = "x"), inherit.aes = FALSE,
+      ggplot2::geom_function(mapping = ggplot2::aes(col = rep.int("x", NROW(kmFit0))),
                              fun = cumFun, args = coef(x, group = "x"), linetype = "dashed") +
-      ggplot2::geom_function(mapping = ggplot2::aes(col = "y"), inherit.aes = FALSE,
+      ggplot2::geom_function(mapping = ggplot2::aes(col = rep.int("y", NROW(kmFit0))),
                              fun = cumFun, args = coef(x, group = "y"), linetype = "dashed")
   } else {
     ggplot2::ggplot(data = kmFit0,
