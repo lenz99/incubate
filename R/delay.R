@@ -530,7 +530,7 @@ qweib_delayed <- function(p, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
   delay2 <- delay2[[1L]]
   shape2 <- shape2[[1L]]
   scale2 <- scale2[[1L]]
-  stopifnot( is.finite(delay2), is.finite(shape2), is.finite(scale2) )
+  stopifnot(is.finite(delay2), is.finite(shape2), is.finite(scale2))
 
   # first phase
   qvals <- delay1 + stats::qweibull(p = p, shape = shape1, scale = scale1, lower.tail = lower.tail, log.p = log.p)
@@ -676,23 +676,99 @@ mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay2 = NULL, sha
 }
 
 
+
+# Maybe in the future? Who needs this?
+#
+# #' Delayed Folded Normal Distribution
+# #'
+# #' @description
+# #' Density, distribution function, quantile function, random generation and restricted mean survival time function for the delayed folded normal distribution.
+# #' There is an initial delay phase (parameter `delay`) where no events occur. Beyond that delay, a folded normal distribution applies.
+# #'
+# #' @details
+# #' The numerical arguments other than `n` are recycled to the length of the result (as with the normal distribution in `stats`).
+# #' Generally, only the first elements of the logical arguments are used.
+# #'
+# #' @param x A numeric vector of values for which to get the density.
+# #' @param q A numeric vector of quantile values.
+# #' @param t A numeric vector of times that restrict the mean survival. Default is `+Inf`, i.e., the unrestricted mean survival time.
+# #' @param p A numeric vector of probabilities.
+# #' @param n integer. Number of random observations requested.
+# #' @param delay numeric. The delay, must be non-negative.
+# #' @param mean numeric. The expectation of the underlying normal distribution.
+# #' @param sd numeric. The standard deviation of the underlying normal distribution.
+# #' @param cens numeric. Expected proportion of random right-censored observations. XXX not implemented yet.
+# #' @return Functions pertaining to the delayed folded normal distribution:
+# #' * `dfnorm_delayed` gives the density
+# #' * `pfnorm_delayed` gives the vector of cumulative probabilities or the gradient matrix (nbr parameters x quantile times)
+# #' * `qfnorm_delayed` gives the quantile function
+# #' * `rfnorm_delayed` generates a pseudo-random sample
+# #' * `mfnorm_delayed` gives the restricted mean survival time
+# #'
+# #' The length of the result is determined by `n` for `rfnorm_delayed`, and is the maximum of the lengths of the numerical arguments for the other functions,
+# #' R's recycling rules apply when only single initial delay phase is used.
+# #' @seealso [stats::Normal]
+# #' @keywords distribution
+# #' @name DelayedFoldedNormal
+# NULL
+#
+# #' @rdname DelayedFoldedNormal
+# #' @export
+# dfnorm_delayed <- function(x, delay = 0, mean = 1, sd = 1, log = FALSE) {
+#   stopifnot(length(log) >= 1L, is.logical(log))
+#   log <- log[[1L]] # only first value of log is used
+#
+#   dVals <- numeric(length(x))
+#   xShift <- x - delay1
+#   xInd <- which(xShift >= 0)
+#   if (log) dVals[-xInd] <- -Inf
+#
+#   dVals[xInd] <- stats::dnorm(x = xShift[xInd], mean = mean, sd = sd, log = log) + stats::dnorm(x = xShift[xInd], mean = -mean, sd = sd, log = log)
+#   dVals
+# }
+
+
 #' Get delay distribution function
-#' @param distribution character(1). delay distribution.
+#' @param distribution character(1). Which distribution?
 #' @param type character(1). type of function, cdf: cumulative distribution function, density or random function
 #' @param twoPhase logical(1). For `type='param'`, do we model two phases?
-#' @param twoGroup logical(1). For type='param', do we have two groups?
-#' @param bind character. For type='param', names of parameters that are bind between the two groups.
-#' @param profiled logical(1). For type='param', do we request profiling?
-#' @param transformed logical(1). For type='param', do we need parameter names transformed (as used inside the optimization function?)
+#' @param twoGroup logical(1). For `type='param'`, do we have two groups?
+#' @param bind character. For `type='param'`, names of parameters that are bind between the two groups.
+#' @param profiled logical(1). For `type='param'`, do we request profiling?
+#' @param transformed logical(1). For `type='param'`, do we need parameter names transformed (as used inside the optimization function?)
 #' @return selected distribution function or parameter names
 #' @include delay_estimation.R
-getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", "prob", "density", "random", "param"),
+getDist <- function(distribution = c("exponential", "weibull", "normal"), type = c("cdf", "prob", "density", "random", "param"),
                     twoPhase = FALSE, twoGroup = FALSE, bind = NULL, profiled = FALSE, transformed = FALSE) {
   distribution <- match.arg(distribution)
   type <- match.arg(type)
 
 
   switch(distribution,
+         normal = {
+           stopifnot(!twoPhase)
+           stopifnot(!twoGroup)
+           stopifnot(!profiled)
+
+           switch(type,
+                  # cumulative distribution function
+                  prob =,
+                  cdf  = stats::pnorm,
+                  # density function
+                  density = stats::dnorm,
+                  random  = stats::rnorm,
+                  param = {
+                    pars <- c("mean", "sd")
+
+                    if (transformed) {
+                      pars <- paste0(pars, "_tr")
+                      if (!is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
+                    }
+                    pars
+                  },
+                  stop("Unknown attribute of exponential distribution.", call. = FALSE)
+           )
+         },
          exponential = {
            switch(type,
                   # cumulative distribution function
@@ -709,13 +785,13 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
                     # drop parameters that are profiled out
                     # profiled-setting effects outcome for both transformed=TRUE but also on original scale (transformed=FALSE)
                     # even though profiling is directly relevant only within optimization.
-                    if (profiled && (! "rate1" %in% bind || length(bind) == length(pars))){
+                    if (profiled && (!"rate1" %in% bind || length(bind) == length(pars))) {
                       pars <- setdiff(pars, "rate1") #XXX think about profiling and twoPhase! (and twoGroup?!)
                     }
 
                     if (transformed) {
                       pars <- paste0(pars, "_tr")
-                      if (! is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
+                      if (!is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
                     }
 
                     if (twoGroup) {
@@ -745,13 +821,13 @@ getDist <- function(distribution = c("exponential", "weibull"), type = c("cdf", 
                     pars <- c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")[seq_len(3L*(1L + twoPhase))]
 
                     # drop parameters that are profiled out
-                    if (profiled && (! "scale1" %in% bind || length(bind) == length(pars))){
+                    if (profiled && (! "scale1" %in% bind || length(bind) == length(pars))) {
                       pars <- setdiff(pars, "scale1") #XXX think about profiling and twoPhase! (and twoGroup?!)
                     }
 
                     if (transformed) {
                       pars <- paste0(pars, "_tr")
-                      if (! is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
+                      if (!is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
                     }
 
                     if (twoGroup) {

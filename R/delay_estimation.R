@@ -23,8 +23,8 @@
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
 objFunFactory <- function(x, y = NULL,
-                          distribution = c("exponential", "weibull"), twoPhase = FALSE, bind = NULL,
-                          method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'), profiled = FALSE, ties = c('density', 'error'),
+                          distribution = c("exponential", "weibull", "normal"), twoPhase = FALSE, bind = NULL,
+                          method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'), profiled = FALSE, ties = "density",
                           verbose = 0) {
 
   # setup ----
@@ -32,7 +32,10 @@ objFunFactory <- function(x, y = NULL,
   method <- match.arg(method)
   distribution <- match.arg(distribution)
   stopifnot(is.null(bind) || is.character(bind) && length(bind) >= 1)
-  ties <- match.arg(ties)
+
+  #??? should this go into delay.R as a distribution list-object?
+  negAllowed <- distribution == "normal"
+  hasDelay <- distribution != "normal"
 
   stopifnot(is.logical(twoPhase), length(twoPhase) == 1L)
   stopifnot(is.logical(profiled), length(profiled) == 1L)
@@ -75,15 +78,15 @@ objFunFactory <- function(x, y = NULL,
       obs <- survival::aeqSurv(Surv(obs), tolerance = TOL_NUM)[, 1L, drop = TRUE]
 
       ind_neg <- which(obs < 0L)
-      if (length(ind_neg)) {
+      if (length(ind_neg) && !negAllowed) {
         warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
         obs <- obs[-ind_neg]
       }# fi
-      # drop NA and +/-Inf & sort
+      # drop NA and +/-Inf & sort #XXX sort.int?
       obs <- sort(obs[is.finite(obs)])
 
       if (!length(obs)) {
-        warning("Insufficient data! Only non-negative and finite real values are valid.", call. = FALSE)
+        warning("Insufficient data! Only ", if (!negAllowed) "non-negative and ", "finite real values are valid.", call. = FALSE)
         return(invisible(NULL))
       }# fi
 
@@ -107,7 +110,7 @@ objFunFactory <- function(x, y = NULL,
 
       # drop negative times
       ind_neg <- which(obs[,1L] < 0L)
-      if (length(ind_neg)) {
+      if (length(ind_neg) && !negAllowed) {
         warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
         obs <- obs[-ind_neg, , drop=FALSE]
       }
@@ -119,9 +122,9 @@ objFunFactory <- function(x, y = NULL,
       obs <- sort(obs)
 
       if (!length(obs) || length(which(obs[, "status"] == 1L)) < 1L + method %in% c("MPSE", "MLEc") ) {
-        warning(glue("Insufficient data! Only non-negative and finite real values are valid, ",
+        warning(glue("Insufficient data! Only ", if (!negAllowed) "non-negative and ", "finite real values are valid, ",
                      "at least {c('one observed event time', 'two observed event times')[[1L + method %in% c('MPSE', 'MLEc')]]}",
-                     "for estimation method {method}."), call. = FALSE)
+                     "required for estimation method {method}."), call. = FALSE)
         return(invisible(NULL))
       }# fi
 
@@ -131,22 +134,6 @@ objFunFactory <- function(x, y = NULL,
         return(invisible(NULL))
       }
     } #esle isSurv
-
-
-    ### old code: when we still did tie-break here
-
-    # if (is.null(obs)) return(NULL)
-    # if (startsWith(method, 'MLE') || ties == 'density') return(obs)
-    # # differences of adjacent observed event times
-    # diffobs <- if (isSurv) {
-    #   obsEvInd <- which(obs[, "status"] == 1)
-    #   diff(obs[obsEvInd, 1L])
-    # } else {
-    #   diff(obs)
-    # }
-    # stopifnot( all(diffobs >= 0L) ) # i.e. sorted obs
-    #
-    # tiesDiffInd <- which(diffobs < TOL_NUM) # < .Machine$double.xmin
 
     obs
   } #fn preprocessF
@@ -197,7 +184,7 @@ objFunFactory <- function(x, y = NULL,
       outInd <- union(dupInd, which(obs[, "status"] != 1))
       diff(obs[if (length(outInd)) -outInd else TRUE, 1L])
     } else {
-      diff(obs[if (length(dupInd)) -dupInd else TRUE]) #unique
+      diff(obs[if (length(dupInd)) -dupInd else TRUE]) #use unique???
     }
 
     rRad <- TOL_NUM + .5 * min(roundOffPrecision,
@@ -366,7 +353,7 @@ objFunFactory <- function(x, y = NULL,
 
       } else {
         # numeric response, non-Surv
-        stopifnot( length(obs) >= 2L )
+        stopifnot(length(obs) >= 2L)
         # check for easy case: no tie at beginning
         if (obs[[2L]] > obs[[1L]] + TOL_NUM) {
           ind_obs1 <- 1L
@@ -416,7 +403,7 @@ objFunFactory <- function(x, y = NULL,
   # checks ------------------------------------------------------------------
 
   # MLEw works only with profiling
-  stopifnot( method != 'MLEw' || profiled )
+  stopifnot(method != 'MLEw' || profiled)
 
   # check that there is enough data (here we also look at bind= if twoGroup)
   if (!twoGroup && length(x) < length(oNames) ||
@@ -649,33 +636,40 @@ objFunFactory <- function(x, y = NULL,
     # single group!
     list(x = seq_along(trNames)) ## Cave: trNames reacts to twoPhase-setting (which I've not thought through, yet)
   } else {
+    stopifnot(distribution != "normal")
     # two group!
     #XXX exponential && profiled: indices are not correct for two groups, yet!!
     #(this would allow to run simul_test.R!) #YYY already done?!
     if (is.null(bind)) {
-      if (distribution == 'exponential') {
-        if (profiled) list(x = c(1L), y = c(2L)) else list(x = c(1L, 2L), y = c(3L, 4L))
-      } else {
-        #weibull:
-        if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else
-          list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
-      }
+      switch(distribution,
+             exponential = {
+               if (profiled) list(x = c(1L), y = c(2L)) else list(x = c(1L, 2L), y = c(3L, 4L))
+             },
+             weibull = {
+               if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else
+                 list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
+             },
+             stop("Unsupported distribution!", call. = FALSE)
+      )
     } else if (length(oNames) == length(bind)) {
       # twoGroup, but all parameters are bound!
-      if (distribution == 'exponential') {
-        # profiled can actually be true (as each group leads to own scale/rate
-        #+but it will be averaged (see mergePars!!)
-        if (profiled) {
-          #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
-          list(x = c(1L), y = c(1L))
-        } else list(x = c(1L, 2L), y = c(1L, 2L))
-      } else {
-        #weibull:
-        if (profiled) {
-          #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
-          list(x = c(1L, 2L), y = c(1L, 2L))
-        } else list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
-      }
+      switch(distribution,
+             exponential = {
+               # profiled can actually be true (as each group leads to own scale/rate
+               #+but it will be averaged (see mergePars!!)
+               if (profiled) {
+                 #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
+                 list(x = c(1L), y = c(1L))
+               } else list(x = c(1L, 2L), y = c(1L, 2L))
+             },
+             weibull = {
+               if (profiled) {
+                 #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
+                 list(x = c(1L, 2L), y = c(1L, 2L))
+               } else list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
+             },
+             stop("Unsupported distribution!", call. = FALSE)
+      )
     } else {
       # twoGroups & non-trivial bind
 
@@ -710,13 +704,14 @@ objFunFactory <- function(x, y = NULL,
       list(x = seq_along(oNames)) ## Cave: oNames reacts to twoPhase-setting (which I've not thought through, yet)
       #if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
     } else {
+      stopifnot(distribution != "normal")
       # twoGroup && profiled
-      if (is.null(bind)){
+      if (is.null(bind)) {
         if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else
           # weibull
           list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
       } else {
-        if ( length(oNames) == length(bind)) {
+        if (length(oNames) == length(bind)) {
           # profiled can actually be true (as each group leads to own scale/rate
           #+but it will be averaged (see mergePars!!)
           #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
@@ -745,14 +740,19 @@ objFunFactory <- function(x, y = NULL,
                                        0, 1, 0, 0,
                                        -1, 0, 1, 0,
                                        0, 0, 0, 1), nrow = 4L, byrow = TRUE,
-                                    dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
+                                    dimnames = list(c("delay1_tr", "rate1_tr",
+                                                      "delay2_tr", "rate2_tr"))),
                weibull = matrix(c( 1, 0, 0, 0, 0, 0,
                                    0, 1, 0, 0, 0, 0,
                                    0, 0, 1, 0, 0, 0,
                                    -1, 0, 0, 1, 0, 0,
                                    0, 0, 0, 0, 1, 0,
                                    0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
-                                dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
+                                dimnames = list(c("delay1_tr", "shape1_tr", "scale1_tr",
+                                                  "delay2_tr", "shape2_tr", "scale2_tr"))),
+               normal = matrix(c( 1, 0,
+                                  0, 1), nrow = 2, byrow = TRUE,
+                               dimnames = list(c("mean_tr", "sd_tr"))),
                stop("Unknown distribution!", call. = FALSE)
     ),
     Minv = switch(distribution,
@@ -768,14 +768,19 @@ objFunFactory <- function(x, y = NULL,
                                      0, 0, 0, 0, 1, 0,
                                      0, 0, 0, 0, 0, 1), nrow = 6L, byrow = TRUE,
                                    dimnames = list(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"))),
+                  normal = matrix(c( 1, 0,
+                                     0, 1), nrow = 2, byrow = TRUE,
+                                  dimnames = list(c("mean", "sd"))),
                   stop("Unknown distribution", call. = FALSE)
     ),
     F = list(exponential = c(identity, log, log, log),
              weibull = c(identity, log, #log1p, #identity, #=shape1
-                         log, log, log, log))[[distribution]],
+                         log, log, log, log),
+             normal = c(identity, identity))[[distribution]],
     Finv = list(exponential = c(identity, exp, exp, exp),
                 weibull = c(identity, exp, #expm1, #identity, #=shape1
-                            exp, exp, exp, exp))[[distribution]]
+                            exp, exp, exp, exp),
+                normal = c(identity, identity))[[distribution]]
   )
 
   # transform parameter vector for a single group. Does not use parameter names.
@@ -818,7 +823,7 @@ objFunFactory <- function(x, y = NULL,
                             }, simplify = TRUE))
     # .. only for delay1 we use minimum as aggregation function
     #+(in this case first entry in exParInd$x and exParInd$y is 1!)
-    if (exParInd$x[[1L]] + exParInd$y[[1L]] == 2){
+    if (hasDelay && exParInd$x[[1L]] + exParInd$y[[1L]] == 2) {
       res[[1L]] <- min(parx[[1L]], pary[[1L]])
     }
 
@@ -869,6 +874,7 @@ objFunFactory <- function(x, y = NULL,
         res0 <- transformPars1(parV[ind], inverse = isOpt)
 
         if (profiled) {
+          stopifnot(distribution != 'normal')
           # un-profile (when going from profiled par_opt to par_orig)
           if (isOpt) {
             # access observations for specified group
@@ -889,7 +895,8 @@ objFunFactory <- function(x, y = NULL,
             # extract only remaining parameters
             res0 <- res0[extractParOptInd[[group]]]
           }
-        }
+        }# profiled
+
         res0
       })
     }
@@ -1001,6 +1008,9 @@ objFunFactory <- function(x, y = NULL,
                      parV0
 
                    },
+                   normal = {
+                     c(stats::median(obs), stats::IQR(obs)/1.3)
+                   },
                    # default:
                    stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
     )
@@ -1027,7 +1037,9 @@ objFunFactory <- function(x, y = NULL,
                      # shape lower bound for MLEnp (actually for shape1)
                      #shape = c(lower = if (profiled && method == 'MLEn' && !profiled_llik_directly) 1.49e-8 else -Inf, upper = +Inf),
                      shape = c(lower = -Inf, upper = 3.5), # exp(3.5) = 33, exp(4.5) = 90 is already huge for shape, exp(1.6) = 5
-                     scale = c(lower = -Inf, upper = +Inf))
+                     scale = c(lower = -Inf, upper = +Inf),
+                     mean = c(lower = -Inf, upper = +Inf),
+                     sd = c(lower = 0, upper = +Inf))
 
 
   # set bounds from lookup table PAR_BOUNDS
@@ -1103,7 +1115,7 @@ objFunFactory <- function(x, y = NULL,
   # ensure we have names of transformed parameters
   parV <- rlang::set_names(parV, nm = trNamesFull)
 
-  stopifnot(! any(is.na(lowerB), is.na(upperB)))
+  stopifnot(!any(is.na(lowerB), is.na(upperB)))
   # clean up env. # use local() more???
   remove(list=c("PAR_BOUNDS", "par0_x"))
 
@@ -1239,6 +1251,7 @@ objFunFactory <- function(x, y = NULL,
            # weighted MLE
            MLEw = {
              stopifnot(profiled)
+             stopifnot(hasDelay, distribution != "normal")
 
              retVal <- if (isSurv) {
                switch(EXPR = attr(obs, which = "type", exact = TRUE),
@@ -1314,7 +1327,7 @@ objFunFactory <- function(x, y = NULL,
                    -penF(k))
              }
            },
-           stop("This method is not handled here!", call. = FALSE)
+           stop(glue("This method {method} is not handled here!"), call. = FALSE)
     )
   }
 
@@ -1417,7 +1430,7 @@ objFunFactory <- function(x, y = NULL,
           stop("getCumDiffs: ties are not allowed!", call. = FALSE)
         },
         # handle exception
-        stop("Unknown strategy to handle ties here.", call. = FALSE)
+        stop(glue("Unknown strategy {ties.} to handle ties here."), call. = FALSE)
       )
     } #fi
 
@@ -1653,9 +1666,9 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @param verbose integer. level of verboseness. Default 0 is quiet.
 #' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x = stop("Specify observations for first group x=!", call. = FALSE), y = NULL,
-                        distribution = c("exponential", "weibull"), twoPhase = FALSE,
-                        bind = NULL, ties = c('density', 'equidist', 'random', 'error'),
+delay_model <- function(x = stop('Specify observations for first group x=!', call. = FALSE), y = NULL,
+                        distribution = c('exponential', 'weibull', 'normal'), twoPhase = FALSE,
+                        bind = NULL, ties = c('density', 'equispaced', 'error'),
                         method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profiled = method == 'MLEw',
                         optim_args = NULL, verbose = 0) {
 

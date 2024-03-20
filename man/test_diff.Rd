@@ -11,7 +11,7 @@ test_diff(
   twoPhase = FALSE,
   method = c("MPSE", "MLEn", "MLEw", "MLEc"),
   profiled = method == "MLEw",
-  ties = c("density", "equidist", "random", "error"),
+  ties = c("density", "equispaced", "error"),
   param = "delay1",
   type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LR"),
   doLogrank = TRUE,

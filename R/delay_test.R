@@ -635,7 +635,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 #' @export
 test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c("exponential", "weibull"), twoPhase = FALSE,
                       method = c("MPSE", "MLEn", "MLEw", "MLEc"), profiled = method == "MLEw",
-                      ties = c("density", "equidist", "random", "error"),
+                      ties = c("density", "equispaced", "error"),
                       param = "delay1",
                       type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LR"), doLogrank = TRUE,
                       R = 400,

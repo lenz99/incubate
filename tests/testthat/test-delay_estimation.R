@@ -1278,3 +1278,14 @@ test_that("Confidence intervals", code = {
                 expect_equal(ci_own, ci_boot, tolerance = 1e-3)})
 
 })
+
+
+test_that("Fit normal", {
+  fm_nrm_grph <- delay_model(x = incubate::graphite, distribution = "normal", method = "MPSE", ties = "density")
+  gof_nrm_grph <- test_GOF(fm_nrm_grph)
+
+  # cf Cheng & Stephens (1989), 4.3 Example
+  expect_equal(coef(fm_nrm_grph), expected = c(mean = 34.072, sd = sqrt(6.874)), tolerance = 1e-3)
+  expect_equal(gof_nrm_grph$statistic, expected = c(`X^2` = 63.1), tolerance = 1e-3)
+  expect_equal(stats::qchisq(p = 0.05, df = gof_nrm_grph$df, lower.tail = FALSE), expected = 56.9, tolerance = 1e-3)
+})

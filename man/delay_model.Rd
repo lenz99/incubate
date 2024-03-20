@@ -7,10 +7,10 @@
 delay_model(
   x = stop("Specify observations for first group x=!", call. = FALSE),
   y = NULL,
-  distribution = c("exponential", "weibull"),
+  distribution = c("exponential", "weibull", "normal"),
   twoPhase = FALSE,
   bind = NULL,
-  ties = c("density", "equidist", "random", "error"),
+  ties = c("density", "equispaced", "error"),
   method = c("MPSE", "MLEn", "MLEw", "MLEc"),
   profiled = method == "MLEw",
   optim_args = NULL,

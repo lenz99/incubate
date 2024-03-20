@@ -8,12 +8,12 @@ or according to some flavour of maximum likelihood estimation (e.g., naive ('MLE
 objFunFactory(
   x,
   y = NULL,
-  distribution = c("exponential", "weibull"),
+  distribution = c("exponential", "weibull", "normal"),
   twoPhase = FALSE,
   bind = NULL,
   method = c("MPSE", "MLEn", "MLEc", "MLEw"),
   profiled = FALSE,
-  ties = c("density", "error"),
+  ties = NULL,
   verbose = 0
 )
 }
