@@ -28,14 +28,14 @@ objFunFactory <- function(x, y = NULL,
                           verbose = 0) {
 
   # setup ----
-  stopifnot( is.numeric(x), length(x) > 0, is.null(y) || is.numeric(y) && length(y) > 0 )
+  stopifnot(is.numeric(x), length(x) > 0, is.null(y) || is.numeric(y) && length(y) > 0)
   method <- match.arg(method)
   distribution <- match.arg(distribution)
-  stopifnot( is.null(bind) || is.character(bind) && length(bind) >= 1 )
+  stopifnot(is.null(bind) || is.character(bind) && length(bind) >= 1)
   ties <- match.arg(ties)
 
-  stopifnot( is.logical(twoPhase), length(twoPhase) == 1L)
-  stopifnot( is.logical(profiled), length(profiled) == 1L)
+  stopifnot(is.logical(twoPhase), length(twoPhase) == 1L)
+  stopifnot(is.logical(profiled), length(profiled) == 1L)
   # enforce either TRUE or FALSE
   twoPhase <- isTRUE(twoPhase)
   profiled <- isTRUE(profiled)
@@ -51,7 +51,7 @@ objFunFactory <- function(x, y = NULL,
 
   # unify Surv-type but keep numeric if no censoring
   respL <- prepResponseVar(x0 = x, y0 = y, simplify = TRUE)
-  stopifnot( is.list(respL), identical(names(respL), c("x", "y")) )
+  stopifnot(is.list(respL), identical(names(respL), c("x", "y")))
   x <- respL[["x"]]
   y <- respL[["y"]]
   rm(list = "respL")
@@ -65,10 +65,10 @@ objFunFactory <- function(x, y = NULL,
   # @return sorted, cleaned up data vector or NULL in case of trouble
   preprocessF <- function(obs) {
 
-    if ( is.null(obs) || ! is.numeric(obs)) return(NULL)
+    if (is.null(obs) || ! is.numeric(obs)) return(NULL)
 
 
-    if (! isSurv) {
+    if (!isSurv) {
       # numeric response, non-Surv
 
       # fix numeric instabilities to have proper ties (when observations are pretty close)
@@ -133,13 +133,10 @@ objFunFactory <- function(x, y = NULL,
     } #esle isSurv
 
 
-    if (is.null(obs)) return(NULL)
-
-    if ( startsWith(method, 'MLE') || ties == 'density' ) return(obs)
-
-
     ### old code: when we still did tie-break here
 
+    # if (is.null(obs)) return(NULL)
+    # if (startsWith(method, 'MLE') || ties == 'density') return(obs)
     # # differences of adjacent observed event times
     # diffobs <- if (isSurv) {
     #   obsEvInd <- which(obs[, "status"] == 1)
@@ -175,7 +172,7 @@ objFunFactory <- function(x, y = NULL,
       cat(glue("Round-off error has magnitude {roundOffPrecision}."), "\n")
     }
 
-    if (! length(obs)) return(invisible(NULL))
+    if (!length(obs)) return(invisible(NULL))
 
     # for Surv, we only consider duplicated observed event times, here.
     # as we only need to fix ties within observed times, ties in censored times use interpolation!?
@@ -200,18 +197,19 @@ objFunFactory <- function(x, y = NULL,
       outInd <- union(dupInd, which(obs[, "status"] != 1))
       diff(obs[if (length(outInd)) -outInd else TRUE, 1L])
     } else {
-      diff(obs[if (length(dupInd)) -dupInd else TRUE])
+      diff(obs[if (length(dupInd)) -dupInd else TRUE]) #unique
     }
 
     rRad <- TOL_NUM + .5 * min(roundOffPrecision,
                                # obs[1L] = min(obs) = diff of minimal obs with 0
                                abs(if (isSurv) obs[which.max(obs[, "status"] == 1), 1L] else obs[[1L]]), # very first time obs[[1L]] should be non-negative, anyways.
-                               stats::plogis(q = .1+length(diffObs), scale = 17) * diffObs,
+                               #stats::plogis(q = .1+length(diffObs), scale = 17) * diffObs,
+                               diffObs,
                                na.rm = TRUE)
 
     if (length(dupInd)) {
       stopifnot(dupInd[[1]] > 1L) # duplicated entries start at least 2
-      if ( ties == "error" ) stop("Ties within data are not allowed (ties == 'error')!", call. = FALSE)
+      if (ties == "error") stop("Ties within data are not allowed (ties == 'error')!", call. = FALSE)
 
       gapsInDupInds <- c(1L, which(diff(dupInd)>1)+1) # +1 to be on dupInd-scale
       nbrTieGroups <- length(gapsInDupInds)
@@ -235,8 +233,9 @@ objFunFactory <- function(x, y = NULL,
       tieGrp <- cbind(startInd, len) # 2-column matrix
       # index vector for cumDiff where spacing will be zer0 due to ties
       # unlist could become purrr::list_c (req v1.0.0)
-      cumDiffInd <- rep.int(startInd, times = len-1L) + unlist(purrr::map(.x = len-1, .f = function(.x) seq_len(length.out = .x)))
-    }
+      cumDiffInd <- rep.int(startInd, times = len-1L) +
+        unlist(purrr::map(.x = len-1, .f = function(.x) seq_len(length.out = .x)))
+    }#fi dupInd
 
     # return tie information (per group)
     list(tieGrp = tieGrp,
@@ -340,7 +339,7 @@ objFunFactory <- function(x, y = NULL,
     # little helper function to get the indices for the first two smallest observed values (non-censorings)
     #+in a sorted vector of observations
     forefrontIndF <- function(group) {
-      stopifnot(! missing(group), is.character(group), length(group) == 1L)
+      stopifnot(!missing(group), is.character(group), length(group) == 1L)
       obs <- if (group == "y") y else x
 
       ind_obs1 <- ind_next <- integer()
@@ -499,7 +498,7 @@ objFunFactory <- function(x, y = NULL,
           return(-log(1-z0))
         }#fi ! isSurv
 
-        stopifnot( isSurv )
+        stopifnot(isSurv)
         switch(EXPR = attr(x, which = "type", exact = TRUE),
                right = {
                  # nbr of events observed
@@ -641,12 +640,12 @@ objFunFactory <- function(x, y = NULL,
   } #esle weights
 
 
-  stopifnot( ! twoPhase ) #XXX not implemented yet!!
+  stopifnot(!twoPhase) #XXX not implemented yet!!
 
 
   # provide indices for x and for y
   # where to find the parameters per group in the parameter vector of the objective function
-  extractParOptInd <- if (! twoGroup) {
+  extractParOptInd <- if (!twoGroup) {
     # single group!
     list(x = seq_along(trNames)) ## Cave: trNames reacts to twoPhase-setting (which I've not thought through, yet)
   } else {
@@ -706,7 +705,7 @@ objFunFactory <- function(x, y = NULL,
     extractParOptInd
   } else {
     # profiled!
-    if (! twoGroup) {
+    if (!twoGroup) {
       # profiled single group!
       list(x = seq_along(oNames)) ## Cave: oNames reacts to twoPhase-setting (which I've not thought through, yet)
       #if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))

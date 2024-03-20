@@ -29,12 +29,12 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 
 
   # required variables
-  meth <- statist <- dgf <- p_val <- NULL
+  methStr <- statist <- dgf <- p_val <- NULL
 
   switch(method,
          moran = {
            # Moran's GOF test
-           meth <- "Moran's Goodness-of-fit (GOF) test"
+           methStr <- "Moran's Goodness-of-fit (GOF) test"
 
            EUL_MAS <- -digamma(1L)
 
@@ -61,17 +61,18 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 
            # we resolve ties in the back-transformed 0-1 space via equal spacing (see Cheng & Stephens)
            statist <- if (twoGroup) { ##  && length(delayFit$bind) < length(oNames) # not needed!?
-             c(`X^2` = sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE,
-                                                                  ties. = "equispaced"), #criterion per group
-                                       n = nObs, k = k/2)))
+             sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE,
+                                                        ties. = "equispaced"), #criterion per group
+                             n = nObs, k = k/2))
              #XXX can be negative, when many ties (example for instance, happened for the call:)
              #delay_model(x = 5 + rpois(17, lambda = 5), y = survival::Surv(8 + rpois(23, lambda = 3), event = sample(x = c(0, 1, 1, 1), size = 23, replace = T)))
            } else {
              # single group
-             c(`X^2` = testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, ties. = "equispaced"),
-                                   n = nObs, k = k) )
+               testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, ties. = "equispaced"),
+                           n = nObs, k = k)
            }
 
+           statist <- rlang::set_names(statist, nm = "X^2")
            # in case of two groups: sum of two independent chi-sq. is chi-sq
            dgf <- sum(nObs)
            p_val <- stats::pchisq(q = statist, df = dgf, lower.tail = FALSE)
@@ -79,7 +80,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 
          pearson = {
            # Pearson GOF-test
-           meth <- "Pearson's Goodness-of-fit (GOF) test" # (per group) ## this is our standard
+           methStr <- "Pearson's Goodness-of-fit (GOF) test" # (per group) ## this is our standard
 
 
            if (!isSurv) {
@@ -95,7 +96,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
              statist <- local({
                datr <- transform.incubate_fit(delayFit)
 
-               purrr::set_names(
+               rlang::set_names(
                  sum(purrr::map2_dbl(.x = if (is.numeric(datr)) list(x=datr) else datr,
                                      .y = nCl,
                                      .f = function(.x, .y) {
@@ -478,7 +479,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 
          NRR =, nikulin = {
 
-           meth <- "Nikulin-Rao-Robson's Goodness-of-fit (GOF) test"
+           methStr <- "Nikulin-Rao-Robson's Goodness-of-fit (GOF) test"
 
            if (isSurv) {
              #+see book, Nikulin, 2017, chapter 2
@@ -536,7 +537,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
            # Anderson-Darling (AD) test statistic
            # cf Stephens, Tests based on EDF Statistics p.101, (4.2)
 
-           meth <- "Anderson-Darling Goodness-of-fit (GOF) test (per group)"
+           methStr <- "Anderson-Darling Goodness-of-fit (GOF) test (per group)"
 
            if (isSurv) stop("Censored observations are not supported here!", call. = FALSE)
 
@@ -595,7 +596,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
   # stats:::print.htest recognizes:
   #+parameter, alternative, null.value, conf.int, estimate
   structure(
-    list(method = meth, data.name = data_name,
+    list(method = methStr, data.name = data_name,
          statistic = statist, df = dgf, p.value = p_val),
     class = "htest")
 }
