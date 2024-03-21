@@ -747,7 +747,6 @@ getDist <- function(distribution = c("exponential", "weibull", "normal"), type =
   switch(distribution,
          normal = {
            stopifnot(!twoPhase)
-           stopifnot(!twoGroup)
            stopifnot(!profiled)
 
            switch(type,
@@ -764,7 +763,15 @@ getDist <- function(distribution = c("exponential", "weibull", "normal"), type =
                       pars <- paste0(pars, "_tr")
                       if (!is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
                     }
-                    pars
+
+                    if (twoGroup) {
+                      bind <- intersect(pars, bind) #intersect: enforces original order from pars
+                      pars_gr <- setdiff(pars, bind)
+                      # bind parameters first
+                      c(bind, paste(rep.int(pars_gr, times = 2L), rep(c("x", "y"), each = length(pars_gr)), sep = "."))
+                    } else {
+                      pars
+                    }
                   },
                   stop("Unknown attribute of exponential distribution.", call. = FALSE)
            )

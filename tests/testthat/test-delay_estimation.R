@@ -203,11 +203,11 @@ test_that("Parameter extraction and transformation", {
     }
   }
 
-  extPars_exp1 <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE, profiled = FALSE) %>%
-    rlang::fn_env() %>% rlang::env_get("extractPars")
+  extPars_exp1 <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE, profiled = FALSE) |>
+    rlang::fn_env() |> rlang::env_get("extractPars")
 
-  extPars_exp1P <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE, profiled = TRUE) %>%
-    rlang::fn_env() %>% rlang::env_get("extractPars")
+  extPars_exp1P <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE, profiled = TRUE) |>
+    rlang::fn_env() |> rlang::env_get("extractPars")
 
   par_exp1 <- c(delay1 = 3, rate1 = .8)
 
@@ -930,10 +930,10 @@ test_that("Fit delayed Weibull", {
 
   # # visualize the optimization function landscape
   # objFunLS_maxFl_MLEnp <- tidyr::expand_grid(a = seq.int(0, .26, length.out = 17),
-  #                                            k = seq.int(1.3, 3, length.out = 17)) %>%
-  #   #head %>%
-  #   rowwise() %>%
-  #   dplyr::mutate(ll = llProfObjFun(theta = c(a,k))) %>%
+  #                                            k = seq.int(1.3, 3, length.out = 17)) |>
+  #   #head() |>
+  #   rowwise() |>
+  #   dplyr::mutate(ll = llProfObjFun(theta = c(a,k))) |>
   #   ungroup()
   #
   # ggplot(objFunLS_maxFl_MLEnp, aes(x = a, y = k, z = log(ll+.1), colour = after_stat(level))) +
@@ -1281,11 +1281,32 @@ test_that("Confidence intervals", code = {
 
 
 test_that("Fit normal", {
+  # MPSE fit
   fm_nrm_grph <- delay_model(x = incubate::graphite, distribution = "normal", method = "MPSE", ties = "density")
   gof_nrm_grph <- test_GOF(fm_nrm_grph)
 
   # cf Cheng & Stephens (1989), 4.3 Example
+  expect_identical(fm_nrm_grph$optimizer$convergence, 0L)
   expect_equal(coef(fm_nrm_grph), expected = c(mean = 34.072, sd = sqrt(6.874)), tolerance = 1e-3)
   expect_equal(gof_nrm_grph$statistic, expected = c(`X^2` = 63.1), tolerance = 1e-3)
   expect_equal(stats::qchisq(p = 0.05, df = gof_nrm_grph$df, lower.tail = FALSE), expected = 56.9, tolerance = 1e-3)
+
+  # MLE fit
+  fm_nrm_grph_MLEn <- delay_model(x = incubate::graphite, distribution = "normal", method = "MLEn", ties = "density")
+  expect_identical(fm_nrm_grph_MLEn$optimizer$convergence, 0L)
+  expect_equal(coef(fm_nrm_grph_MLEn),
+               expected = c(mean = mean(incubate::graphite),
+                            sd = sqrt(stats::var(incubate::graphite) * (length(incubate::graphite)-1)/length(incubate::graphite))),
+               tolerance = 1e-5)
+
+  # two group
+  fm_nrm_2gr <- delay_model(x = incubate::graphite, y = incubate::fatigue, distribution = "normal", method = "MPSE", ties = "density")
+  expect_identical(fm_nrm_2gr$optimizer$convergence, 0L)
+  expect_named(coef(fm_nrm_2gr), expected = c("mean.x", "sd.x", "mean.y", "sd.y"))
+  expect_equal(coef(fm_nrm_2gr)[1:2], expected = coef(fm_nrm_grph), tolerance = 1e-5, ignore_attr = "names")
+
+  # bind is working
+  fm_nrm_2grb <- delay_model(x = incubate::graphite, y = sqrt(incubate::fatigue), distribution = "normal", method = "MPSE", bind = "sd", ties = "density")
+  expect_identical(fm_nrm_2grb$optimizer$convergence, 0L)
+  expect_named(coef(fm_nrm_2grb), expected = c("sd", "mean.x", "mean.y"))
 })

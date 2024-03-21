@@ -33,9 +33,6 @@ objFunFactory <- function(x, y = NULL,
   distribution <- match.arg(distribution)
   stopifnot(is.null(bind) || is.character(bind) && length(bind) >= 1)
 
-  #??? should this go into delay.R as a distribution list-object?
-  negAllowed <- distribution == "normal"
-  hasDelay <- distribution != "normal"
 
   stopifnot(is.logical(twoPhase), length(twoPhase) == 1L)
   stopifnot(is.logical(profiled), length(profiled) == 1L)
@@ -248,7 +245,7 @@ objFunFactory <- function(x, y = NULL,
 
 
   # adjust profiled:
-  #+profiling is not implemented for all cases! we sometimes reverse it to FALSE and just issue a warning
+  #+profiling is not implemented for some cases! Then, we reverse it to FALSE and just issue a warning
   #+profiling is only possible if rate1/scale1 is not bound and single phase
   profiled0 <- profiled
   profiled <- profiled && (! any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) && ! twoPhase
@@ -542,7 +539,7 @@ objFunFactory <- function(x, y = NULL,
 
         switch(EXPR = method,
                sample = {
-                 if (missing(z) || ! is.numeric(z) || length(z) == 0L){
+                 if (missing(z) || !is.numeric(z) || length(z) == 0L){
                    stop("Please provide the vector of z's to estimate W1!", call. = FALSE)
                  }
                  mean(z)
@@ -636,10 +633,9 @@ objFunFactory <- function(x, y = NULL,
     # single group!
     list(x = seq_along(trNames)) ## Cave: trNames reacts to twoPhase-setting (which I've not thought through, yet)
   } else {
-    stopifnot(distribution != "normal")
     # two group!
     #XXX exponential && profiled: indices are not correct for two groups, yet!!
-    #(this would allow to run simul_test.R!) #YYY already done?!
+    #+(this would allow to run simul_test.R!) #YYY already done?!
     if (is.null(bind)) {
       switch(distribution,
              exponential = {
@@ -648,6 +644,10 @@ objFunFactory <- function(x, y = NULL,
              weibull = {
                if (profiled) list(x = c(1L, 2L), y = c(3L, 4L)) else
                  list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
+             },
+             normal = {
+               stopifnot(!profiled)
+               list(x = c(1L, 2L), y = c(3L, 4L))
              },
              stop("Unsupported distribution!", call. = FALSE)
       )
@@ -667,6 +667,10 @@ objFunFactory <- function(x, y = NULL,
                  #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
                  list(x = c(1L, 2L), y = c(1L, 2L))
                } else list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
+             },
+             normal = {
+               stopifnot(!profiled)
+               list(x = c(1L, 2L), y = c(1L, 2L))
              },
              stop("Unsupported distribution!", call. = FALSE)
       )
@@ -690,7 +694,7 @@ objFunFactory <- function(x, y = NULL,
         )
       })
     }
-  }
+  }#esle twoGroup
 
   # provide indices for x and for y
   # where to find the parameters per group in the common parameter vector
@@ -704,8 +708,8 @@ objFunFactory <- function(x, y = NULL,
       list(x = seq_along(oNames)) ## Cave: oNames reacts to twoPhase-setting (which I've not thought through, yet)
       #if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
     } else {
-      stopifnot(distribution != "normal")
       # twoGroup && profiled
+      stopifnot(distribution != "normal")
       if (is.null(bind)) {
         if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else
           # weibull
@@ -733,7 +737,7 @@ objFunFactory <- function(x, y = NULL,
     }
   } #esle !profiled
 
-  # parameter transformation matrices
+  # parameter transformation matrices (for single group)
   paramTransf <- list(
     M = switch(distribution,
                exponential = matrix(c( 1, 0, 0, 0,
@@ -784,7 +788,8 @@ objFunFactory <- function(x, y = NULL,
   )
 
   # transform parameter vector for a single group. Does not use parameter names.
-  # transformed parameters are used within optimization. The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativity of original parameter)
+  # transformed parameters are used within optimization.
+  # The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativity of original parameter)
   # @param parV1 parameter vector for a single group
   # @param inverse logical. `inverse=TRUE` takes optimization parameters back to original parameters
   # @return transformed parameter vector, unnamed!
@@ -1009,7 +1014,9 @@ objFunFactory <- function(x, y = NULL,
 
                    },
                    normal = {
-                     c(stats::median(obs), stats::IQR(obs)/1.3)
+                     # robust start values
+                     # IQR in normal is 1.349 times the std. deviation
+                     c(stats::median(obs), stats::IQR(obs)/1.349)
                    },
                    # default:
                    stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
@@ -1036,7 +1043,7 @@ objFunFactory <- function(x, y = NULL,
                      rate  = c(lower = -Inf, upper = +Inf),
                      # shape lower bound for MLEnp (actually for shape1)
                      #shape = c(lower = if (profiled && method == 'MLEn' && !profiled_llik_directly) 1.49e-8 else -Inf, upper = +Inf),
-                     shape = c(lower = -Inf, upper = 3.5), # exp(3.5) = 33, exp(4.5) = 90 is already huge for shape, exp(1.6) = 5
+                     shape = c(lower = -Inf, upper = 3.5), # exp(3.5) = 33 is already huge for shape [exp(1.6) = 5, exp(4.5) = 90]
                      scale = c(lower = -Inf, upper = +Inf),
                      mean = c(lower = -Inf, upper = +Inf),
                      sd = c(lower = 0, upper = +Inf))
@@ -1078,8 +1085,8 @@ objFunFactory <- function(x, y = NULL,
 
         par0_xy[['par']]
 
-      } else { #twoGroup, not all params bound!
-
+      } else {
+        #twoGroup, not all params bound!
         par0_y <- getParSetting.gr(y)
 
         start_x <- par0_x[['par']]
@@ -1693,6 +1700,11 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 
   distribution <- match.arg(distribution)
 
+  #??? should this go into delay.R as a distribution list-object?
+  negAllowed <- distribution == "normal"
+  hasDelay <- distribution != "normal"
+  twoPhaseAllowed <- distribution != "normal"
+
   method <- if (length(method) == 1L && toupper(method) == 'MSE') {
     message("The method name 'MPSE' is prefered over the previously used name 'MSE'!")
     "MPSE"
@@ -1702,18 +1714,20 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 
   if (is.character(bind)) {
     if (any(endsWith(bind, suffix = "_tr"))) {
-      stop("Parameter names to bind= refer to the distribution parameters and not to the transformed parameters of the objective function.",
+      stop("Parameter names to bind= refer to the distribution parameters and not to transformed parameters of the objective function.",
            call. = FALSE)
     }
 
     # translate convenience names (for single phase) to canonical names
-    unNmbrdIdx <- !grepl(pattern = "[12]", bind, fixed = FALSE)
-    if (any(unNmbrdIdx)) {
-      bind[unNmbrdIdx] <- paste0(bind[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
-      if (verbose > 0L) {
-        cat("The unnumbered parameter names in bind= are translated to canonical parameter names (=phase 1).\n")
+    if (twoPhaseAllowed) {
+      unNmbrdIdx <- !grepl(pattern = "[12]", bind, fixed = FALSE)
+      if (any(unNmbrdIdx)) {
+        bind[unNmbrdIdx] <- paste0(bind[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
+        if (verbose > 0L) {
+          cat("The unnumbered parameter names in bind= are translated to canonical parameter names (=phase 1).\n")
+        }
       }
-    }
+    }#fi twoPhaseAllowed
   }#fi bind=
 
 
@@ -2124,7 +2138,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                                  bs_data, bs_infer = c('logquantile', 'lognormal', 'quantile', 'quantile0', 'normal', 'normal0'),
-                                 useBoot=FALSE, ...){
+                                 useBoot=FALSE, ...) {
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0)
@@ -2172,7 +2186,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   if (genBootstrapData) {
     bs_data <- bsDataStep(object = object, bs_data = bs_data, R = R, useBoot = useBoot)
   }
-  stopifnot( ! is.vector(bs_data) && ! is.character(bs_data) )
+  stopifnot(!is.vector(bs_data) && !is.character(bs_data))
   # set R according to the provided bs_data (in particular important when both R & bs_data object are given)
   R <- if (useBoot) bs_data[['R']] else NCOL(bs_data)
   if (R < 999) warning(glue('Be cautious with the confidence interval(s) because the number of effective bootstrap samples R = {R} is rather low (R<999).'),
