@@ -8,12 +8,12 @@ or according to some flavour of maximum likelihood estimation (e.g., naive ('MLE
 objFunFactory(
   x,
   y = NULL,
-  distribution = c("exponential", "weibull", "normal"),
+  distO,
   twoPhase = FALSE,
   bind = NULL,
   method = c("MPSE", "MLEn", "MLEc", "MLEw"),
   profiled = FALSE,
-  ties = NULL,
+  ties = "density",
   verbose = 0
 )
 }
@@ -22,7 +22,7 @@ objFunFactory(
 
 \item{y}{numeric. observations in second group.}
 
-\item{distribution}{character(1). delayed distribution family}
+\item{distO}{distribution object}
 
 \item{twoPhase}{logical flag. Do we allow for two delay phases where event rate may change? Default is \code{FALSE}, i.e., a single delay phase.}
 

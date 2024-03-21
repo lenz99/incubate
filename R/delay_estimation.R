@@ -14,7 +14,7 @@
 #'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
-#' @param distribution character(1). delayed distribution family
+#' @param distO distribution object
 #' @param twoPhase logical flag. Do we allow for two delay phases where event rate may change? Default is `FALSE`, i.e., a single delay phase.
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
 #' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
@@ -22,28 +22,27 @@
 #' @param ties character. How to handle ties within data of a group.
 #' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
-objFunFactory <- function(x, y = NULL,
-                          distribution = c("exponential", "weibull", "normal"), twoPhase = FALSE, bind = NULL,
+objFunFactory <- function(x, y = NULL, distO,
+                          twoPhase = FALSE, bind = NULL,
                           method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'), profiled = FALSE, ties = "density",
                           verbose = 0) {
 
   # setup ----
   stopifnot(is.numeric(x), length(x) > 0, is.null(y) || is.numeric(y) && length(y) > 0)
   method <- match.arg(method)
-  distribution <- match.arg(distribution)
+  stopifnot(!missing(distO), is.list(distO))
   stopifnot(is.null(bind) || is.character(bind) && length(bind) >= 1)
 
 
   stopifnot(is.logical(twoPhase), length(twoPhase) == 1L)
   stopifnot(is.logical(profiled), length(profiled) == 1L)
   # enforce either TRUE or FALSE
-  twoPhase <- isTRUE(twoPhase)
+  twoPhase <- isTRUE(twoPhase) && distO$twoPhaseAllowed
   profiled <- isTRUE(profiled)
 
 
   # original names: standard names of distribution (say, for a single group)
-  oNames <- getDist(distribution, type = "param", twoPhase = twoPhase,
-                    twoGroup = FALSE, bind = NULL, transformed = FALSE, profiled = FALSE)
+  oNames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = FALSE, profiled = FALSE)
 
 
 
@@ -75,7 +74,7 @@ objFunFactory <- function(x, y = NULL,
       obs <- survival::aeqSurv(Surv(obs), tolerance = TOL_NUM)[, 1L, drop = TRUE]
 
       ind_neg <- which(obs < 0L)
-      if (length(ind_neg) && !negAllowed) {
+      if (length(ind_neg) && !distO$negAllowed) {
         warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
         obs <- obs[-ind_neg]
       }# fi
@@ -83,7 +82,7 @@ objFunFactory <- function(x, y = NULL,
       obs <- sort(obs[is.finite(obs)])
 
       if (!length(obs)) {
-        warning("Insufficient data! Only ", if (!negAllowed) "non-negative and ", "finite real values are valid.", call. = FALSE)
+        warning("Insufficient data! Only ", if (!distO$negAllowed) "non-negative and ", "finite real values are valid.", call. = FALSE)
         return(invisible(NULL))
       }# fi
 
@@ -107,7 +106,7 @@ objFunFactory <- function(x, y = NULL,
 
       # drop negative times
       ind_neg <- which(obs[,1L] < 0L)
-      if (length(ind_neg) && !negAllowed) {
+      if (length(ind_neg) && !distO$negAllowed) {
         warning("Negative values in data", deparse(substitute(obs)), "! These are dropped.", call. = FALSE)
         obs <- obs[-ind_neg, , drop=FALSE]
       }
@@ -119,7 +118,7 @@ objFunFactory <- function(x, y = NULL,
       obs <- sort(obs)
 
       if (!length(obs) || length(which(obs[, "status"] == 1L)) < 1L + method %in% c("MPSE", "MLEc") ) {
-        warning(glue("Insufficient data! Only ", if (!negAllowed) "non-negative and ", "finite real values are valid, ",
+        warning(glue("Insufficient data! Only ", if (!distO$negAllowed) "non-negative and ", "finite real values are valid, ",
                      "at least {c('one observed event time', 'two observed event times')[[1L + method %in% c('MPSE', 'MLEc')]]}",
                      "required for estimation method {method}."), call. = FALSE)
         return(invisible(NULL))
@@ -385,14 +384,13 @@ objFunFactory <- function(x, y = NULL,
   # set some coefficient names:
   # coefficient names (now that we have settled the profiling flag)
   # transformed (within optimization function)
-  trNames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, bind = NULL,
-                     profiled = profiled, transformed = TRUE)
+  trNames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, profiled = profiled, transformed = TRUE)
   # full parameter names (for the whole parameter vector spanning all groups)
   # original (including parameters that are profiled out in optimization)
-  oNamesFull <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
+  oNamesFull <- distO$param(twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
                         profiled = FALSE, transformed = FALSE) # profiled = FALSE because we consider here original parameters
   # transformed
-  trNamesFull <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
+  trNamesFull <- distO$param(twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
                          profiled = profiled, transformed = TRUE) # profiled as requested because we consider optimization parameters
 
 
@@ -637,7 +635,7 @@ objFunFactory <- function(x, y = NULL,
     #XXX exponential && profiled: indices are not correct for two groups, yet!!
     #+(this would allow to run simul_test.R!) #YYY already done?!
     if (is.null(bind)) {
-      switch(distribution,
+      switch(distO$dist,
              exponential = {
                if (profiled) list(x = c(1L), y = c(2L)) else list(x = c(1L, 2L), y = c(3L, 4L))
              },
@@ -649,11 +647,11 @@ objFunFactory <- function(x, y = NULL,
                stopifnot(!profiled)
                list(x = c(1L, 2L), y = c(3L, 4L))
              },
-             stop("Unsupported distribution!", call. = FALSE)
+             stop(glue("Unsupported distribution {distO$dist}!"), call. = FALSE)
       )
     } else if (length(oNames) == length(bind)) {
       # twoGroup, but all parameters are bound!
-      switch(distribution,
+      switch(distO$dist,
              exponential = {
                # profiled can actually be true (as each group leads to own scale/rate
                #+but it will be averaged (see mergePars!!)
@@ -672,17 +670,16 @@ objFunFactory <- function(x, y = NULL,
                stopifnot(!profiled)
                list(x = c(1L, 2L), y = c(1L, 2L))
              },
-             stop("Unsupported distribution!", call. = FALSE)
+             stop(glue("Unsupported distribution {distO$dist}!"), call. = FALSE)
       )
     } else {
       # twoGroups & non-trivial bind
 
       local({
-        # getDist with profiled=TRUE & transformed = FALSE removes the profile parameters (although it is original scale)
+        # param with profiled=TRUE & transformed = FALSE removes the profile parameters (although it is original scale)
         #+ as we need the original parameter names without those of profiling
         oNamesFullProf <- if (!profiled) oNamesFull else
-          getDist(distribution = distribution, type = "param", twoPhase = twoPhase, bind = bind,
-                  twoGroup = TRUE, profiled = TRUE, transformed = FALSE)
+          distO$param(twoPhase = twoPhase, bind = bind, twoGroup = TRUE, profiled = TRUE, transformed = FALSE)
 
         # locally, drop "rate1/scale1" from oNames when in profiling mode
         # Cave: not robust! Think about (e.g.) twoPhase when profiling! (currently profiling is switched off when twoPhase)
@@ -706,12 +703,12 @@ objFunFactory <- function(x, y = NULL,
     if (!twoGroup) {
       # profiled single group!
       list(x = seq_along(oNames)) ## Cave: oNames reacts to twoPhase-setting (which I've not thought through, yet)
-      #if (distribution == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
+      #if (distO$dist == 'exponential') list(x = c(1L, 2L)) else list(x = c(1L, 2L, 3L))
     } else {
       # twoGroup && profiled
-      stopifnot(distribution != "normal")
+      stopifnot(distO$dist != "normal")
       if (is.null(bind)) {
-        if (distribution == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else
+        if (distO$dist == 'exponential') list(x = c(1L, 2L), y = c(3L, 4L)) else
           # weibull
           list(x = c(1L, 2L, 3L), y = c(4L, 5L, 6L))
       } else {
@@ -719,7 +716,7 @@ objFunFactory <- function(x, y = NULL,
           # profiled can actually be true (as each group leads to own scale/rate
           #+but it will be averaged (see mergePars!!)
           #warning("Did not expect `profiled=TRUE` and full bind on all parameters!", call. = FALSE)
-          if (distribution == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else
+          if (distO$dist == 'exponential') list(x = c(1L, 2L), y = c(1L, 2L)) else
             # weibull
             list(x = c(1L, 2L, 3L), y = c(1L, 2L, 3L))
         } else {
@@ -739,7 +736,7 @@ objFunFactory <- function(x, y = NULL,
 
   # parameter transformation matrices (for single group)
   paramTransf <- list(
-    M = switch(distribution,
+    M = switch(distO$dist,
                exponential = matrix(c( 1, 0, 0, 0,
                                        0, 1, 0, 0,
                                        -1, 0, 1, 0,
@@ -759,7 +756,7 @@ objFunFactory <- function(x, y = NULL,
                                dimnames = list(c("mean_tr", "sd_tr"))),
                stop("Unknown distribution!", call. = FALSE)
     ),
-    Minv = switch(distribution,
+    Minv = switch(distO$dist,
                   exponential = matrix(c(1, 0, 0, 0,
                                          0, 1, 0, 0,
                                          1, 0, 1, 0,
@@ -780,11 +777,11 @@ objFunFactory <- function(x, y = NULL,
     F = list(exponential = c(identity, log, log, log),
              weibull = c(identity, log, #log1p, #identity, #=shape1
                          log, log, log, log),
-             normal = c(identity, identity))[[distribution]],
+             normal = c(identity, identity))[[distO$dist]],
     Finv = list(exponential = c(identity, exp, exp, exp),
                 weibull = c(identity, exp, #expm1, #identity, #=shape1
                             exp, exp, exp, exp),
-                normal = c(identity, identity))[[distribution]]
+                normal = c(identity, identity))[[distO$dist]]
   )
 
   # transform parameter vector for a single group. Does not use parameter names.
@@ -828,7 +825,7 @@ objFunFactory <- function(x, y = NULL,
                             }, simplify = TRUE))
     # .. only for delay1 we use minimum as aggregation function
     #+(in this case first entry in exParInd$x and exParInd$y is 1!)
-    if (hasDelay && exParInd$x[[1L]] + exParInd$y[[1L]] == 2) {
+    if (distO$hasDelay && exParInd$x[[1L]] + exParInd$y[[1L]] == 2) {
       res[[1L]] <- min(parx[[1L]], pary[[1L]])
     }
 
@@ -879,12 +876,12 @@ objFunFactory <- function(x, y = NULL,
         res0 <- transformPars1(parV[ind], inverse = isOpt)
 
         if (profiled) {
-          stopifnot(distribution != 'normal')
+          stopifnot(distO$dist != 'normal')
           # un-profile (when going from profiled par_opt to par_orig)
           if (isOpt) {
             # access observations for specified group
             obs <- if (group == "y") y else x
-            k <- if (distribution == 'weibull') res0[[2L]] else 1L
+            k <- if (distO$dist == 'weibull') res0[[2L]] else 1L
             # calculate scale parameter
             scale0 <- if (isSurv) {
               # XXX Surv: only right-censored observations currently implemented!
@@ -895,7 +892,7 @@ objFunFactory <- function(x, y = NULL,
               (mean((obs-res0[[1L]])^k) / weights$W1[[group]])^(1/k)
             }
             # add scale/rate parameter at the end of parameter vector
-            res0 <- append(res0, values = if (distribution == 'exponential') 1/scale0 else scale0)
+            res0 <- append(res0, values = if (distO$dist == 'exponential') 1/scale0 else scale0)
           } else {
             # extract only remaining parameters
             res0 <- res0[extractParOptInd[[group]]]
@@ -938,7 +935,7 @@ objFunFactory <- function(x, y = NULL,
       obs <- obs[, 1L, drop=TRUE][obs[, "status", drop = TRUE] <= 1]
     }
 
-    parV <- switch(EXPR = distribution,
+    parV <- switch(EXPR = distO$dist,
                    # min(obs) = obs[1L]
                    exponential = {
                      parV0 <- c( max(DELAY_MIN, obs[[1L]] - 3 / (length(obs)+1)),
@@ -1019,7 +1016,7 @@ objFunFactory <- function(x, y = NULL,
                      c(stats::median(obs), stats::IQR(obs)/1.349)
                    },
                    # default:
-                   stop(glue("Provided distribution {sQuote(distribution)} is not implemented!"), call. = FALSE)
+                   stop(glue("Distribution {sQuote(distO$dist)} is not implemented!"), call. = FALSE)
     )
 
     list(
@@ -1163,8 +1160,8 @@ objFunFactory <- function(x, y = NULL,
 
     penF <- function(k) pen_shape * log(1 + exp(pen_shape_steep * (k - pen_shape_shift)) / pen_shape_steep)
 
-    densFun <- getDist(distribution, type = "density")
-    cdfFun <- getDist(distribution, type = "cdf")
+    densFun <- distO$pdf
+    cdfFun <- distO$cdf
 
     if (criterion) {
       # criterion = proper log-likelihood
@@ -1192,11 +1189,11 @@ objFunFactory <- function(x, y = NULL,
     n <- length(obs)
     stopifnot(!criterion, n > 1L)
     # shape parameter (candidate)
-    k <- if (distribution == 'weibull') pars.gr[[2L]] else 1L
+    k <- if (distO$dist == 'weibull') pars.gr[[2L]] else 1L
 
     switch(EXPR = method,
            MLEn = {
-             if (profiled && distribution == 'weibull') {
+             if (profiled && distO$dist == 'weibull') {
                if (isSurv) {
                  switch(attr(obs, which = "type", exact = TRUE),
                         right = {
@@ -1258,7 +1255,7 @@ objFunFactory <- function(x, y = NULL,
            # weighted MLE
            MLEw = {
              stopifnot(profiled)
-             stopifnot(hasDelay, distribution != "normal")
+             stopifnot(distO$hasDelay, distO$dist != "normal")
 
              retVal <- if (isSurv) {
                switch(EXPR = attr(obs, which = "type", exact = TRUE),
@@ -1381,7 +1378,7 @@ objFunFactory <- function(x, y = NULL,
       stopifnot(sum(as.integer(kmFit$n.event[ind_evKM]),
                     if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]])
       # use CDF for all observed event times of right-censored outcome variable
-      h[obs[, "status"] == 1] <- rep.int(rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (cens$rcens$surv[ind_evKM]) + (1 - cens$rcens$surv[ind_evKM]),
+      h[obs[, "status"] == 1] <- rep.int(rlang::exec(distO$cdf, !!! c(list(q=kmFit$time[ind_evKM]), pars.gr)) * (cens$rcens$surv[ind_evKM]) + (1 - cens$rcens$surv[ind_evKM]),
                                          # n.event is not always integer for Surv-type=interval/left. rep.int truncates floats & it should always work.
                                          times = kmFit$n.event[ind_evKM])
       # censored observations get interpolated values
@@ -1400,7 +1397,7 @@ objFunFactory <- function(x, y = NULL,
 
     } else {
       # numeric response, non-Surv
-      diff(c(0L, rlang::exec(getDist(distribution, type = "cdf"), !!! c(list(q=obs), pars.gr)), 1L))
+      diff(c(0L, rlang::exec(distO$cdf, !!! c(list(q=obs), pars.gr)), 1L))
     }
 
     # check for ties to fix cumDiffs for observed event times
@@ -1418,7 +1415,7 @@ objFunFactory <- function(x, y = NULL,
           # use density instead of diff of CDF for tied observation pairs
           rep.int(
             # take first observation per tie-group
-            rlang::exec(getDist(distribution, type = "dens"), !!! c(list(x = obsVals), pars.gr)),
+            rlang::exec(distO$pdf, !!! c(list(x = obsVals), pars.gr)),
             #tig$tieGrp[, "len"]-1L # number of repeats per tie group
             times = tig$tieGrp[, "len"]-1L)
         },
@@ -1427,7 +1424,7 @@ objFunFactory <- function(x, y = NULL,
         #e.g., for Moran's test
         equispaced = {
           # per tie group, use equal spacings in transformed space
-          rep.int(diff(rlang::exec(getDist(distribution, type = "cdf"),
+          rep.int(diff(rlang::exec(distO$cdf,
                                    !!! c(list(q = rep(obsVals, each = 2L) + c(-1, 1) * tig$numPrecision[["rRad"]]), pars.gr)))[seq.int(from = 1, by = 2, length.out = nTigs)] / (tig$tieGrp[, "len"]-1L),
                   times = tig$tieGrp[, "len"]-1L)
 
@@ -1498,7 +1495,7 @@ objFunFactory <- function(x, y = NULL,
   } #fn objFun
 
   # attach analytical solution for MLE
-  if ( method == 'MLEn' && ! twoGroup && ! twoPhase && distribution == 'exponential' && ! isSurv ){
+  if (method == 'MLEn' && !twoGroup && !twoPhase && distO$dist == 'exponential' && !isSurv) {
     attr(objFun, which = "opt") <- local({
       par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
       list(par_orig = par_analytic,
@@ -1535,7 +1532,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
   # gather information from objective function environment
   objFunObjs <- rlang::env_get_list(env = objFunEnv,
-                                    nms = c("bind", "distribution", "method", "optim_args" ,"trNamesFull", "profiled", "twoGroup", "twoPhase", "x", "y", "extractPars", "oNames"))
+                                    nms = c("bind", "method", "optim_args" ,"trNamesFull", "profiled", "twoGroup", "twoPhase", "x", "y", "extractPars", "oNames"))
 
   # check if there is already a solution provided by the objective function
   optObj <- attr(objFun, which = "opt", exact = TRUE)
@@ -1663,7 +1660,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' Numerical optimization is done by `stats::optim`.
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
-#' @param distribution character. Which delayed distribution is assumed? Exponential or Weibull.
+#' @param distribution Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution object.
 #' @param twoPhase logical. Allow for two phases?
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param ties character. Strategy to handle ties for `method = "MPSE"`.
@@ -1698,12 +1695,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   # enforce that the first argument x= is properly instantiated
   stopifnot(!is.null(x), is.numeric(x), length(x) > 0)
 
-  distribution <- match.arg(distribution)
-
-  #??? should this go into delay.R as a distribution list-object?
-  negAllowed <- distribution == "normal"
-  hasDelay <- distribution != "normal"
-  twoPhaseAllowed <- distribution != "normal"
+  distO <- if (is.list(distribution)) distribution else buildDist(match.arg(distribution))
 
   method <- if (length(method) == 1L && toupper(method) == 'MSE') {
     message("The method name 'MPSE' is prefered over the previously used name 'MSE'!")
@@ -1719,7 +1711,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
     }
 
     # translate convenience names (for single phase) to canonical names
-    if (twoPhaseAllowed) {
+    if (distO$twoPhaseAllowed) {
       unNmbrdIdx <- !grepl(pattern = "[12]", bind, fixed = FALSE)
       if (any(unNmbrdIdx)) {
         bind[unNmbrdIdx] <- paste0(bind[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
@@ -1733,7 +1725,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 
   # objective function ------------------------------------------------------
 
-  objFun <- objFunFactory(x = x, y = y, method = method, profiled = profiled, distribution = distribution,
+  objFun <- objFunFactory(x = x, y = y, method = method, profiled = profiled, distO = distO,
                           twoPhase = twoPhase, bind = bind, ties = ties, verbose = verbose)
   if (is.null(objFun)) return(invisible(NULL))
   objFunEnv <- rlang::fn_env(objFun)
@@ -1754,7 +1746,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
     list(
       data = if (twoGroup) list(x = x, y = y) else x,
       nobs = c(x = NROW(x), y = if (twoGroup) NROW(y) else 0),
-      distribution = distribution,
+      distO = distO,
       twoPhase = twoPhase,
       twoGroup = twoGroup,
       method = method,
@@ -1784,7 +1776,7 @@ print.incubate_fit <- function(x, ...) {
     paste(round(x$data[[1L]],4), round(x[["data"]][[length(x$data)]],4), sep = " to ")
   }
   cat(glue::glue_data(x, .sep = "\n",
-                      "Fit a delayed {distribution}{c('', ' with two delay phases')[[1L+twoPhase]]} through{c('', ' profiled')[[1L+optimizer$profiled]]} {switch(method,
+                      "Fit a {distO$dist_name}{c('', ' with two delay phases')[[1L+twoPhase]]} through{c('', ' profiled')[[1L+optimizer$profiled]]} {switch(method,
                       MPSE = 'Maximum Product of Spacings Estimation (MPSE)', MLEn = 'naive Maximum Likelihood Estimation (MLEn)',
                       MLEw = 'weighted Maximum Likelihood Estimation (MLEw)',
                       MLEc = 'corrected Maximum Likelihood Estimation (MLEc)', '???')} for {c('a single group', 'two independent groups')[[1L+twoGroup]]}.",
@@ -1825,7 +1817,7 @@ summary.incubate_fit <- function(object, ...) {
 #' @export
 update.incubate_fit <- function(object, optim_args = NULL, verbose = 0, ...) {
 
-  stopifnot(all(c("data", "distribution", "method", "objFun", "twoPhase", "twoGroup", "par", "criterion", "optimizer") %in% names(object)))
+  stopifnot(all(c("data", "distO", "method", "objFun", "twoPhase", "twoGroup", "par", "criterion", "optimizer") %in% names(object)))
 
   ## fit model with given optim_args
   objFun <- object[["objFun"]]
@@ -1854,7 +1846,8 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...) {
 
   rlang::check_installed(pkg = 'ggplot2', reason = 'to draw plots', version = '3.3')
 
-  cumFun <- getDist(x[["distribution"]], type = "cdf")
+  distO <- x$distO
+  cumFun <- distO$cdf
 
   # add time = 0 per group
   kmFit0 <- survival::survfit0(x[["kmFit"]], start.time = 0)
@@ -1889,7 +1882,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...) {
 
 
   if (missing(title)) title <- glue::glue_data(x,
-                                               "Fitted {distribution} delay {c('model ', 'models ')[[1L+twoGroup]]}",
+                                               "Fitted {distO$dist_name} {c('model ', 'models ')[[1L+twoGroup]]}",
                                                "{c('', 'with two delay phases')[[1L+twoPhase]]}")
   coefPrint <- function(gr) {
     co <- coef(x, group = gr)
@@ -1912,7 +1905,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...) {
 simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...) {
   stopifnot(inherits(object, "incubate_fit"))
 
-  ranFun <- getDist(object$distribution, type = "r")
+  ranFun <- object$distO$random
 
   #XXX add option to mirror cens= setting in observed data?
   # arguments to the random function generation
@@ -1950,8 +1943,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
   stopifnot(is.numeric(R), length(R) == 1L, R > 1L)
   R <- ceiling(R)
   useBoot <- isTRUE(useBoot)
-  ranFun <- getDist(object$distribution, type = "r")
-  dFun <- getDist(object$distribution, type = "d")
+  ranFun <- object$distO$random
+  dFun <- object$distO$pdf
   twoGroup <- isTRUE(object$twoGroup)
   nObs <- object$nobs
   # full untransformed parameter vector
@@ -2046,7 +2039,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
   if (useBoot) {
     stopifnot(!twoGroup) # for the time being only single group calls are supported!
     boot::boot(data = object$data,
-               statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distribution, twoPhase = object$twoPhase,
+               statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distO, twoPhase = object$twoPhase,
                                                            ties = object$ties,
                                                            method = object$method, bind = object$bind), transformed = FALSE),
                sim = bs_data, mle = coef(object), R = R,
@@ -2067,7 +2060,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           x <- (if (twoGroup) object$data$x else object$data)[sample.int(n = nObs[[1L]], replace = TRUE)]
                           y <- if (twoGroup) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
 
-                          coef(delay_model(x=x, y=y, distribution = object$distribution, twoPhase = object$twoPhase,
+                          coef(delay_model(x=x, y=y, distribution = object$distO, twoPhase = object$twoPhase,
                                            ties = object$ties,
                                            method = object$method, bind = object$bind), transformed = FALSE)
                         },
@@ -2091,7 +2084,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                             x <- rlang::exec(ranFun, !!! ranFunArgsX)
                             y <- if (twoGroup) rlang::exec(ranFun, !!! ranFunArgsY)
 
-                            dm <- suppressWarnings(delay_model(x=x, y=y, distribution = object$distribution, twoPhase = object$twoPhase,
+                            dm <- suppressWarnings(delay_model(x=x, y=y, distribution = object$distO, twoPhase = object$twoPhase,
                                                                ties = object$ties,
                                                                method = object$method, bind = object$bind))
                             retVec <- rep.int(NA_real_, times = ncoef)
@@ -2116,7 +2109,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     # more clear and shorter but less efficient!
     # future.apply::future_vapply(simulate(object, nsim = R), FUN.VALUE = numeric(length(cf)),
-    #  FUN = \(d) coef(delay_model(x=d, distribution = object$distribution, ties = object$ties, method = object$method, bind = object$bind)))
+    #  FUN = \(d) coef(delay_model(x=d, distribution = object$distO, ties = object$ties, method = object$method, bind = object$bind)))
 
   }
 }
@@ -2196,7 +2189,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
   logshift <- rlang::set_names(rep_len(.0001, length.out=length(pnames)), nm = pnames)
   # for delay, the transformation needs to be independent of the scale of delay, so we subtract the minimum and add a shift
   #+use fixed logshift_delay = 5 (which performed well in simulation at single group, exponential distribution, together with smd=0.25)
-  if (logTransform){
+  if (logTransform) {
     LOGSHIFT_DELAY <- 5
     for (i in which(startsWith(pnames, 'delay'))){
       logshift[i] <- -min(if (useBoot) bs_data$t[,i] else bs_data[i,], na.rm = TRUE) + LOGSHIFT_DELAY
@@ -2316,7 +2309,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
 transform.incubate_fit <- function(`_data`, ...) {
   stopifnot(inherits(`_data`, "incubate_fit"))
 
-  cdfFun <- getDist(`_data`$distribution, type = "cdf")
+  cdfFun <- `_data`$distO$cdf
 
   twoGroup <- isTRUE(`_data`$twoGroup)
   isSurv <- isTRUE(`_data`$cens$isSurv)

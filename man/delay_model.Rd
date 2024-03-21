@@ -22,7 +22,7 @@ delay_model(
 
 \item{y}{numeric. observations from 2nd group}
 
-\item{distribution}{character. Which delayed distribution is assumed? Exponential or Weibull.}
+\item{distribution}{Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution object.}
 
 \item{twoPhase}{logical. Allow for two phases?}
 

@@ -25,7 +25,7 @@ test_diff(
 
 \item{y}{data from the treatment group.}
 
-\item{distribution}{character(1). Name of the parametric delay distribution to use.}
+\item{distribution}{Name of the distribution to use or distribution object.}
 
 \item{twoPhase}{logical(1). Do we model two phases per group? Default is \code{FALSE}, i.e. a single delay phase per group.}
 

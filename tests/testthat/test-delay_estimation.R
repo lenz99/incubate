@@ -4,22 +4,25 @@
 
 test_that("Parameter extraction and transformation", {
 
-  # test getDist for parameter names:
+  distO_e <- buildDist(distribution = "exponential")
+  distO_w <- buildDist(distribution = "weibull")
+
+  expect_named(distO_e, expected = c("dist", "dist_name", "hasDelay", "negAllowed",
+                                     "twoPhaseAllowed", "cdf", "pdf", "random", "param"))
+  expect_type(distO_e$param, type = "closure")
+
+  # test parameter names of distribution object
   # on transformed scale (for optimization)
-  expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
-                                      bind = "shape1", profiled = FALSE, transformed = TRUE),
+  expect_identical(distO_w$param(twoPhase = FALSE, twoGroup = TRUE, bind = "shape1", profiled = FALSE, transformed = TRUE),
                    expected = c("shape1_tr", "delay1_tr.x", "scale1_tr.x", "delay1_tr.y", "scale1_tr.y"))
-  expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
-                                      bind = "shape1", profiled = TRUE, transformed = TRUE),
+  expect_identical(distO_w$param(twoPhase = FALSE, twoGroup = TRUE, bind = "shape1", profiled = TRUE, transformed = TRUE),
                    expected = c("shape1_tr", "delay1_tr.x", "delay1_tr.y"))
   # original (=non-transformed) scale
-  expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
-                                      bind = "shape1", profiled = FALSE, transformed = FALSE),
+  expect_identical(distO_w$param(twoPhase = FALSE, twoGroup = TRUE, bind = "shape1", profiled = FALSE, transformed = FALSE),
                    expected = c("shape1", "delay1.x", "scale1.x", "delay1.y", "scale1.y"))
-  # getDist takes out profiled parameters even when for original (=non-transformed) scale
+  # param() takes out profiled parameters even when for original (=non-transformed) scale
   #+ this is needed in delay_estimation (at extractParOptInd)
-  expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
-                                      bind = "shape1", profiled = TRUE, transformed = FALSE),
+  expect_identical(distO_w$param(twoPhase = FALSE, twoGroup = TRUE, bind = "shape1", profiled = TRUE, transformed = FALSE),
                    expected = c("shape1", "delay1.x", "delay1.y"))
 
   #' Slow extract-routine based on R's name-matching capabilities as gold standard function.
@@ -44,8 +47,8 @@ test_that("Parameter extraction and transformation", {
   #' @return requested parameters as named numeric vector
   extractParsTest <- function(parV, distribution = c('exponential', 'weibull'), twoPhase = NULL, group = NULL, isTransformed = NULL, transform = FALSE) {
 
-    stopifnot( is.numeric(parV), all(nzchar(names(parV))) )
-    distribution <- match.arg(distribution)
+    stopifnot(is.numeric(parV), all(nzchar(names(parV))))
+    distO <- buildDist(match.arg(distribution))
 
     # contract: parV is canonically ordered (see below as well)
     # extractPars will not check if it needs first to reorder the parameters given by checking the names.
@@ -61,7 +64,7 @@ test_that("Parameter extraction and transformation", {
       twoPhase <- any(grepl(pattern = "delay2", pNames, fixed = TRUE))
     }
     # parameter names of single group where we start from!
-    oNames <- incubate:::getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
+    oNames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
 
     # index of parameters that are *not* group-specific
     idx.nongrp <- which(!grepl(pattern = paste0("[.][xy]$"), pNames))
@@ -72,14 +75,14 @@ test_that("Parameter extraction and transformation", {
 
     # transform parameters if requested
     # if no transformation required, simply extract the relevant parameters
-    if ( transform ){
+    if (transform) {
 
       # transform parameter vector for a single group. Also transforms parameter names.
       # @param parV1: parameter vector for a single group
       # @return transformed parameter vector
-      transformPars1Test <- function(parV1){
+      transformPars1Test <- function(parV1) {
         # parameter transformation matrices
-        PARAM_TRANSF_M <- switch(distribution,
+        PARAM_TRANSF_M <- switch(distO$dist,
                                  exponential = matrix(c( 1, 0, 0, 0,
                                                          0, 1, 0, 0,
                                                          -1, 0, 1, 0,
@@ -94,7 +97,7 @@ test_that("Parameter extraction and transformation", {
                                                   dimnames = list(paste0(c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2"), "_tr"))),
                                  stop("Unknown distribution!", call. = FALSE)
         )
-        PARAM_TRANSF_Minv <- switch(distribution,
+        PARAM_TRANSF_Minv <- switch(distO$dist,
                                     exponential = matrix(c(1, 0, 0, 0,
                                                            0, 1, 0, 0,
                                                            1, 0, 1, 0,
@@ -113,12 +116,12 @@ test_that("Parameter extraction and transformation", {
 
         PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
                                weibull = c(identity, log, #log1p, #identity, #=shape1
-                                           log, log, log, log))[[distribution]]
+                                           log, log, log, log))[[distO$dist]]
         PARAM_TRANSF_Finv <- list(exponential = c(identity, exp, exp, exp),
                                   weibull = c(identity, exp, #expm1, #identity, #=shape1
-                                              exp, exp, exp, exp))[[distribution]]
+                                              exp, exp, exp, exp))[[distO$dist]]
 
-        stopifnot( length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F) )
+        stopifnot(length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F))
 
 
         if (isTransformed) {
@@ -178,7 +181,7 @@ test_that("Parameter extraction and transformation", {
       # reflect transformation in meta-data
       isTransformed <- ! isTransformed
       pNames <- names(parV)
-      oNames <- incubate:::getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
+      oNames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, transformed = isTransformed)
     }# transform
 
 
@@ -188,7 +191,7 @@ test_that("Parameter extraction and transformation", {
       parV
     } else {
       # single group extraction
-      stopifnot( is.character(group), nzchar(group) )
+      stopifnot(is.character(group), nzchar(group))
 
       # extract all group parameters (=contain .x or .y at the end)
       #+and restore original name (=remove ".x" or ".y")
@@ -203,10 +206,11 @@ test_that("Parameter extraction and transformation", {
     }
   }
 
-  extPars_exp1 <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE, profiled = FALSE) |>
+  dummydat <- c(6, 7, 9, 11)
+  extPars_exp1 <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE, profiled = FALSE) |>
     rlang::fn_env() |> rlang::env_get("extractPars")
 
-  extPars_exp1P <- incubate:::objFunFactory(x = rexp_delayed(n=11, delay1 = 5, rate1 = .2), distribution = "expon", twoPhase = FALSE, profiled = TRUE) |>
+  extPars_exp1P <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE, profiled = TRUE) |>
     rlang::fn_env() |> rlang::env_get("extractPars")
 
   par_exp1 <- c(delay1 = 3, rate1 = .8)
@@ -231,7 +235,8 @@ test_that("Parameter extraction and transformation", {
   expect_identical(extractParsTest(parV = par_exp1, transform = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
 
   # exponential, two groups, unbound
-  objFun_exp2 <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2), y = rexp_delayed(n=3, delay1 = 3, rate1 = .1), distribution = "expon", twoPhase = FALSE)
+  objFun_exp2 <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2),
+                                          y = rexp_delayed(n=3, delay1 = 3, rate1 = .1), distO = distO_e, twoPhase = FALSE)
   extPars_exp2 <- rlang::env_get(rlang::fn_env(objFun_exp2), "extractPars")
 
   par_exp2 <- c(delay1.x = 2.8, rate1.x = .81, delay1.y = 5.1, rate1.y = 1.1)
@@ -248,7 +253,8 @@ test_that("Parameter extraction and transformation", {
   expect_identical(extractParsTest(parV = par_exp2, group = "y"), setNames(par_exp2[3:4], c("delay1", "rate1")))
 
   # exponential, two groups, bound
-  objFun_exp2b <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2), y = rexp_delayed(n=3, delay1 = 3, rate1 = .1),
+  objFun_exp2b <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2),
+                                           y = rexp_delayed(n=3, delay1 = 3, rate1 = .1),
                                            distribution = "expon", twoPhase = FALSE, bind = "rate1")
   extPars_exp2b <- rlang::env_get(rlang::fn_env(objFun_exp2b), "extractPars")
 
@@ -292,7 +298,8 @@ test_that("Parameter extraction and transformation", {
                    c(delay1_tr = par_weib1s[["delay1"]], shape1_tr = log(par_weib1s[["shape1"]])))
 
   # weibull two groups
-  objFun_weib2 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2), y = rweib_delayed(n=4, delay1=3, shape1 = 2.8, scale1 = .9),
+  objFun_weib2 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2),
+                                           y = rweib_delayed(n=4, delay1=3, shape1 = 2.8, scale1 = .9),
                                            distribution = "weib", twoPhase = FALSE)
   extPars_weib2 <- rlang::env_get(rlang::fn_env(objFun_weib2), "extractPars")
 
@@ -744,7 +751,7 @@ test_that("Fit delayed exponentials with censoring", {
   #plot(fmCR1_mlewp)
 
 
-  slotNames <- c("data", "nobs", "distribution", "twoPhase", "twoGroup", "method", "bind",
+  slotNames <- c("data", "nobs", "distO", "twoPhase", "twoGroup", "method", "bind",
                  "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer")
   expect_named(fmCR1_mpse, expected = slotNames)
   expect_named(fmCR1_mpse$cens, expected = c("isSurv", "n", "ind", "rcens"))
@@ -844,8 +851,8 @@ test_that("Fit delayed exponentials with censoring", {
 
 test_that("Fit delayed Weibull", {
 
-  densFun_wb <- incubate:::getDist(distribution = "weib", type = "density")
-
+  distO <- buildDist(distribution = "weibull")
+  densF_w <- distO$pdf
 
   # single group ----
 
@@ -995,7 +1002,7 @@ test_that("Fit delayed Weibull", {
   # Cousineau reports delay=280.9, shape=2.62, scale=119.0 as result from indirect optimization
   expect_lte(fd_wbc_mlen$criterion, expected = fd_wbc_mlen$objFun(pars = c(delay1=280.9, shape1=2.62, scale1=119.0), criterion = TRUE))
   # criterion is really neg. log likelihood
-  expect_equal(fd_wbc_mlen$criterion, -sum(densFun_wb(cousEx, delay1 = 280.9, shape1=2.62, scale1=119.0, log = TRUE)), tolerance = .001)
+  expect_equal(fd_wbc_mlen$criterion, -sum(densF_w(cousEx, delay1 = 280.9, shape1=2.62, scale1=119.0, log = TRUE)), tolerance = .001)
   # MLEw
   fd_wbc_mlew <- delay_model(x = cousEx, distribution = "weib", method = "MLEw", profile = TRUE)
   expect_true(fd_wbc_mlew$optimizer$profiled)

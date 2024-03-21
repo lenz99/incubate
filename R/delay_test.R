@@ -21,7 +21,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
   method <- match.arg(method)
   twoGroup <- isTRUE(delayFit$twoGroup)
   isSurv <- isTRUE(delayFit$cens$isSurv)
-  distribution <- delayFit$distribution
+  distO <- delayFit$distO
   data_name <- if (twoGroup) paste(names(delayFit$data), collapse = " and ") else "x"
   nObs <- delayFit$nobs[seq_len(1L+twoGroup)]
   params <- coef.incubate_fit(delayFit, transformed = FALSE)
@@ -119,8 +119,8 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
              # generalized Pearson-Fisher chi-squared test,
              #+see Nikulin (2007), referring to Li and Doss (1993) in turn
 
-             cdfF <- getDist(distribution, type = "cdf")
-             densF <- getDist(distribution, type = "density")
+             cdfF <- distO$cdf
+             densF <- distO$pdf
 
 
              # estimate variance-covariance matrix for specified groups
@@ -442,7 +442,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
              #
              # Dmat <- diag(1/sqrt(pIntPred))
              # # apply() transposes the partial derivative matrix (as required, see Nikulin, p. 33)
-             # Cmat <- Dmat %*% apply(pd_cdfF(distribution = distribution, par = coef_minX2, q = boundaries), MARGIN = 1L, FUN = diff)
+             # Cmat <- Dmat %*% apply(pd_cdfF(distribution = distO$dist, par = coef_minX2, q = boundaries), MARGIN = 1L, FUN = diff)
              # Pmat <- diag(nCl) - Cmat %*% solve(crossprod(Cmat)) %*% t(Cmat)
              #
              # S1mat <- matrix(data = -1, nrow = nCl-1, ncol = nCl-1)
@@ -483,7 +483,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 
            if (isSurv) {
              #+see book, Nikulin, 2017, chapter 2
-             switch (delayFit$distribution,
+             switch (distO$dist,
                      exponential = {
                        # with specific test statistics for exponential
                        # see chapter 2, 2.5.1 (p. 51ff) in Nikulin (2017)
@@ -519,7 +519,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
                      weibull = {
                        stop("Weibull fixme XXX")
                      },
-                     stop("This distribution is not handled here!", call. = FALSE)
+                     stop(glue("This distribution {distO$dist} is not handled here!"), call. = FALSE)
              ) #switch
 
            } else {
@@ -553,27 +553,30 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
              testStat_ad(datr = transform(delayFit), n = nObs)
            }
 
-           p_val <- if (delayFit$distribution == 'exponential') {
-             # modification for Exponential (cf Stephens, Table 4.14, p.138)
-             # the correction factor approaches 1 from above.
-             # We keep the number of N as all observations, independent of the number of parameters estimated in the null-model.
-             # QQQ Should we increase N by the number of parameters p estimated less 2 ( p -2 because 2 parameters are estimated in standard delayed exponential)
-             A2_mod <- A2 * pmax.int(1L, 1L + 5.4 / nObs - 11 / nObs**2L)
+           p_val <- switch(distO$dist,
+                           exponential = {
+                             # modification for Exponential (cf Stephens, Table 4.14, p.138)
+                             # the correction factor approaches 1 from above.
+                             # We keep the number of N as all observations, independent of the number of parameters estimated in the null-model.
+                             # QQQ Should we increase N by the number of parameters p estimated less 2 ( p -2 because 2 parameters are estimated in standard delayed exponential)
+                             A2_mod <- A2 * pmax.int(1L, 1L + 5.4 / nObs - 11 / nObs**2L)
 
-             # .ad_pval was defined in data-raw/ad_pval.R. Has been moved to scratch/test_GOF_ad_pval.R
-             ##.ad_pval[['exponential']](A2_mod)
-             NA_real_ # dummy return value
+                             # .ad_pval was defined in data-raw/ad_pval.R. Has been moved to scratch/test_GOF_ad_pval.R
+                             ##.ad_pval[['exponential']](A2_mod)
+                             NA_real_ # dummy return value
 
-           } else {
-             stopifnot( delayFit$distribution == 'weibull' )
+                           },
+                           weibull = {
 
-             # P-value for Weibull based on Lockhart, 1994 (Table 1)
-             # interpolation model on logits using critical value and inverse of shape parameter
-             params_ntr <- coef.incubate_fit(delayFit, transformed = FALSE)
-             # .ad_pval was defined in data-raw/ad_pval.R. Has been moved to scratch/test_GOF_ad_pval.R
-             ##.ad_pval[['weibull']](A2, params_ntr[grepl('shape', names(params_ntr), fixed = TRUE)])
-             NA_real_ # dummy return value
-           }
+                             # P-value for Weibull based on Lockhart, 1994 (Table 1)
+                             # interpolation model on logits using critical value and inverse of shape parameter
+                             params_ntr <- coef.incubate_fit(delayFit, transformed = FALSE)
+                             # .ad_pval was defined in data-raw/ad_pval.R. Has been moved to scratch/test_GOF_ad_pval.R
+                             ##.ad_pval[['weibull']](A2, params_ntr[grepl('shape', names(params_ntr), fixed = TRUE)])
+                             NA_real_ # dummy return value
+                           },
+                           stop("This distribution is not handled here (yet)!", call. = FALSE)
+           )
 
            if (twoGroup) {
              A2 <- paste(signif(A2, 4), collapse = ' and ')
@@ -620,7 +623,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 #'
 #' @param x data from reference/control group.
 #' @param y data from the treatment group.
-#' @param distribution character(1). Name of the parametric delay distribution to use.
+#' @param distribution Name of the distribution to use or distribution object.
 #' @param twoPhase logical(1). Do we model two phases per group? Default is `FALSE`, i.e. a single delay phase per group.
 #' @param method character. Which method to fit the models.
 #' @param profiled logical. Use the profiled likelihood?
@@ -642,9 +645,9 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                       chiSqApprox = FALSE, verbose = 0) {
 
   # setup ----
-  distribution <- match.arg(arg = distribution)
+  distO <- if (is.list(distribution)) distribution else buildDist(match.arg(arg = distribution))
   type <- match.arg(arg = type)
-  onames <- getDist(distribution = distribution, type = "param", twoPhase = FALSE, twoGroup = FALSE, transformed = FALSE)
+  onames <- distO$param(twoPhase = FALSE, twoGroup = FALSE, transformed = FALSE)
   stopifnot(is.numeric(x), length(x) > length(onames), is.numeric(y), length(y) > length(onames))
   stopifnot(is.numeric(R), length(R) == 1L, R >= 1L)
   stopifnot(is.character(param))
@@ -730,9 +733,9 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   # @param strict logical. Accept models only if they converged flawlessly, i.e., if convergence=0?
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y, strict = TRUE) {
-    fit0 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase,
+    fit0 <- delay_model(x = x, y = y, distribution = distO$dist, twoPhase = twoPhase,
                         method = method, profiled = profiled, ties = ties, bind = param)
-    fit1 <- delay_model(x = x, y = y, distribution = distribution, twoPhase = twoPhase,
+    fit1 <- delay_model(x = x, y = y, distribution = distO$dist, twoPhase = twoPhase,
                         method = method, profiled = profiled, ties = ties)
 
     if (is.null(fit0) || is.null(fit1) ||
@@ -829,7 +832,6 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     # calculate the test statistic on the simulated data
     # estimate P as proportion of simulated test statistics that exceed the observed test statistic t_obs
 
-    ranFun <- getDist(distribution, type = "r")
     # arguments to the random function generation
     # XXX censoring: we actually expect/support only right-censoring (but here, we still count *any* censoring)
     ranFunArgsX <- c(list(n=length(x), cens = fit0$cens$n[["x"]]["any"] / length(x)),
@@ -843,8 +845,8 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
                                              # generate new data according to given fitted null-model
                                              # sort is not needed here, as it goes through the whole pipeline (factory method)
-                                             ts_boot <- testStat(x = rlang::exec(ranFun, !!! ranFunArgsX),
-                                                                 y = rlang::exec(ranFun, !!! ranFunArgsY),
+                                             ts_boot <- testStat(x = rlang::exec(distO$random, !!! ranFunArgsX),
+                                                                 y = rlang::exec(distO$random, !!! ranFunArgsY),
                                                                  strict = FALSE)
                                              if (is.null(ts_boot)) {
                                                rep.int(NA_real_, times = retL)
@@ -1009,15 +1011,15 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
                        nRange = c(5, 150), verbose=0){
 
   tol_pow <- .001
-  distribution <- match.arg(distribution)
+  distO <- buildDist(match.arg(distribution))
   if (! missing(test)) test <- tolower(test)
   test <- match.arg(arg = test)
   test_cat <- sub(pattern = "[_].*$", replacement = "", x = test)
-  ranFun <- getDist(distribution, type = "r")
-  onames <- getDist(distribution, type = "param", twoPhase = twoPhase, twoGroup = FALSE, transformed = FALSE)
+  ranFun <- distO$random
+  onames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, transformed = FALSE)
 
   # parameters to test differences and for which power is requested
-  if (any(grepl(pattern = "_tr", param, fixed = TRUE))){
+  if (any(grepl(pattern = "_tr", param, fixed = TRUE))) {
     stop("Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.", call. = FALSE)
   }
 
@@ -1058,7 +1060,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
   pary <- rlang::set_names(pary, onames)
 
 
-  simulatePower <- function(nx, ny, B = nPowerSim, R){
+  simulatePower <- function(nx, ny, B = nPowerSim, R) {
     nx <- ceiling(nx); ny <- ceiling(ny)
 
     # repeatedly test for difference in parameter on bootstrapped data
@@ -1072,7 +1074,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
                                             P_val <- NA_real_
                                             try(expr = {
                                               P_val <- purrr::pluck(test_diff(x = datx, y = daty,
-                                                                              distribution = distribution, twoPhase = twoPhase,
+                                                                              distribution = distO, twoPhase = twoPhase,
                                                                               param = param, type = test_cat, R = R),
                                                                     "P", test, .default = NA_real_)
                                             }, silent = TRUE)

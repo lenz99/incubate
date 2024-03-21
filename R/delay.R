@@ -732,6 +732,7 @@ mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay2 = NULL, sha
 #' This object contains all relevant informations about the chosen distribution.
 #' @param distribution character(1). Which distribution?
 #' @return distribution object. currently, it is simply a list.
+#' @export
 buildDist <- function(distribution) {
   stopifnot(distribution %in% c("exponential", "weibull", "normal"))
 
@@ -754,8 +755,8 @@ buildDist <- function(distribution) {
                  stop(glue("Unknown distribution {distribution}."), call. = FALSE)),
     pdf = switch(distribution,
                  normal = stats::dnorm,
-                 exponential = pexp_delayed,
-                 weibull = pweib_delayed,
+                 exponential = dexp_delayed,
+                 weibull = dweib_delayed,
                  stop(glue("Unknown distribution {distribution}."), call. = FALSE)),
     random = switch(distribution,
                     normal = stats::rnorm,
