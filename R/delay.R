@@ -727,6 +727,88 @@ mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay2 = NULL, sha
 #   dVals
 # }
 
+#' Builds the distribution object
+#'
+#' This object contains all relevant informations about the chosen distribution.
+#' @param distribution character(1). Which distribution?
+#' @return distribution object. currently, it is simply a list.
+buildDist <- function(distribution) {
+  stopifnot(distribution %in% c("exponential", "weibull", "normal"))
+
+  list(
+    dist = distribution,
+    dist_name = switch(distribution,
+                       normal = "Normal distribution", #(with parameters expectation and std. deviation)
+                       exponential = "Delayed exponential distribution", #2-parameter
+                       weibull = "Delayed Weibull distribution", #3-parameter
+                       "unknown distribution"),
+    # some properties
+    hasDelay = distribution != "normal",
+    negAllowed = distribution == "normal",
+    twoPhaseAllowed = distribution != "normal",
+
+    cdf = switch(distribution,
+                 normal = stats::pnorm,
+                 exponential = pexp_delayed,
+                 weibull = pweib_delayed,
+                 stop(glue("Unknown distribution {distribution}."), call. = FALSE)),
+    pdf = switch(distribution,
+                 normal = stats::dnorm,
+                 exponential = pexp_delayed,
+                 weibull = pweib_delayed,
+                 stop(glue("Unknown distribution {distribution}."), call. = FALSE)),
+    random = switch(distribution,
+                    normal = stats::rnorm,
+                    exponential = rexp_delayed,
+                    weibull = rweib_delayed,
+                    stop(glue("Unknown distribution {distribution}."), call. = FALSE)),
+    param = function(twoPhase = FALSE, twoGroup = FALSE, bind = NULL, profiled = FALSE, transformed = FALSE) {
+
+      pars <- switch(distribution,
+                     normal = c("mean", "sd"),
+                     exponential = c("delay1", "rate1", "delay2", "rate2")[seq_len(2L*(1L + twoPhase))],
+                     weibull = c("delay1", "shape1", "scale1", "delay2", "shape2", "scale2")[seq_len(3L*(1L + twoPhase))],
+                     stop(glue("Unknown distribution {distribution}."), call. = FALSE))
+
+      if (profiled) {
+        # drop parameters that are profiled out
+        # profiled-setting effects outcome for both transformed=TRUE but also on original scale (transformed=FALSE)
+        # even though profiling is directly relevant only within optimization.
+        switch(distribution,
+               exponential = {
+                 if (!"rate1" %in% bind || length(bind) == length(pars)) {
+                   pars <- setdiff(pars, "rate1") #XXX think about profiling and twoPhase! (and twoGroup?!)
+                 }
+               },
+               weibull = {
+                 # drop parameters that are profiled out
+                 if (! "scale1" %in% bind || length(bind) == length(pars)) {
+                   pars <- setdiff(pars, "scale1") #XXX think about profiling and twoPhase! (and twoGroup?!)
+                 }
+               },
+               normal = {
+                 warning("Profiling not supported for normal distribution.", call. = FALSE)
+               },
+               stop(glue("Unknown distribution {distribution}."), call. = FALSE))
+      }#fi
+
+
+      if (transformed) {
+        pars <- paste0(pars, "_tr")
+        if (!is.null(bind) && any(nzchar(bind))) bind <- paste0(bind, "_tr")
+      }
+
+      if (twoGroup) {
+        bind <- intersect(pars, bind) #intersect: enforces original order from pars
+        pars_gr <- setdiff(pars, bind)
+        # bind parameters first
+        pars <- c(bind, paste(rep.int(pars_gr, times = 2L), rep(c("x", "y"), each = length(pars_gr)), sep = "."))
+      }
+
+      pars
+    }#fn param
+  )
+}
 
 #' Get delay distribution function
 #' @param distribution character(1). Which distribution?
