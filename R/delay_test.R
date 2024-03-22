@@ -8,10 +8,11 @@
 #'
 #' @param delayFit delay_model fit object
 #' @param method character(1). which method to use for GOF. Default is 'moran'.
+#' @param estimated flag. Moran test: was the parameter estimated?
 #' @param verbose integer. Verbosity level. The higher the more verbose debugging output.
 #' @return An `htest`-object containing the GOF-test result
 #' @export
-test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"), verbose = 0) {
+test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"), estimated = TRUE, verbose = 0) {
 
   stopifnot(inherits(delayFit, what = "incubate_fit"))
   if (delayFit$method != "MPSE") {
@@ -45,17 +46,16 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
            # @param n nbr of observations, length 1 or 2
            # @param k nbr of parameters to be estimated
            # @return Moran's test statistic, length 1 or 2
-           testStat_mo <- function(mpseCrit, n, k) {
+           testStat_mo <- function(mpseCrit, nObs, k) {
+
+             mo_m <- (nObs+1L) * (log(nObs+1L) + EUL_MAS) - .5 - 1/(12L*(nObs + 1L))
+             mo_v <- (nObs+1L) * (pi**2L / 6L - 1L) - .5 - 1/(6L*(nObs + 1L))
+
+             C1 <- mo_m - sqrt(.5 * nObs * mo_v)
+             C2 <- sqrt(mo_v / (2L*nObs))
+
              # factor (n+1) takes -avg to -sum
-             mpseCrit <- mpseCrit * (n+1L)
-
-             mo_m <- (n+1L) * (log(n+1L) + EUL_MAS) - .5 - 1/(12L*(n + 1L))
-             mo_v <- (n+1L) * (pi**2L / 6L - 1L) - .5 - 1/(6L*(n + 1L))
-
-             C1 <- mo_m - sqrt(.5 * n * mo_v)
-             C2 <- sqrt(mo_v / (2L*n))
-
-             (mpseCrit + .5 * k - C1) / C2
+             ((nObs+1L) * mpseCrit + (if (estimated) .5 * k else 0) - C1) / C2
            } # fn
 
 
@@ -63,15 +63,17 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
            statist <- if (twoGroup) { ##  && length(delayFit$bind) < length(oNames) # not needed!?
              sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE,
                                                         ties. = "equispaced"), #criterion per group
-                             n = nObs, k = k/2))
-             #XXX can be negative, when many ties (example for instance, happened for the call:)
-             #delay_model(x = 5 + rpois(17, lambda = 5), y = survival::Surv(8 + rpois(23, lambda = 3), event = sample(x = c(0, 1, 1, 1), size = 23, replace = T)))
+                             nObs = nObs, k = k/2))
            } else {
              # single group
                testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, ties. = "equispaced"),
-                           n = nObs, k = k)
+                           nObs = nObs, k = k)
            }
 
+           # statist sometimes negative, in particular with ties because of conservative tie-fix
+           # e.g. for exponential model on single group data
+           # x = c(8, 9, 9, 10, 11, 12, 14, 16)
+           statist <- max(0, statist) #ensure non-negative
            statist <- rlang::set_names(statist, nm = "X^2")
            # in case of two groups: sum of two independent chi-sq. is chi-sq
            dgf <- sum(nObs)

@@ -7,6 +7,7 @@
 test_GOF(
   delayFit,
   method = c("moran", "pearson", "nikulin", "NRR"),
+  estimated = TRUE,
   verbose = 0
 )
 }
@@ -14,6 +15,8 @@ test_GOF(
 \item{delayFit}{delay_model fit object}
 
 \item{method}{character(1). which method to use for GOF. Default is 'moran'.}
+
+\item{estimated}{flag. Moran test: was the parameter estimated?}
 
 \item{verbose}{integer. Verbosity level. The higher the more verbose debugging output.}
 }

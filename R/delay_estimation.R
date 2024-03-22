@@ -1339,8 +1339,9 @@ objFunFactory <- function(x, y = NULL, distO,
   # log spacings:
   # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
   # These log-spacings are the heart of the MPSE-criterion which is the negative mean of these log-spacings.
+  # Moran's test statistic is the negative sum of these log-spacings.
   # @param pars vector of parameters (by default, on transformed scale, i.e. when criterion = FALSE)
-  # @param criterion logical. When `criterion = TRUE`, then pars are on original scale.
+  # @param criterion logical. When `criterion = TRUE`, then pars are on original scale. No other meaning here.
   # @param ties. how to handle ties. By default, use the tie-setting from objective function call.
   # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
   getCumDiffs <- function(pars, group, criterion = FALSE, ties. = ties) {
@@ -1361,7 +1362,10 @@ objFunFactory <- function(x, y = NULL, distO,
 
     # calculate spacings
     # contract: data is sorted!
-    cumDiffs <- if (isSurv) {
+    cumDiffs <- if (!isSurv) {
+        # numeric response (non-Surv)
+        diff(c(0L, rlang::exec(distO$cdf, !!! c(list(q=obs), pars.gr)), 1L))
+    } else {
       # Surv-response
       ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here [but 0 is 0 also for interval!?])
 
@@ -1395,10 +1399,7 @@ objFunFactory <- function(x, y = NULL, distO,
 
       diff(c(0L, h, 1L))
 
-    } else {
-      # numeric response, non-Surv
-      diff(c(0L, rlang::exec(distO$cdf, !!! c(list(q=obs), pars.gr)), 1L))
-    }
+    }#esle !isSurv
 
     # check for ties to fix cumDiffs for observed event times
     tig <- tieInfo[[group]] # tie info group (tig)
@@ -1407,7 +1408,7 @@ objFunFactory <- function(x, y = NULL, distO,
     if (nTigs) {
       stopifnot(all(cumDiffs[tig[["cumDiffInd"]]] == 0)) # all spacings for tied observed event times are 0
 
-      obsVals <- if (isSurv) obs[tig$tieGrp[, "startInd"], 1L] else obs[tig$tieGrp[, "startInd"]]
+      obsVals <- if (!isSurv) obs[tig$tieGrp[, "startInd"]] else obs[tig$tieGrp[, "startInd"], 1L]
 
       cumDiffs[tig[["cumDiffInd"]]] <- switch(
         ties.,
@@ -1423,7 +1424,10 @@ objFunFactory <- function(x, y = NULL, distO,
         # we keep using a standard density strategy for fitting, but can request another tie-strategy for evaluating the MPSE-criterion,
         #e.g., for Moran's test
         equispaced = {
-          # per tie group, use equal spacings in transformed space
+          # per tie group, assume tied observations are maximally spread (within rounding radius).
+          # Two reasons why this is leads to bigger cumDiffs (=smaller criterion/Moran's test statistic = conservative)
+          # 1/ for adjacent spacings (involving obs directly before and after tie) we have assumed the original tied observation
+          # 2/ we use equal spacings in transformed space for all tied observation (within tie group)
           rep.int(diff(rlang::exec(distO$cdf,
                                    !!! c(list(q = rep(obsVals, each = 2L) + c(-1, 1) * tig$numPrecision[["rRad"]]), pars.gr)))[seq.int(from = 1, by = 2, length.out = nTigs)] / (tig$tieGrp[, "len"]-1L),
                   times = tig$tieGrp[, "len"]-1L)
@@ -1459,8 +1463,8 @@ objFunFactory <- function(x, y = NULL, distO,
 
     retVal <- switch(method,
            MPSE = {
-             - if (!twoGroup) {
-               mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.))
+             if (!twoGroup) {
+               -mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.))
              } else {
                #twoGroup:
                #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
@@ -1469,7 +1473,7 @@ objFunFactory <- function(x, y = NULL, distO,
                res <- c(mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.)),
                         mean(getCumDiffs(pars, group = "y", criterion = criterion, ties. = ties.)))
 
-               if (aggregated) stats::weighted.mean(res, w = c(length(x), length(y))) else res
+               if (aggregated) -stats::weighted.mean(res, w = c(length(x), length(y))) else -res
              }
            },
            MLEn = ,

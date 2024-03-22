@@ -275,10 +275,11 @@ test_that("Moran GOF-test", code = {
   expect_lte(mean(testres3[4L,]), expected = .8)
   #boxplot(list(moran=testres3[2L,], pearson = testres3[4L,]), main = "H0, non-Surv, two-group")
 
-  # XXX Moran GOF-test statistic is negative, even without Surv
+  # XXX Moran GOF-test statistic is negative, single group, numeric (even without Surv)
   local({
-    # data from Poisson model (HA), many ties
-    fm0 <- delay_model(x = c(8, 8, 8, 8, 9, 9, 9, 10, 10, 11, 12, 12, 12, 14, 14, 14, 16), method = "MPSE")
+    # data from Poisson model (=not H0), many ties
+    #fm0 <- delay_model(x = c(8, 9, 9, 9, 10, 11, 12, 12, 14, 16), method = "MPSE")
+    fm0 <- delay_model(x = c(8, 9, 9, 10, 11, 12, 14), method = "MPSE")
     #tieInfo <- rlang::env_get(rlang::fn_env(fm0$objFun), "tieInfo")
     expect_gte(test_GOF(delayFit = fm0, method = "moran")$statistic, expected = 0)
   })
