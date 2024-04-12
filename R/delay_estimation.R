@@ -388,10 +388,10 @@ objFunFactory <- function(x, y = NULL, distO,
   # full parameter names (for the whole parameter vector spanning all groups)
   # original (including parameters that are profiled out in optimization)
   oNamesFull <- distO$param(twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
-                        profiled = FALSE, transformed = FALSE) # profiled = FALSE because we consider here original parameters
+                            profiled = FALSE, transformed = FALSE) # profiled = FALSE because we consider here original parameters
   # transformed
   trNamesFull <- distO$param(twoPhase = twoPhase, twoGroup = twoGroup, bind = bind,
-                         profiled = profiled, transformed = TRUE) # profiled as requested because we consider optimization parameters
+                             profiled = profiled, transformed = TRUE) # profiled as requested because we consider optimization parameters
 
 
 
@@ -918,6 +918,7 @@ objFunFactory <- function(x, y = NULL, distO,
   # Get optimization start values and upper limits based on observations from a single group
   # for `twoPhase=TRUE` there will be more parameters
   # with profiling no scale parameter is returned (as it is not optimized)
+  # @param obs vector of observations from single group
   # @return list with transformed par for single group and upper limits for delay parameters, in canonical order (bind has no effect here!)
   getParSetting.gr <- function(obs) {
     # contract: obs is sorted!
@@ -950,7 +951,7 @@ objFunFactory <- function(x, y = NULL, distO,
 
                      # drop scale if profiling
                      if (profiled) {
-                       stopifnot(! twoPhase) #XXX not implemented, yet!
+                       stopifnot(!twoPhase) #XXX not implemented, yet!
                        parV0 <- parV0[1L] # drop "rate1"
                      }
                      parV0
@@ -1141,7 +1142,8 @@ objFunFactory <- function(x, y = NULL, distO,
   # objective function ----
 
   # calculate the log-likelihood, either naive, weighted or in corrected form.
-  # What precisely is calculated depends on method but also on the profiled-flag.
+  # What precisely is calculated depends on its surrounding closure (value of method but also the profiled-flag)
+  # @param pars complete vector of parameters (can be refering to two groups)
   # @param criterion logical. If `TRUE`, then pars are on original scale and the proper log-likelihood is returned
   getLogLik <- function(pars, group, criterion = FALSE) {
 
@@ -1153,30 +1155,20 @@ objFunFactory <- function(x, y = NULL, distO,
     pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
 
 
-    # for Weibull, do we want to penalize high shape values in MLE?
-    pen_shape <- FALSE # distribution == 'weibull' && method == "MLEw" # could become an option
-    pen_shape_shift <- 7 #shift parameter of softplus penalty
-    pen_shape_steep <- 1 #steepness of softplus penality
-
-    penF <- function(k) pen_shape * log(1 + exp(pen_shape_steep * (k - pen_shape_shift)) / pen_shape_steep)
-
-    densFun <- distO$pdf
-    cdfFun <- distO$cdf
-
     if (criterion) {
       # criterion = proper log-likelihood
       retV <- if (isSurv) {
         #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
         switch (attr(obs, which = "type", exact = TRUE),
                 right = {
-                  sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
-                      rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) )
+                  sum(rlang::exec(distO$pdf, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
+                      rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)))
                 },
                 stop("This type of censoring is not supported!", call. = FALSE)
         )
       } else {
         # numeric response, non-Surv
-        sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)))
+        sum(rlang::exec(distO$pdf, !!! c(list(x=obs, log=TRUE), pars.gr)))
       } #esle
       return(retV)
     } #fi criterion
@@ -1186,8 +1178,24 @@ objFunFactory <- function(x, y = NULL, distO,
     # calculate the objective function which depends on
     #+method
     #+profiled
-    n <- length(obs)
-    stopifnot(!criterion, n > 1L)
+    nObs <- length(obs)
+    stopifnot(!criterion, nObs > 1L)
+
+    # Penalization function
+    # For Weibull distribution, it might penalize high shape values
+    # Currently, penalization is turned off!
+    # @return non-negative penalty value. Big values mean higher penalty (it gets subtracted from the log-likelihood)
+    penF <- function(k) {
+      pen_shape <- FALSE && distO$dist == 'weibull' && method == 'MLEw'
+
+      if (!isTRUE(pen_shape)) return(0)
+
+      pen_shape_shift <- 7 #shift parameter of softplus penalty
+      pen_shape_steep <- 1 #steepness of softplus penality
+
+      log(1 + exp(pen_shape_steep * (k - pen_shape_shift)) / pen_shape_steep)
+    }#fn penF
+
     # shape parameter (candidate)
     k <- if (distO$dist == 'weibull') pars.gr[[2L]] else 1L
 
@@ -1201,9 +1209,9 @@ objFunFactory <- function(x, y = NULL, distO,
 
                           # objective function to maximize:
                           # we use 1st derivative to profile out scale parameter, but otherwise, use log-likelihood function directly
-                          (n - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) +
+                          (nObs - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) +
                             # contribution of right censorings
-                            sum(rlang::exec(cdfFun, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                            sum(rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
                                 # optional penalty term for large values of shape
                                 -penF(k))
 
@@ -1220,7 +1228,7 @@ objFunFactory <- function(x, y = NULL, distO,
                  # objective function to maximize:
                  # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
                  # 2nd & 3rd summand could also be: - log(sum(obs_c^k)) + log(n*k)
-                 n * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) - penF(k)
+                 nObs * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) - penF(k)
 
                  # alternative:
                  #indirect way: ! profiled_llik_directly
@@ -1238,15 +1246,15 @@ objFunFactory <- function(x, y = NULL, distO,
                if (isSurv) {
                  switch (attr(obs, which = "type", exact = TRUE),
                          right = {
-                           sum(rlang::exec(densFun, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
-                               rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                           sum(rlang::exec(distO$pdf, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
+                               rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
                                # optional penalty term for high shape parameter
                                -penF(k))
                          },
                          stop("This Surv-type is not supported!", call. = FALSE)
                  )
                } else { #numeric, non-Surv
-                 sum(rlang::exec(densFun, !!! c(list(x=obs, log=TRUE), pars.gr)),
+                 sum(rlang::exec(distO$pdf, !!! c(list(x=obs, log=TRUE), pars.gr)),
                      -penF(k))
                } #esle
              } #esle
@@ -1267,7 +1275,7 @@ objFunFactory <- function(x, y = NULL, distO,
                           # 1st factor is inverse of harmonic mean
                           -(mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)) - weights$W3[[group]](k))^2 +
                           # contribution of right-censored obs
-                          rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
+                          rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
                           # optional penalization term for big shape
                           -penF(k)
                       },
@@ -1302,7 +1310,7 @@ objFunFactory <- function(x, y = NULL, distO,
            # corrected MLE
            # objective function to maximize
            MLEc = {
-             stopifnot(n >= 2L)
+             stopifnot(nObs >= 2L)
              # contribution of first observation is corrected for: we take first two different values
              ind12 <- indForefront[[group]]
              if (isSurv) {
@@ -1312,12 +1320,12 @@ objFunFactory <- function(x, y = NULL, distO,
                          stopifnot( length(cens$ind[[group]]$obs) >= 2L )
 
                          # first event-time needs correction
-                         sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]), pars.gr)))),
+                         sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]), pars.gr)))),
                              # remaining observed event times
-                             rlang::exec(densFun, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
+                             rlang::exec(distO$pdf, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
                              # right-censored observations do not need correction
                              #+(as they are tail probabilities that do not peak so drastically as densities do)
-                             rlang::exec(cdfFun,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                             rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
                              # optional penalization term
                              -penF(k))
                        },
@@ -1325,8 +1333,8 @@ objFunFactory <- function(x, y = NULL, distO,
                )
              } else {
                # numeric response, non-Surv
-               sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(cdfFun, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))),
-                   rlang::exec(densFun, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr)),
+               sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))),
+                   rlang::exec(distO$pdf, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr)),
                    # optional penalization term
                    -penF(k))
              }
@@ -1363,8 +1371,8 @@ objFunFactory <- function(x, y = NULL, distO,
     # calculate spacings
     # contract: data is sorted!
     cumDiffs <- if (!isSurv) {
-        # numeric response (non-Surv)
-        diff(c(0L, rlang::exec(distO$cdf, !!! c(list(q=obs), pars.gr)), 1L))
+      # numeric response (non-Surv)
+      diff(c(0L, rlang::exec(distO$cdf, !!! c(list(q=obs), pars.gr)), 1L))
     } else {
       # Surv-response
       ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here [but 0 is 0 also for interval!?])
@@ -1461,35 +1469,36 @@ objFunFactory <- function(x, y = NULL, distO,
   # param `ties.` how to handle ties for the MPSE-function. Default value is 'density'.
   objFun <- function(pars, criterion = FALSE, aggregated = TRUE, ties. = ties) {
 
+    if (verbose > 1) cat("pars:", pars, "\n")
+
     retVal <- switch(method,
-           MPSE = {
-             if (!twoGroup) {
-               -mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.))
-             } else {
-               #twoGroup:
-               #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
-               #because the parameters should be optimized within group.
-               #merged data lead to frequent non-convergence or visually bad fits
-               res <- c(mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.)),
-                        mean(getCumDiffs(pars, group = "y", criterion = criterion, ties. = ties.)))
+                     MPSE = {
+                       if (!twoGroup) {
+                         -mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.))
+                       } else {
+                         #twoGroup:
+                         #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
+                         #because the parameters should be optimized within group.
+                         #merged data lead to frequent non-convergence or visually bad fits
+                         res <- c(mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.)),
+                                  mean(getCumDiffs(pars, group = "y", criterion = criterion, ties. = ties.)))
 
-               if (aggregated) -stats::weighted.mean(res, w = c(length(x), length(y))) else -res
-             }
-           },
-           MLEn = ,
-           MLEw = ,
-           MLEc = {
-             stopifnot(!twoPhase) #XXX not implemented yet!
+                         if (aggregated) -stats::weighted.mean(res, w = c(length(x), length(y))) else -res
+                       }
+                     },
+                     MLEn = ,
+                     MLEw = ,
+                     MLEc = {
+                       stopifnot(!twoPhase) #XXX not implemented yet!
 
-             if (verbose > 1) cat("pars:", pars, "\n")
-             - if (!twoGroup) getLogLik(pars, group = "x", criterion = criterion) else {
-               res <- c(getLogLik(pars, group = "x", criterion = criterion), getLogLik(pars, group = "y", criterion = criterion))
+                       if (!twoGroup) -getLogLik(pars, group = "x", criterion = criterion) else {
+                         res <- c(getLogLik(pars, group = "x", criterion = criterion), getLogLik(pars, group = "y", criterion = criterion))
 
-               if (aggregated) sum(res) else res
-             }
+                         if (aggregated) -sum(res) else -res
+                       }
 
-           },
-           stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
+                     },
+                     stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
     )
 
     if (verbose > 2) {
@@ -1505,7 +1514,7 @@ objFunFactory <- function(x, y = NULL, distO,
       list(par_orig = par_analytic,
            #transformed parameters
            par = extractPars(par_analytic, isOpt = FALSE, transform = TRUE, named = TRUE),
-           value = length(x) * ( log(mean(x) - x[[1L]]) + 1L ),
+           value = length(x) * (log(mean(x) - x[[1L]]) + 1L),
            methodOpt = "analytic",
            convergence = 0L,
            message = "analytic solution for naive MLE ('MLEn')",
@@ -1845,7 +1854,7 @@ update.incubate_fit <- function(object, optim_args = NULL, verbose = 0, ...) {
 
 #' @export
 plot.incubate_fit <- function(x, y, title, subtitle, ...) {
-  # parameter y comes from the plot-generic. y is not used here.
+  # parameter y comes from the plot-generic but y is not used here.
   stopifnot(inherits(x, "incubate_fit"))
 
   rlang::check_installed(pkg = 'ggplot2', reason = 'to draw plots', version = '3.3')
@@ -2234,7 +2243,7 @@ confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
       ncol = 2L, byrow = TRUE)
   } else {
 
-    stopifnot( is.matrix(bs_data) )
+    stopifnot(is.matrix(bs_data))
 
     # bootstrapped confidence limits
     # bias-correction for parametric bootstrap only!?
