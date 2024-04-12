@@ -56,7 +56,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 
              # factor (n+1) takes -avg to -sum
              ((nObs+1L) * mpseCrit + (if (estimated) .5 * k else 0) - C1) / C2
-           } # fn
+           } #fn Moran's test statistic
 
 
            # we resolve ties in the back-transformed 0-1 space via equal spacing (see Cheng & Stephens)
@@ -763,7 +763,8 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       fit1oa[['control']][['parscale']] <- scalePars(parV = fit1oa[["par"]])
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
-      if (is.null(fit1) || fit0[["optimizer"]][["valOpt"]] + TOL_CRIT < fit1[["optimizer"]][["valOpt"]]) {
+      if (is.null(fit1) || is.null(fit1$optimizer) || is.null(fit1$optimizer$valOpt) ||
+          fit0[["optimizer"]][["valOpt"]] + TOL_CRIT < fit1[["optimizer"]][["valOpt"]]) {
         warning("Restricted model with better fit (=smaller criterion in optimization) than unrestricted model even after refit of the unrestricted model!",
                 call. = FALSE)
         return(invisible(NULL))

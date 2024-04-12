@@ -255,7 +255,7 @@ test_that("Parameter extraction and transformation", {
   # exponential, two groups, bound
   objFun_exp2b <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2),
                                            y = rexp_delayed(n=3, delay1 = 3, rate1 = .1),
-                                           distribution = "expon", twoPhase = FALSE, bind = "rate1")
+                                           distO = buildDist("exponential"), twoPhase = FALSE, bind = "rate1")
   extPars_exp2b <- rlang::env_get(rlang::fn_env(objFun_exp2b), "extractPars")
 
   par_exp2b <- c(rate1 = .23, delay1.x = 2.8, delay1.y = 5.1)
@@ -283,7 +283,8 @@ test_that("Parameter extraction and transformation", {
 
 
   # weibull
-  objFun_weib1 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2), distribution = "weib", twoPhase = FALSE)
+  objFun_weib1 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2),
+                                           distO = buildDist("weibull"), twoPhase = FALSE)
   extPars_weib1 <- rlang::env_get(rlang::fn_env(objFun_weib1), "extractPars")
 
   par_weib1 <- c(delay1 = 5, shape1 = .8, scale1 = 1.2)
@@ -300,7 +301,7 @@ test_that("Parameter extraction and transformation", {
   # weibull two groups
   objFun_weib2 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2),
                                            y = rweib_delayed(n=4, delay1=3, shape1 = 2.8, scale1 = .9),
-                                           distribution = "weib", twoPhase = FALSE)
+                                           distO = buildDist("weibull"), twoPhase = FALSE)
   extPars_weib2 <- rlang::env_get(rlang::fn_env(objFun_weib2), "extractPars")
 
   par_weib2 <- c(delay1.x = 1, shape1.x = 1.8, scale1.x = 34, delay1.y = 4.2, shape1.y = 3.4, scale1.y = 12)

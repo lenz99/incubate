@@ -190,7 +190,7 @@ test_that("Bootstrap test for difference in delay under H0 (no difference in del
 
 
 
-test_that("Moran GOF-test", code = {
+test_that("Moran/Pearson GOF-test", code = {
 
   testthat::skip_on_cran()
 
