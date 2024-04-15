@@ -447,7 +447,7 @@ objFunFactory <- function(x, y = NULL, distO,
           } else { # Benard-style approximation for long observation vectors
             # 1st and last entry are still exact median rank values
             z_n <- .5^(1/nObs)
-            c(1-z_n, stats::ppoints(n, a=a)[1L+seq_len(nObs-2L)], z_n)
+            c(1-z_n, stats::ppoints(n = nObs, a = a)[1L+seq_len(nObs-2L)], z_n)
           }
 
           if (propagateTies && length(ind_doz)) {
