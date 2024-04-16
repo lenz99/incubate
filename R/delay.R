@@ -366,11 +366,11 @@ dweib_delayed <- function(x, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
   if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
   if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
 
-  stopifnot( all(is.finite(delay1), is.finite(shape1), is.finite(scale1)) )
+  stopifnot(all(is.finite(delay1), is.finite(shape1), is.finite(scale1)))
 
 
   # check for easy case: only a single phase
-  if ( is.null(delay2) ) {
+  if (is.null(delay2)) {
     if (!is.null(shape2) || ! missing(scale2)) warning("Arguments shape2= and/or scale2= are ignored, as argument delay2= is not set.", call. = FALSE)
     return(stats::dweibull(x = x - delay1, shape = shape1, scale = scale1, log = log))
   }
@@ -422,6 +422,7 @@ pweib_delayed <- function(q, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
   grad <- isTRUE(grad[1L])
 
 
+  #cat("delay1: ", delay1, "\tshape1: ", shape1, "\tscale1: ", scale1, "\n") ##DEBUG
   if (any(is.null(delay1), is.null(shape1), is.null(scale1)) || !all(is.finite(delay1), is.finite(shape1), is.finite(scale1))) {
     stop("All arguments for delay1=, shape1= and scale1= must be finite!", call. = FALSE)
   }

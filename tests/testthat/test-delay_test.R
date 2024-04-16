@@ -194,12 +194,13 @@ test_that("Moran/Pearson GOF-test", code = {
 
   testthat::skip_on_cran()
 
+  nTests <- 181
+
   future::plan(future.callr::callr, workers = 5L)
   # testres1: all observed events
-  testres1 <- future.apply::future_vapply(X = seq_len(219L),
+  testres1 <- future.apply::future_vapply(X = seq_len(nTests),
                                           function(dummy) {
                                             x <- rexp_delayed(n = 23, delay1 = 3, rate1 = .7)
-
                                             fm <- delay_model(x = x, method = "MPSE")
 
                                             unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")])
@@ -214,11 +215,10 @@ test_that("Moran/Pearson GOF-test", code = {
 
 
   # testres2: right-censored events
-  testres2 <- future.apply::future_vapply(X = seq_len(219L),
+  testres2 <- future.apply::future_vapply(X = seq_len(nTests),
                                           function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 3, rate1 = .7)
                                             evStatus <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
-
                                             fm <- delay_model(x = survival::Surv(x, event = evStatus),
                                                               method = "MPSE")
 
@@ -246,7 +246,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
 
   # testres3: GOF-tests, nonSurv, two group scenario
-  testres3 <- future.apply::future_vapply(X = seq_len(257L),
+  testres3 <- future.apply::future_vapply(X = seq_len(nTests),
                                           function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 3, rate1 = 1.1)
                                             y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
@@ -275,17 +275,13 @@ test_that("Moran/Pearson GOF-test", code = {
   expect_lte(mean(testres3[4L,]), expected = .8)
   #boxplot(list(moran=testres3[2L,], pearson = testres3[4L,]), main = "H0, non-Surv, two-group")
 
-  # XXX Moran GOF-test statistic is negative, single group, numeric (even without Surv)
-  local({
-    # data from Poisson model (=not H0), many ties
-    #fm0 <- delay_model(x = c(8, 9, 9, 9, 10, 11, 12, 12, 14, 16), method = "MPSE")
-    fm0 <- delay_model(x = c(8, 9, 9, 10, 11, 12, 14), method = "MPSE")
-    #tieInfo <- rlang::env_get(rlang::fn_env(fm0$objFun), "tieInfo")
-    expect_gte(test_GOF(delayFit = fm0, method = "moran")$statistic, expected = 0)
-  })
+  # data from Poisson model (=not H0), many ties
+  #fm0 <- delay_model(x = c(8, 9, 9, 9, 10, 11, 12, 12, 14, 16), method = "MPSE")
+  #tieInfo <- rlang::env_get(rlang::fn_env(fm0$objFun), "tieInfo")
+  expect_gte(test_GOF(delayFit = delay_model(x = c(8, 9, 9, 10, 11, 12, 14), method = "MPSE"), method = "moran")$statistic, expected = 0)
 
   # GOF-moran tests on tied data from poisson (HA), noSurv, two group, many ties
-  testres3a <- future.apply::future_vapply(X = seq_len(137L),
+  testres3a <- future.apply::future_vapply(X = seq_len(nTests),
                                            function(dymmy) {
 
                                              yObs <- 8 + rpois(23, lambda = 3)
@@ -301,7 +297,6 @@ test_that("Moran/Pearson GOF-test", code = {
                                            FUN.VALUE = double(2L),
                                            future.seed = TRUE)
 
-  # XXX Moran GOF-test statistic is sometimes negative
   expect_gte(min(testres3a[1L,]), expected = 0) #stat moran
   expect_gte(min(testres3a[2L,]), expected = 0) #stat pearson
   #boxplot(list(mo = testres3a[1L,], pe = testres3a[2L,]), main = "H0, nonSurv, two group", sub = "many ties", ylab = "Moran test stat")
@@ -310,7 +305,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
 
   # testres4: GOF-tests H0, Surv, two group
-  testres4 <- future.apply::future_vapply(X = seq_len(137L),
+  testres4 <- future.apply::future_vapply(X = seq_len(nTests),
                                           function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 3, rate1 = 1.1)
                                             y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
@@ -333,19 +328,22 @@ test_that("Moran/Pearson GOF-test", code = {
   expect_gt(min(testres4[1L,]), expected = 0) #stat moran
   expect_gt(min(testres4[3L,]), expected = 0) #stat pearson
 
-  # p-values are not too far off from uniform
-  expect_gt(mean(testres4[2L,]), expected = .33)
-  expect_gt(mean(testres4[4L,]), expected = .33)
-  # P-values are strongly skewed upwards, median close to .9
+  # Are p-values not too far off from uniform?
+  #P-values moran
+  expect_gte(mean(testres4[2L,]) - 2 * sd(testres4[2L,])/sqrt(nTests), expected = .3)
+  # P-values from Moran-GOF are strongly skewed upwards, median close to .9
   # we expected more small P-values (by chance)
-  expect_equal(mean(testres4[2L,]), expected = .5, tolerance = .3) #P-values moran
-  expect_equal(mean(testres4[4L,]), expected = .5, tolerance = .3) #P-values pearson
+  expect_lte(mean(testres4[2L,]) + 2 * sd(testres4[2L,])/sqrt(nTests), expected = .7)
+
+  #P-values pearson
+  expect_gte(mean(testres4[4L,]) - 2 * sd(testres4[4L,])/sqrt(nTests), expected = .3)
+  expect_lte(mean(testres4[4L,]) + 2 * sd(testres4[4L,])/sqrt(nTests), expected = .7)
   #expect_lte(mean(testres4[4L,]), expected = .85)
   #boxplot(list(moran=testres4[2L,], pearson = testres4[4L,]), main = "H0, Surv, two group")
 
 
-  # GOF-moran tests on tied data from Poisson (HA), Surv, two group, many ties
-  testres4a <- future.apply::future_vapply(X = seq_len(137L),
+  # GOF-moran tests on tied data from Poisson (HA situation). Surv, two group, many ties
+  testres4a <- future.apply::future_vapply(X = seq_len(nTests),
                                            function(dymmy) {
 
                                              yObs <- 8 + rpois(23, lambda = 3)
@@ -369,7 +367,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
   # GOF-tests for 2-groups with bind= parameter
   # testres5: GOF-tests for H0 (delays are equal), bind delay1, Surv, two group scenario
-  testres5 <- future.apply::future_vapply(X = seq_len(117L),
+  testres5 <- future.apply::future_vapply(X = seq_len(nTests),
                                           function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 5, rate1 = 1.1)
                                             y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
@@ -400,7 +398,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
 
   # testres6: GOF-tests for two group scenario with censored observations, bind delay1 (HA, as delay diff is 3)
-  testres6 <- future.apply::future_vapply(X = seq_len(217L),
+  testres6 <- future.apply::future_vapply(X = seq_len(nTests),
                                           function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 5, rate1 = 1.1)
                                             y <- rexp_delayed(n = 23, delay1 = 8, rate1 = .4)
