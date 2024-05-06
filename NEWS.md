@@ -1,12 +1,17 @@
 # incubate 1.3.0.9053
 * work on censoring
 
+<<<<<<< HEAD
 # incubate 1.3.0
+=======
+# incubate 1.2.1.9059
+>>>>>>> ee14ce3 (simul_test: option to drop MLEw from testing)
 * implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter
 * allow for random right-censoring
 * use some log-transformed parameters internally for more stable and less constrained optimization
 * `test_diff`: allow for likelihood-ratio test
 * include restricted mean survival time function for delayed exponential and Weibull
+* implement delayed normal distribution
 * [experimental] implement two delay phases for exponential and for Weibull
 * update simulation R-scripts (in `inst/scripts/`) to also use ML-based estimation and LR-tests, with and without censoring
 

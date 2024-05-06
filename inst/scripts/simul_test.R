@@ -58,6 +58,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
   cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
   cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
+  cat('  --includeMLEw\t include also weighted MLE approach\n')
   cat('  --cens\t apply also random right-censoring during the simulation study\n')
   cat('  --slice=\t if given, pick only this number of first scenarios for simulations. If negative, scenarios taken from the tail.\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent.\n')
@@ -74,10 +75,10 @@ stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
            (file.mode(myResultsDir) %>% as.character() %>% substr(1,1) %>% as.octmode() & 6) == '6')
 
 myDist <- cmdArgs[["dist"]]
-stopifnot( is.character(myDist), length(myDist) == 1L )
+stopifnot(is.character(myDist), length(myDist) == 1L)
 myDist <- match.arg(arg = tolower(myDist), choices = c("exponential", "weibull"))
 isExpon <- isTRUE(myDist == "exponential")
-stopifnot( isExpon || isTRUE(myDist == "weibull"))
+stopifnot(isExpon || isTRUE(myDist == "weibull"))
 
 myWorkers <- cmdArgs[["workers"]]
 stopifnot(is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L)
@@ -100,11 +101,12 @@ mySeed <- cmdArgs[["seed"]]
 stopifnot( is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L )
 
 myScenario <- cmdArgs[["scenario"]]
-stopifnot( ! is.null(myScenario), is.character(myScenario), length(myScenario) == 1L, nzchar(myScenario) )
+stopifnot(! is.null(myScenario), is.character(myScenario), length(myScenario) == 1L, nzchar(myScenario))
 myScenario <- match.arg(arg = toupper(myScenario), choices = c("DELAYEQ", "DELAYGT", "MS", "ALL"))
 
 myPrint <- isTRUE(any(c("print", "p") %in% tolower(names(cmdArgs))))
 myAllN <- isTRUE(any(c("alln", "a") %in% tolower(names(cmdArgs))))
+myIncludeMLEw <- isTRUE(any("includemlew" %in% tolower(names(cmdArgs))))
 myScaleSimple <- isTRUE(any(c("scalesimple", "scale", "scales") %in% tolower(names(cmdArgs))))
 myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
 
@@ -115,9 +117,9 @@ myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
 
 if (mySeed > 0L) set.seed(mySeed)
 
-simSetting <- tidyr::expand_grid(n_x = c(8, 10, 12, 15, 20, 30, 50, 100),
+simSetting <- tidyr::expand_grid(n_x = c(8, 10, 12, 15, 20, 30, 50, 75), #100
                                  delay_x = 5,
-                                 delay_y = c(5, 7, 9, 11, 13, 15), #, 20, 100, 1000),
+                                 delay_y = c(5, 7, 9, 11, 13, 15), #, 20),
                                  scale_x = c(5, 10), #c(1, 2, 5),
                                  scale_ratio = c(2, 1, .5),
                                  # shape values according to distribution
@@ -128,6 +130,7 @@ simSetting <- tidyr::expand_grid(n_x = c(8, 10, 12, 15, 20, 30, 50, 100),
 # avoid duplicates:
 # by convention, group y is not less delayed than group x
 simSetting <- simSetting %>%
+  # symmetry
   dplyr::filter(delay_y >= delay_x) %>%
   # enough expected number of observations
   dplyr::filter(cens >= 0, cens < 1, n_x * (1-cens) > 5) %>%
@@ -140,10 +143,10 @@ if (!myCens) {
     dplyr::slice_min(cens)
 }
 
-# default is to use only the smallest sample size
+# default is to use only the largest sample size
 if (!myAllN) {
   simSetting <- simSetting %>%
-    dplyr::slice_min(n_x)
+    dplyr::slice_max(n_x)
 }
 
 if (myScaleSimple) {
@@ -251,11 +254,14 @@ if (USE_FUTURE) {
 #' Uses parallel computation (future_replicate) to go through the (=nrep) MC-simulations.
 #' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
 #' @param DGPsetting numeric. a row from `simSetting`. It encodes parameters that specify the data generating process for both groups
+#' @param include_MLEw logical. Should we also include MLEw?
 #' @return dataframe. P-values in the different Monte-Carlo runs.
-doMCSim <- function(DGPsetting) {
+doMCSim <- function(DGPsetting, include_MLEw = TRUE) {
   # settings from the environment:
   stopifnot(exists("isExpon"), exists("myMCNrep"), exists("myR"))
   stopifnot(is.numeric(DGPsetting), length(DGPsetting) == 8L)
+  stopifnot(is.logical(include_MLEw), length(include_MLEw) == 1L)
+  include_MLEw <- isTRUE(include_MLEw)
 
   n_x <- DGPsetting[[1]]
   n_y <- DGPsetting[[2]]
@@ -272,10 +278,10 @@ doMCSim <- function(DGPsetting) {
   scale_y <- scale_x * scale_ratio
 
   # different estimation methods
-  estimMethods <- tidyr::expand_grid(method = c("MPSE", "MLEn", "MLEc", "MLEw"),
+  estimMethods <- tidyr::expand_grid(method = c(c("MPSE", "MLEn", "MLEc"), if (include_MLEw) "MLEw"),
                                      profiled = c(FALSE, TRUE),
                                      R = as.integer(myR)) %>%
-    # all MLE-methods use only profiled variant, MPSE uses both, unprofiled & unprofiled
+    # all MLE-methods use only profiled variant, MPSE uses both, profiled & unprofiled
     dplyr::filter(method == 'MPSE' | profiled) %>%
     dplyr::rowwise()
 
@@ -337,10 +343,11 @@ doMCSim <- function(DGPsetting) {
 
 #' Run MC-simulations for each scenario sequentially (row-by-row)
 #' @param simSetDF dataframe containing simulation scenarios
+#' @param ... further arguments passed to `doMCSim` (currently not used!)
 #' @returns tibble of simulations settings with results added
-applyMCSims <- function(simSetDF) {
+applyMCSims <- function(simSetDF, ...) {
   simSetDF %>%
-    dplyr::mutate(., results = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim))
+    dplyr::mutate(., results = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim, includeMLEw = myIncludeMLEw, ...))
 }
 
 
