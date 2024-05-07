@@ -2,8 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{objFunFactory}
 \alias{objFunFactory}
-\title{Factory method for objective function, either according to maximum product of spacings estimation ('MPSE')
-or according to some flavour of maximum likelihood estimation (e.g., naive ('MLEn') or corrected ('MLEc') or weighted ('MLEw') MLE).}
+\title{Factory method for objective function}
 \usage{
 objFunFactory(
   x,
@@ -41,11 +40,11 @@ the objective function (e.g., the negative MPSE criterion) for given choice of m
 }
 \description{
 Given the observed data this factory method produces an objective function
-which is either the negative of the MPSE-criterion H or the negative log-likelihood for MLE.
+which is either the negative of the MPSE-criterion H or some flavour of the negative log-likelihood for MLE.
+Implemented variants of MLE-objective functions are naive MLE (\code{'MLEn'}), corrected MLE (\code{'MLEc'}) or weighted MLE (\code{'MLEw'}).
+In any case, the objective function is to be \strong{minimized}.
 }
 \details{
 The objective function takes a vector of model parameters as argument.
-
 From the observations, negative or infinite values are discarded during pre-processing.
-In any case, the objective function is to be \strong{minimized}.
 }

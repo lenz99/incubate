@@ -51,5 +51,6 @@ Collate:
     'delay.R'
     'delay_test.R'
     'incubate-package.R'
+    'integration.R'
     'utils.R'
 VignetteBuilder: knitr
