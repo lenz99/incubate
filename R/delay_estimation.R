@@ -412,24 +412,25 @@ objFunFactory <- function(x, y = NULL, distO,
   weights <- if (method != "MLEw") list(W1 = c(x=1, y=1)) else {
     local({
 
-      # Little helper to get the so-called z-values z_i := -log(1-F_i) = log(1/(1-F_i)) which define the weights W1-W3
+      # Little helper to get the so-called z-values z_i := -log(1-F_i) = log(1/(1-F_i))
+      #+which define the weights W1-W3
       # Median rank is a general way to estimate F_i (using a binomial model)
       # Benard's approximation estimates F_i as (i - a) / (N + 1 - 2*i) for some a
       #+a=.3 is recommended by Fothergill (1990) ***
       #+a=.3175 due to Filliben, "The probability plot.." (1975)
+      # Assuming 3-parameter Weibull holds, we have z_i = ((x_(i) - a)/gamma)^k ~ Exp(1).
       # Exact values for 1st and last (=nth) entry are known (see "A reliable algorithm..", Jacquelin, 1993)
-      # For Weibull, we have z_i = ((x_(i) - a)/gamma)^k ~ Exp(1).
       # Cousineau uses MC-simulation, drawing from Exp(1). He does not use the observed data to derive F_i.
       # He chooses weights W1-W3 as median of their sampling distribution in MC irrespective of the concrete sample.
       # @param group Specifies for which group to estimate the z's
-      # @param method How to estimate the z's. mr = median rank method to estimate F_i
+      # @param method How to estimate the z's. mr = median rank method to estimate F_i. mr_exact for short data sample
       # @param propagateTies logical. Should ties in the observations lead to ties in the z's as well?
       # @return numeric vector of ordered z's, same length as number of observed event time values in group
       zF <- function(group = "x", method = c("mr_exact", "mr_benard"), a = 0.3, propagateTies = FALSE) {
         method <- match.arg(method)
         nObs <- if (group == "y") length(y) else length(x)
 
-        if (! isSurv) {
+        if (!isSurv) {
           # numeric response, non-Surv
 
           if (propagateTies) {
@@ -443,7 +444,8 @@ objFunFactory <- function(x, y = NULL, distO,
             .5
           } else if (method == "mr_exact" && nObs < 89L) { #use exact median rank values if not too many observations
             stats::qbeta(p=.5, shape1 = seq_len(nObs), shape2 = rev(seq_len(nObs)))
-          } else { # Benard-style approximation for long observation vectors
+          } else {
+            # Benard-style approximation for long observation vectors
             # 1st and last entry are still exact median rank values
             z_n <- .5^(1/nObs)
             c(1-z_n, stats::ppoints(n = nObs, a = a)[1L+seq_len(nObs-2L)], z_n)
@@ -478,7 +480,7 @@ objFunFactory <- function(x, y = NULL, distO,
           } #fi
 
           return(-log(1-z0))
-        }#fi ! isSurv
+        }#fi !isSurv
 
         stopifnot(isSurv)
         switch(EXPR = attr(x, which = "type", exact = TRUE),
@@ -491,7 +493,7 @@ objFunFactory <- function(x, y = NULL, distO,
                  # Estimate F_i via Kaplan-Meier (copes with censorings) with Benard-style median rank estimation to avoid 0 and 1
                  # z is an estimate for the ordered z_i = -log(1-F_i) = ((x_(i) - a)/gamma)^k ~ Exp(1)
                  # unique event times (in all available groups)
-                 ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type="interval" makes that we get fractional numbers here [but 0 is 0 also for interval!?])
+                 ind_evKM <- which(kmFit$n.event > 0.99) #at least one event (type=left/interval makes that we get fractional numbers here [but 0 is 0 also for interval!?])
                  # get the right subset of indices for specified group (when having two groups)
                  if (twoGroup) {
                    # Cave: works only for two groups (x or y) as I only use the strata[[1L]] as cutpoint
@@ -518,20 +520,20 @@ objFunFactory <- function(x, y = NULL, distO,
       z_y <- if (twoGroup) zF(group = "y", propagateTies = TRUE)
 
       # how to calculate the weights W1-W3?
-      method_w1 <- if (isSurv) "sample" else "sdist_median" #"hybrid"
-      method_w2 <- if (isSurv) "sample" else "sdist_median" #"hybrid"
-      method_w3 <- if (isSurv) "sample" else "sdist_median" #"hybrid"
+      method_w1 <- if (isSurv) "sample" else "sdist_median"
+      method_w2 <- if (isSurv) "sample" else "sdist_median"
+      method_w3 <- if (isSurv) "sample" else "sdist_median"
 
       # little helper function to calculate W1-weight (as function of n)
       # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n and we estimate W1 as median of it.
       # W1 is also used to get scale parameter during un-profiling.
       # We count all events because it is used to get scale parameter (and in this formula we already correct for censorings),
       #+e.g., nObs = length(x), even when there is cens$n$x[["any"]]
+      # @param method By which method to calculate weights W1? 'sample' will use the mean of the provided sample of z-values, sdist_median uses the median of the sampling distribution (MC-sim)
       w1F <- function(nObs, z, method = c("sample", "sdist_median", "hybrid")) {
         method <- match.arg(method)
 
-        # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n
-        #+we estimate W1 as median of it. Using a MC-simulation
+        #Using a MC-simulation
         #+cf. Cousineau's simulation results for median of W1's sampling distribution
         #+"Nearly unbiased estimators.." (2009), Table 2, column J_1
 
@@ -553,7 +555,7 @@ objFunFactory <- function(x, y = NULL, distO,
         )
       } #w1F
 
-      # W1 weights: use full length even when
+      # W1 weights: use full length (even when censored obs are present?!)
       W1_x <- w1F(nObs = length(x), z = z_x, method = method_w1) #or # nObs = length(x) - cens$n$x[["any"]]),
       W1_y <- if (twoGroup) w1F(nObs = length(y), z = z_y, method = method_w1) else 1 #length(y) - cens$n$y[["any"]])
 
@@ -916,7 +918,7 @@ objFunFactory <- function(x, y = NULL, distO,
     } else {
       as.vector(res)
     }
-  }
+  } #fn extractPars
 
 
   # optimization arguments -----
