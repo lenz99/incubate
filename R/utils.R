@@ -26,23 +26,47 @@ near <- function(x, y) {
   abs(x-y) < TOL_NUM
 }
 
-#' Minimize an objective function with PORT routine (nlminb)
+#' Minimize an objective function with alternative optimizer
 #'
-#' This is a thin wrapper function.
-#' @param objFun objective function
-#' @param start numeric vector of parameter values to start optimization
+#' The primary optimization routine is BFGS from `stats::optim`.
+#' If this fails for some reason we try an alternative which is implemented here.
+#' It can use the derivative-free minimizaiton through `bobyqa` or the PORT-routine `nlminb`.
+#'
+#' This is only a thin wrapper to the chosen alternative optimizer.
+#' @param objFun function to minimize
+#' @param start vector of start values for parameters
 #' @param lower numeric. lower bound for parameters (boxed constraint)
 #' @param upper numeric. upper bound for parameters (boxed constraint)
-#' @param verbose numeric. Verbosity level.
-#' @return optimization object or `NULL` in case of failure
-minObjFunPORT <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0) {
+#' @param verbose numeric. Verbosity level
+#' @param method Specifies which optimizer to use
+#' @return optimization object with some common entries like `convergence`, `methodOpt` and `counts`. Or `NULL` in case of failure.
+minObjFunAlt <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0,
+                          method = c("bobyqa", "nlminb")) {
   optObj <- NULL
+
   try({
-    optObj <- stats::nlminb(start = start, objective = objFun,
-                            lower = lower, upper = upper,
-                            control = list(trace = verbose))
-    optObj$counts <- optObj$evaluations
-    optObj$methodOpt <- "PORT"
+    switch(method,
+           nlminb = {
+             optObj <- stats::nlminb(start = start, objective = objFun,
+                                     lower = lower, upper = upper,
+                                     control = list(trace = verbose))
+             optObj$counts <- optObj$evaluations
+             optObj$methodOpt <- "PORT (nlminb)"
+           },
+           bobyqa = {
+             rhob <- min(.95, min(abs(upper-lower))/2 * .999, .2 * max(abs(start)), na.rm = TRUE)
+             optObj <- minqa::bobyqa(par = start, fn = objFun,
+                                     lower = lower, upper = upper,
+                                     control = list(iprint = verbose,
+                                                    # trust region setting: see ?bobyqa
+                                                    rhobeg = rhob,
+                                                    rhoend = rhob / 1e6))
+             optObj$counts <- optObj$feval
+             optObj$methodOpt <- "minqa::bobyqa"
+             optObj$convergence <- optObj$ierr
+           },
+           stop("This optimizer-method is not supported!", call. = FALSE)
+    )
   }, silent = TRUE)
   optObj
 }

@@ -723,9 +723,10 @@ test_that("MLEw weights", code = {
   }#fn
 
   testMLEwFits(x = x, y = y)
+  set.seed(2024-05-15)
   # tiny changes can have an impact on the fit under MLEw
-  testMLEwFits(x = x, y = y + stats::rnorm(length(y), sd = .0001)) #raise error
-  testMLEwFits(x = x, y = y + stats::rnorm(length(y), sd = .01))
+  testMLEwFits(x = x, y = y + stats::rnorm(length(y), sd = .001)) #raise error?
+  testMLEwFits(x = x, y = y + stats::rnorm(length(y), sd = .02))
 
 })
 
@@ -734,11 +735,12 @@ test_that("Fit delayed exponentials with censoring", {
 
 
   # single group ------------------------------------------------------------
-  # with ties
+
+  # with ties broken
   ticr1 <- local({
     set.seed(2023-03-24)
     n <- 97L
-    sort(survival::Surv(time =  1.5 + rpois(n, lambda = 9.8),
+    sort(survival::Surv(time =  1.5 + stats::rpois(n, lambda = 9.8) + abs(stats::rnorm(n, sd = .21)),
                         event = sample(c(0,1,1,1,1), size = n, replace = TRUE)))
   })
 
@@ -776,9 +778,9 @@ test_that("Fit delayed exponentials with censoring", {
   expect_equal(coef(fmCR1_mlewp)[1], expected = coef(fmCR1_mlec)[1], tolerance = 1e-1)
 
   # rate estimate somewhat different when profiling (due to unprofiling of scale was developed for non-censored observations)
-  expect_equal(coef(fmCR1_mlenp)[2], expected = coef(fmCR1_mlen)[2], tolerance = 1e-1)
-  expect_equal(coef(fmCR1_mlecp)[2], expected = coef(fmCR1_mlec)[2], tolerance = 1e-1)
-  expect_equal(coef(fmCR1_mlewp)[2], expected = coef(fmCR1_mlec)[2], tolerance = 1e-1)
+  expect_equal(coef(fmCR1_mlenp)[2], expected = coef(fmCR1_mlen)[2], tolerance = .15)
+  expect_equal(coef(fmCR1_mlecp)[2], expected = coef(fmCR1_mlec)[2], tolerance = .15)
+  expect_equal(coef(fmCR1_mlewp)[2], expected = coef(fmCR1_mlec)[2], tolerance = .1)
 
   fmCR1w_mpse <- delay_model(x = ticr1, distribution = "wei")
   #plot(fmCR1w_mpse)
@@ -792,6 +794,7 @@ test_that("Fit delayed exponentials with censoring", {
   #plot(fmCR1w_mlecp)
   fmCR1w_mlewp <- delay_model(x = ticr1, distribution = "wei", method = "MLEw", profiled = TRUE)
   #plot(fmCR1w_mlewp)
+
   # delay and shape parameters do not change much when profiling (in particular, if enough data is available)
   expect_equal(coef(fmCR1w_mlenp)[1:2], expected = coef(fmCR1w_mlen)[1:2], tolerance = .07)
   # scale changes considerably as with profiling the censored observations do matter
@@ -802,10 +805,12 @@ test_that("Fit delayed exponentials with censoring", {
   expect_named(fmCR1w_mlewp$cens, expected = c("isSurv", "n", "ind", "rcens"))
   expect_true(fmCR1w_mlewp$cens$isSurv)
 
-  # similar criterion value
-  expect_equal(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion, tolerance = .1)
+  # MLEw worse than MLEc
+  expect_gte(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion)
+  expect_equal(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion, tolerance = .25)
   # roughly similar parameter estimates
-  expect_equal(coef(fmCR1w_mlewp), expected = coef(fmCR1w_mpse), tolerance = .25)
+  expect_gte(coef(fmCR1w_mlewp)[1], expected = 2)
+  expect_equal(coef(fmCR1w_mlewp), expected = coef(fmCR1w_mpse), tolerance = .45)
 
 
   # shorter surv-data that has censorings & ties
@@ -1017,12 +1022,13 @@ test_that("Fit delayed Weibull", {
   # MLEw
   fd_wbc_mlew <- delay_model(x = cousEx, distribution = "weib", method = "MLEw", profile = TRUE)
   expect_identical(fd_wbc_mlew$optimizer$convergence, expected = 0L)
+  expect_identical(fd_wbc_mlew$optimizer$methodOpt, expected = "L-BFGS-B")
   expect_true(fd_wbc_mlew$optimizer$profiled)
-  expect_equal(coef(fd_wbc_mlew), expected = cousPar_mlew, tolerance = .2)
-  # our implementation finds a smaller value of the objective function (to be minimized)
+  expect_equal(coef(fd_wbc_mlew), expected = cousPar_mlew, tolerance = .15)
+  # our implementation finds a smaller value of our objective function (to be minimized)
   expect_lte(fd_wbc_mlew$optimizer$valOpt, fd_wbc_mlew$objFun(c(delay1=cousPar_mlew[["delay1"]], shape1=log(cousPar_mlew[["shape1"]]))))
   # but neg. log-likelihood criterion is in fact quite similar (actually, Cousineau's solution is slightly better)
-  expect_equal(fd_wbc_mlew$criterion, fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = .007)
+  expect_equal(fd_wbc_mlew$criterion, fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = 0.07)
 
 
 

@@ -1175,8 +1175,8 @@ objFunFactory <- function(x, y = NULL, distO,
 
     if (!isTRUE(pen_shape)) return(0)
 
-    pen_shape_shift <- 9.9 #shift parameter of softplus penalty
-    pen_shape_steep <- .9 #steepness of softplus penality
+    pen_shape_shift <- 9.5 #shift parameter of softplus penalty
+    pen_shape_steep <- .91 #steepness of softplus penality
 
     nObs * log1p(exp(pen_shape_steep * (k - pen_shape_shift)) / pen_shape_steep)
   }#fn penF
@@ -1321,7 +1321,7 @@ objFunFactory <- function(x, y = NULL, distO,
                           # 1st factor is inverse of harmonic mean
                           -(mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)) - weights$W3[[group]](k))^2 +
                           # contribution of right-censored obs
-                          rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)) +
+                          sum(rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
                           # optional penalization term for big shape
                           -penF(k, nObs = nObs)
                       },
@@ -1501,7 +1501,7 @@ objFunFactory <- function(x, y = NULL, distO,
   # One can estimate parameters by minimizing this objective function.
   #
   # param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
-  # param `criterion` logical. If `TRUE`, give the original criterion to minimize. In this case, the parameters must be on original scale.
+  # param `criterion` logical. If `TRUE`, give the original criterion to minimize (e.g., neg. log-likelihood). In this case, the parameters must be on original scale.
   # param `aggregated` logical. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
   # param `ties.` how to handle ties for the MPSE-function. Default value is 'density'.
   objFun <- function(pars, criterion = FALSE, aggregated = TRUE, ties. = ties) {
@@ -1620,11 +1620,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
 
     if (is.null(optObj)) {
-      if (verbose > 0L) warning(glue("{objFunObjs$method}-optimization failed during model fit!"),
-                                call. = FALSE)
+      if (verbose > 0L) {
+        warning(glue("{objFunObjs$method}-optimization failed during model fit!"), call. = FALSE)
+      }#fi
     } else if (isTRUE(optObj$convergence > 0L)) {
       # do a 2nd attempt of optim in case it did not converge in the first place
-      if (verbose > 1L) message("No proper convergence during 1st optimization in delay fit. Re-try with different parameter scaling.")
+      if (verbose > 1L) {
+        message("No proper convergence during 1st optimization in delay fit. Re-try with different parameter scaling.")
+      }#fi
 
       # Use parameter values of non-converged fit as new start values (and adapt parscale accordingly)
       #+The objFun is to be minimized, smaller is better!
@@ -1634,13 +1637,16 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
         if ("parscale" %in% names(optim_args[["control"]])) {
           optim_args[["control"]][["parscale"]] <- scalePars(optim_args[["par"]])
-        }
+        }#fi
 
         # optim: 2nd attempt --
         optObj <- NULL
-        if (verbose > 1L) message("Do 2nd attempt with renewed start values and parameter scaling")
+        if (verbose > 1L) {
+          message("Do 2nd attempt with renewed start values and parameter scaling")
+        }#fi
+
         try({
-          optObj <- purrr::exec(stats::optim, !!! optim_args)
+          optObj <- rlang::exec(stats::optim, !!! optim_args)
           optObj$methodOpt <- optim_args$method
         }, silent = TRUE)
 
@@ -1651,10 +1657,12 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     }## fi 2nd attempt necessary?
 
 
-    # nlminb (PORT): last attempt ----
+    # optim: last attempt (alternative method) ----
 
     if (is.null(optObj) || optObj$convergence > 0L) {
-      if (verbose > 0L) cat("Do another final attempt with PORT-optimizer.\n")
+      if (verbose > 0L) {
+        cat("Do another final attempt with PORT-optimizer.\n")
+      }#fi
 
       # choose best start values for PORT:
       # if there are shape parameters, go for start value that is reasonably small
@@ -1662,29 +1670,35 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
         shapeInd <- which(startsWith(names(par0), prefix = "shape"))
         keep0 <- length(shapeInd) && sum(pmax.int(par0[shapeInd]-2,0)^2) < sum(pmax.int(optim_args$par[shapeInd]-2,0)^2)
         if (keep0) {
-          if (verbose > 1) cat("Keep initial start parameters for final PORT-optimizer attempt.\n")
+          if (verbose > 1) {
+            cat("Keep initial start parameters for final PORT-optimizer attempt.\n")
+          }#fi
           par0
         } else {
-          if (verbose > 1) cat("Use updated start parameters for final PORT-optimizer attempt.\n")
+          if (verbose > 1) {
+            cat("Use updated start parameters for final PORT-optimizer attempt.\n")
+          }#fi
           optim_args$par
         } #esle
       })
 
       optim_args$par <- par1 #update optim_args
-      optObj <- minObjFunPORT(objFun = objFun, start = optim_args$par,
-                              lower = optim_args$lower, upper = optim_args$upper,
-                              verbose = verbose)
+      optObj <- minObjFunAlt(objFun = objFun, start = optim_args$par,
+                             lower = optim_args$lower, upper = optim_args$upper,
+                             verbose = verbose, method = "bobyqa")
     } #fi
 
 
     # post-process optObj -----
 
     # set names to parameter vector
-    if (! is.null(optObj)) {
+    if (!is.null(optObj)) {
       stopifnot("par" %in% names(optObj))
-      stopifnot(identical(names(optObj$par), objFunObjs$trNamesFull))
-      # # set canonical names for parameters
-      # optObj$par <- rlang::set_names(optObj$par, objFunObjs$trNamesFull)
+      stopifnot(is.numeric(optObj$par), length(optObj$par) == length(objFunObjs$trNamesFull))
+      if (!rlang::is_named(optObj$par)) {
+        names(optObj$par) <- objFunObjs$trNamesFull
+      }
+
       # save optim_args in optimization object (but w/o objective function)
       optim_args$fn <- NULL
       optObj <- append(optObj, values = list(optim_args = optim_args))
