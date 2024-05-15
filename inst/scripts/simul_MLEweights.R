@@ -97,7 +97,7 @@ if (myWorkers > 1L) {
 
 
 # distribution of W1 is Gamma with shape n and scale 1/n
-nObs_vctr <- c(1:25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 10000)
+nObs_vctr <- c(1:25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000)
 shape_vctr <- c(0.01, 0.05, 0.1, 0.25, 0.5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7) #for W3
 
 aggFun <- stats::median; isMedian <- TRUE
@@ -109,6 +109,8 @@ stopifnot(is.function(aggFun), "na.rm" %in% formalArgs(aggFun))
 
 message("Start simulation for W1")
 
+# when 3-param Weibull holds then the mean of z values (where z is Exp(1)) are gamma-distributed with parameter shape n and scale 1/n
+# hence, the mean of W1 is 1 (independently of n)
 W1_mcs <- furrr::future_map_dbl(.x = nObs_vctr,
                                 .f = ~ aggFun(stats::rgamma(n=myMCNrep, shape = .x, scale = 1/.x)),
                                 .options = furrr_options(seed = TRUE)) %>%
@@ -282,7 +284,9 @@ w2F <- function(nObs) {
   ITER_MAX <- 1011
   nObs_vctr <- unique(W3$nObs)
 
-  # Richards' generalized logistic function
+  # for each sample size nObs we fit
+  # Richards' generalized logistic function (as function of shape)
+  # This way we can estimate W3 for each shape value for those nObs that we have simulated in .MLEw_mcs$W3
   fm_W3_indiv <- purrr::map(.x = nObs_vctr,
                             .f = function(.x) {
                               gsl_nls(W3 ~ A + (K - A) / (1 + Q * exp(-B * lshape))**(1/nu),
@@ -295,6 +299,7 @@ w2F <- function(nObs) {
   stopifnot(all(purrr::map_lgl(fm_W3_indiv, .f = list("convInfo", "isConv"))))
   stopifnot(all(purrr::map_dbl(fm_W3_indiv, .f = list("convInfo", "nEval", "f")) < ITER_MAX))
 
+
   if (rlang::is_interactive()) {
 
     nObsIdx <- length(nObs_vctr)
@@ -306,7 +311,7 @@ w2F <- function(nObs) {
       geom_point(mapping = aes(y = W3pred), size = .5, col = "darkred") +
       geom_line(mapping = aes(y = W3pred), col = "darkred") +
       scale_x_log10()
-  }
+  }# fi
 
   # gather coefficients of individual generalized logistic functions per n
   purrr::map(fm_W3_indiv, .f = coef) %>%
@@ -405,6 +410,10 @@ if (rlang::is_interactive()) {
 } #fi
 
 
+#' Factory method to get weight function for W3
+#' The weight W3 depends on the sample size and the shape parameter.
+#' @param nObs sample size for which to return the W3-function
+#' @return W3-function for the given sample size. Ths function returns the W3 weight for the given shape
 w3FF <- function(nObs) {
 
   if (missing(nObs) || length(nObs) != 1L || !is.numeric(nObs) || !is.finite(nObs)) {
@@ -427,6 +436,7 @@ w3FF <- function(nObs) {
   } else {
     stopifnot(setequal(approx_W3_names, names(.MLEw_approx[["coef"]][["W3_richards_ips"]])))
     purrr::map(.x = .MLEw_approx[["coef"]][["W3_richards_ips"]][approx_W3_names],
+               # use predict from splines
                .f = ~ max(0, predict(.x, x = nObs)$y)) %>%
       rlang::set_names(nm = approx_W3_names)
   } #esle
@@ -440,7 +450,6 @@ w3FF <- function(nObs) {
 } #fn w3FF
 
 
-#XXX run this script again and save as RData file => internal data of package
 
 # save results ------------------------------------------------------------
 

@@ -267,9 +267,12 @@ objFunFactory <- function(x, y = NULL, distO,
 
       # mock survfit-object
       rcensDummy <- list(surv=rlang::rep_along(kmFit$surv, 1))
-      if (!isSurv) return(list(n = c(right = 0L, left = 0L, interval = 0L, any = 0L),
-                               ind = list(right = integer(0), left = integer(0), interval = integer(0), obs = seq_along(.x)),
-                               rcens = rcensDummy)[[what]])
+
+      if (!isSurv) {
+        return(list(n = c(right = 0L, left = 0L, interval = 0L, any = 0L),
+                    ind = list(right = integer(0), left = integer(0), interval = integer(0), obs = seq_along(.x)),
+                    rcens = rcensDummy)[[what]])
+      }
 
       switch(what,
              n = {
@@ -277,9 +280,10 @@ objFunFactory <- function(x, y = NULL, distO,
                                right = c(sum(.x[, "status"] == 0), 0, 0),
                                left = c(0, sum(.x[, "status"] == 0), 0),
                                interval = tabulate(.x[, "status"]+1L, nbins = 4L)[-2L],
-                               stop("This type of censoring is not supported!", call. = FALSE) )
+                               stop("This type of censoring is not supported!", call. = FALSE))
 
-               rlang::set_names(append(nvctr, sum(nvctr)), nm = c("right", "left", "interval", "any"))
+               rlang::set_names(append(nvctr, sum(nvctr)),
+                                nm = c("right", "left", "interval", "any"))
              },
              ind = {
                switch(attr(.x, which = "type", exact = TRUE),
@@ -293,25 +297,27 @@ objFunFactory <- function(x, y = NULL, distO,
                stopifnot(is.numeric(.x), length(.x) == 1L, .x >= 0L) #.x is nbr of right censorings in the data
                if (.x > 0L) {
                  # treat right-censorings as events and rest as censoring
-                 survival::survfit(Surv(time[, 1L], event = !time[, "status"], type = "right") ~ groupVar, data = survDat,
-                                   conf.type = "none", se.fit = FALSE)
+                 survival::survfit(Surv(time[, 1L], event = !time[, "status"], type = "right") ~ groupVar,
+                                   data = survDat, conf.type = "none", se.fit = FALSE)
                } else {
                  rcensDummy
                }
              },
              stop("This request ", sQuote(what, q = FALSE), " is not supported here!", call. = FALSE)
       )
-    }
+    } #fn censDescF
 
     retL <- list(isSurv = isSurv,
-                 n = purrr::compact(list(x=censDescF(x, what = "n"), y = if (twoGroup) censDescF(y, what = "n"))),
-                 ind = purrr::compact(list(x=censDescF(x, what = "ind"), y = if (twoGroup) censDescF(y, what = "ind"))))
+                 n = purrr::compact(list(x=censDescF(x, what = "n"),
+                                         y = if (twoGroup) censDescF(y, what = "n"))),
+                 ind = purrr::compact(list(x=censDescF(x, what = "ind"),
+                                           y = if (twoGroup) censDescF(y, what = "ind"))))
     # add KM estimator for right-censorings (combines all data, even when two groups, in one object)
-    retL[["rcens"]] <- censDescF(retL$n$x[["right"]] + if (twoGroup) retL$n$y[["right"]] else 0, what = "rcens")
+    retL[["rcens"]] <- censDescF(retL$n$x[["right"]] + if (twoGroup) retL$n$y[["right"]] else 0,
+                                 what = "rcens")
 
     retL
   })
-
 
   # kmFit and rcens have same number of rows
   stopifnot(length(kmFit$surv) == length(cens$rcens$surv))
@@ -1169,7 +1175,7 @@ objFunFactory <- function(x, y = NULL, distO,
 
     if (!isTRUE(pen_shape)) return(0)
 
-    pen_shape_shift <- 9.2 #shift parameter of softplus penalty
+    pen_shape_shift <- 9.9 #shift parameter of softplus penalty
     pen_shape_steep <- .9 #steepness of softplus penality
 
     nObs * log1p(exp(pen_shape_steep * (k - pen_shape_shift)) / pen_shape_steep)
@@ -1238,9 +1244,9 @@ objFunFactory <- function(x, y = NULL, distO,
                           # we use 1st derivative to profile out scale parameter, but otherwise, use log-likelihood function directly
                           (nObs - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) +
                             # contribution of right censorings
-                            sum(rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
-                                # optional penalty term for large values of shape
-                                -penF(k, nObs = nObs))
+                            sum(rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
+                            # optional penalty term for large values of shape
+                            -penF(k, nObs = nObs)
 
                         },
                         stop("This Surv-type is not supported!", call. = FALSE)
@@ -1266,22 +1272,22 @@ objFunFactory <- function(x, y = NULL, distO,
                  #     (mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)) - k/(k-1))^2 -
                  #     # optional penalization term
                  #     penalize_shape*log(k+1)
-               }
+               } #esle
 
              } else {
                # log-likelihood with all parameters (scale is not profiled out)
                if (!isSurv) {
                  # numeric, non-Surv
-                 sum(rlang::exec(distO$pdf, !!! c(list(x=obs, log=TRUE), pars.gr)),
-                     -penF(k, nObs = nObs))
+                 sum(rlang::exec(distO$pdf, !!! c(list(x=obs, log=TRUE), pars.gr))) +
+                   -penF(k, nObs = nObs)
                } else {
                  # Surv-response
                  switch (attr(obs, which = "type", exact = TRUE),
                          right = {
                            sum(rlang::exec(distO$pdf, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
-                               rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
-                               # optional penalty term for high shape parameter
-                               -penF(k, nObs = nObs))
+                               rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
+                             # optional penalty term for high shape parameter
+                             -penF(k, nObs = nObs)
                          },
                          stop("This Surv-type is not supported!", call. = FALSE))
                } #esle !isSurv
@@ -1352,7 +1358,7 @@ objFunFactory <- function(x, y = NULL, distO,
                switch (attr(obs, which = "type", exact = TRUE),
                        right = {
                          # we need at least two observed event times
-                         stopifnot(length(cens$ind[[group]]$obs) >= 2L)
+                         stopifnot(nObs - cens$n[[group]]["any"] >= 2L)
 
                          # first event-time needs correction
                          sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]),
@@ -1361,7 +1367,7 @@ objFunFactory <- function(x, y = NULL, distO,
                              rlang::exec(distO$pdf, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
                              # right-censored observations do not need correction
                              #+(as they are tail probabilities that do not peak so drastically as densities do)
-                             rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
+                             rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
                              # optional penalization term
                              -penF(k, nObs = nObs))
                        },
