@@ -13,10 +13,11 @@ library("usethis")
 
 FNAME <- "MLEw_weights.RData"
 stopifnot(file.exists(FNAME))
-load(FNAME)
+(load(FNAME))
 
 stopifnot(is.list(.MLEw_mcs), is.list(.MLEw_approx))
-stopifnot(identical(names(.MLEw_mcs), c("W12","W3", "settings")), is.data.frame(.MLEw_mcs$W3))
+stopifnot(identical(names(.MLEw_mcs), c("W12","W3", "settings")),
+          is.data.frame(.MLEw_mcs$W12), is.data.frame(.MLEw_mcs$W3))
 stopifnot(identical(names(.MLEw_approx), c("coef", "fun")))
 
 # save as internal data ---------------------------------------------------
