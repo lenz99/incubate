@@ -334,7 +334,6 @@ objFunFactory <- function(x, y = NULL, distO,
 
       if (isSurv) {
         # Surv-response
-        cind_gr <- cens$ind[[group]]
         cindo_gr <- cens$ind[[group]]$obs
         stopifnot(length(cindo_gr) >= 2L)
 
@@ -350,7 +349,7 @@ objFunFactory <- function(x, y = NULL, distO,
           }
           ind_obs1 <- cindo_gr[seq_len(i1-1L)]
           if (length(cindo_gr) >= i1) ind_next <- cindo_gr[i1]
-        }
+        }#esle
 
       } else {
         # numeric response, non-Surv
@@ -367,17 +366,17 @@ objFunFactory <- function(x, y = NULL, distO,
             #which.max(obs_r > 1) # 1st index of 2nd obs
             firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
             # check that there are two distinct values
-            if (any(is.na(firstTwoRanks))) {
+            if (anyNA(firstTwoRanks)) {
               if (l < length(obs)) next
               if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
               #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
-            } #fi
+            }#fi
 
             ind_obs1 <- which(obs_r == firstTwoRanks[1L])
             ind_next <- which(obs_r == firstTwoRanks[2L])
             if (length(ind_next)) ind_next <- ind_next[1L]
-          } #rof
-        } #esle
+          }#rof l
+        }#esle
       } #esle (non-Surv)
 
       list(inds_obs1 = ind_obs1, ind_next = ind_next)
@@ -628,12 +627,11 @@ objFunFactory <- function(x, y = NULL, distO,
            #function(k) W1_x * if (log(k) < -5) 1 else if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
            W3 = purrr::compact(list(x = w3FF(group = "x", method = method_w3),
                                     y = if (twoGroup) w3FF(group = "y", method = method_w3))))
-    })
+    })#lacol
   } #esle weights
 
 
   stopifnot(!twoPhase) #XXX not implemented yet!!
-
 
   # provide indices for x and for y
   # where to find the parameters per group in the parameter vector of the objective function
@@ -1349,10 +1347,10 @@ objFunFactory <- function(x, y = NULL, distO,
 
              if (!isSurv) {
                # numeric response, non-Surv
-               sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))),
-                   rlang::exec(distO$pdf, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr)),
-                   # optional penalization term
-                   -penF(k, nObs = nObs))
+               length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))) +
+                 sum(rlang::exec(distO$pdf, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr))) +
+                 # optional penalization term
+                 -penF(k, nObs = nObs)
 
              } else {
                switch (attr(obs, which = "type", exact = TRUE),
@@ -1361,15 +1359,15 @@ objFunFactory <- function(x, y = NULL, distO,
                          stopifnot(nObs - cens$n[[group]]["any"] >= 2L)
 
                          # first event-time needs correction
-                         sum(length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]),
-                                                                                                  pars.gr)))),
-                             # remaining observed event times
-                             rlang::exec(distO$pdf, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
-                             # right-censored observations do not need correction
-                             #+(as they are tail probabilities that do not peak so drastically as densities do)
-                             rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)),
-                             # optional penalization term
-                             -penF(k, nObs = nObs))
+                         length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]),
+                                                                                              pars.gr)))) +
+                           # remaining observed event times
+                           sum(rlang::exec(distO$pdf, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
+                               # right-censored observations do not need correction
+                               #+(as they are tail probabilities that do not peak so drastically as densities do)
+                               rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
+                           # optional penalization term
+                           -penF(k, nObs = nObs)
                        },
                        stop("This type of censoring is not supported!", call. = FALSE))
 
