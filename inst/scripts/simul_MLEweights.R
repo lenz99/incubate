@@ -100,8 +100,11 @@ if (myWorkers > 1L) {
 
 
 # distribution of W1 is Gamma with shape n and scale 1/n
-nObs_vctr <- c(1:50, 55, 60, 65, 70, 75, 80, 90, 100, 125, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000)
-shape_vctr <- c(0.01, 0.05, 0.1, 0.25, 0.5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7) #for W3
+nObs_vctr <- c(1:50, 55, 60, 65, 70, 75, 80, 90, 100, 125, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000) |>
+  unique()
+#shape relevant for W3
+shape_vctr <- c(0.01, 0.05, 0.1, 0.25, 0.5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7) |>
+  unique()
 
 aggFun <- stats::median; isMedian <- TRUE
 stopifnot(is.function(aggFun), "na.rm" %in% formalArgs(aggFun))
@@ -202,6 +205,7 @@ try(expr = rm(W12_mcs_df, W3_mcs_df), silent = FALSE)
 saveRDS(.MLEw_mcs, file = file.path(myResultsDir, "MLEw_mcs.rds"))
 
 
+#XXX approximation could go into data_internal.R (together with checks that the approximation is ok)
 
 # approximation W1 ----------------------------------------------------------
 message("Start with building approximations for the weights!")
@@ -491,7 +495,8 @@ w3FF <- function(nObs) {
   if (nObs < 2L) return(function(k) 1)
 
   # get coefficients for a Richards generalized logistic function
-  # if we have fit the parameter  nObs directly we take
+  # if we have fit the parameter nObs directly we use the Richards fit
+  #+otherwise, we rely on the spline approximation of the fit.
   approx_W3_ind <- which(.MLEw_approx[["coef"]][["W3_richards"]]$nObs == nObs)
   approx_W3_names <- c("A", "K", "Q", "B", "nu")
 

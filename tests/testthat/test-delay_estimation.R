@@ -1003,22 +1003,42 @@ test_that("Fit delayed Weibull", {
   expect_named(coef(fd_poll_MLEw), expected = c("delay1", "shape1", "scale1"))
 
 
-  # Cousineau's numerical example, taken from Weibull with delay = 300, shape k = 2 and scale = 100
+  # Cousineau's numerical example,
+  #+originally taken from Weibull with delay = 300, shape k = 2 and scale = 100
+  cousPar_true <- c(delay1 = 300, shape1 = 2, scale1 = 100)
   cousEx <- c(310, 342, 353, 365, 383, 393, 403, 412, 451, 456)
-  cousPar_mlen <- c(delay1=274.8, shape1=2.8, scale1=126)
+  expect_identical(length(cousEx), expected = 10L)
+  expect_gte(min(cousEx), expected = cousPar_true[["delay1"]])
+
+  cousPar_mle1 <- structure(
+    c(delay1=274.8, shape1=2.8, scale1=126),
+    MLE = -51.89)
+  # Cousineau reports coefs as result from MLE-2step
+  #+i.e., indirect optimization, using 1st deriv/gradient to find candidates for local extremum
+  cousPar_mle2 <- c(delay1=280.9, shape1=2.62, scale1=119.0)
   cousPar_mlew <- c(delay1=283.7, shape1=2.29, scale1=116.0)
 
+  # naive MLE (MLEn)
   fd_wbc_mlen <- delay_model(x = cousEx, distribution = "weib", method = "MLEn")
-  expect_equal(coef(fd_wbc_mlen), expected = cousPar_mlen, tolerance = .001)
-  #Cousineau has log-lik value (to be max), our criterion is neg. log-likelihood (to be min.)
-  expect_equal(-fd_wbc_mlen$criterion, expected = -51.89, tolerance = .001)
+  expect_equal(coef(fd_wbc_mlen), expected = cousPar_mle1, tolerance = .0005, ignore_attr = "MLE")
+  # our criterion is neg. log-likelihood (to be min.)
+  expect_equal(-fd_wbc_mlen$criterion,
+               expected = sum(rlang::exec(distO_w$pdf, !!! c(coef(fd_wbc_mlen), list(x=cousEx, log=TRUE)))),
+               tolerance = .000001)
+  # Cousineau gives log-lik value (to be max),
+  expect_equal(-fd_wbc_mlen$criterion,
+               expected = attr(cousPar_mle1, "MLE"),
+               tolerance = .0005)
+
+  # MLEn with profiling
   fd_wbc_mlenp <- delay_model(x = cousEx, distribution = "weib", method = "MLEn", profile = TRUE)
-  # profiling yields same result
-  expect_equal(coef(fd_wbc_mlenp), expected = coef(fd_wbc_mlen), tolerance = .001)
-  # Cousineau reports delay=280.9, shape=2.62, scale=119.0 as result from indirect optimization
-  expect_lte(fd_wbc_mlen$criterion, expected = fd_wbc_mlen$objFun(pars = c(delay1=280.9, shape1=2.62, scale1=119.0), criterion = TRUE))
-  # criterion is really neg. log likelihood
-  expect_equal(fd_wbc_mlen$criterion, -sum(distO_w$pdf(cousEx, delay1 = 280.9, shape1=2.62, scale1=119.0, log = TRUE)), tolerance = .001)
+  # MLE with profiling yields same result as MLEn
+  expect_equal(coef(fd_wbc_mlenp), expected = coef(fd_wbc_mlen), tolerance = .0005)
+  # indirect optimization (using 1st deriv) gives similar log-likelihood
+  #+BTW, MLEn has slightly better criterion (=smaller neg. log-lik)
+  expect_equal(fd_wbc_mlen$criterion,
+               expected = fd_wbc_mlen$objFun(pars = cousPar_mle2, criterion = TRUE),
+               tolerance = .0005)
   # MLEw
   fd_wbc_mlew <- delay_model(x = cousEx, distribution = "weib", method = "MLEw", profile = TRUE)
   expect_identical(fd_wbc_mlew$optimizer$convergence, expected = 0L)
@@ -1026,9 +1046,15 @@ test_that("Fit delayed Weibull", {
   expect_true(fd_wbc_mlew$optimizer$profiled)
   expect_equal(coef(fd_wbc_mlew), expected = cousPar_mlew, tolerance = .15)
   # our implementation finds a smaller value of our objective function (to be minimized)
-  expect_lte(fd_wbc_mlew$optimizer$valOpt, fd_wbc_mlew$objFun(c(delay1=cousPar_mlew[["delay1"]], shape1=log(cousPar_mlew[["shape1"]]))))
-  # but neg. log-likelihood criterion is in fact quite similar (actually, Cousineau's solution is slightly better)
-  expect_equal(fd_wbc_mlew$criterion, fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE), tolerance = 0.07)
+  expect_lte(fd_wbc_mlew$optimizer$valOpt,
+             expected = fd_wbc_mlew$objFun(c(delay1=cousPar_mlew[["delay1"]],
+                                             shape1=log(cousPar_mlew[["shape1"]]))))
+  # but neg. log-likelihood criterion is in fact quite similar
+  #+actually, Cousineau's solution is slightly better (=smaller)
+  expect_equal(fd_wbc_mlew$criterion,
+               expected = fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE),
+               tolerance = 0.07)
+
 
 
 
