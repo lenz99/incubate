@@ -1683,22 +1683,22 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
     if (is.null(optObj) || optObj$convergence > 0L) {
       if (verbose > 0L) {
-        cat("Do another final attempt with PORT-optimizer.\n")
+        cat("Do another final attempt with alternative optimizer.\n")
       }#fi
 
-      # choose best start values for PORT:
+      # choose best start values for alternative:
       # if there are shape parameters, go for start value that is reasonably small
       par1 <- local({
         shapeInd <- which(startsWith(names(par0), prefix = "shape"))
         keep0 <- length(shapeInd) && sum(pmax.int(par0[shapeInd]-2,0)^2) < sum(pmax.int(optim_args$par[shapeInd]-2,0)^2)
         if (keep0) {
           if (verbose > 1) {
-            cat("Keep initial start parameters for final PORT-optimizer attempt.\n")
+            cat("Keep initial start parameters for final optimizer attempt.\n")
           }#fi
           par0
         } else {
           if (verbose > 1) {
-            cat("Use updated start parameters for final PORT-optimizer attempt.\n")
+            cat("Use updated start parameters for final optimizer attempt.\n")
           }#fi
           optim_args$par
         } #esle
