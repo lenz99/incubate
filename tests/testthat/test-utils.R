@@ -1,6 +1,76 @@
 # mkuhn, 2021-10-11
 # test utility functions of this package
 
+test_that("Internal package data (related to weights functions for MLEw)", {
+  # load internal package data
+  FNAME_SYSD <- xfun::magic_path("sysdata.rda")
+  stopifnot(file.exists(FNAME_SYSD))
+  load(FNAME_SYSD)
+  expect_true(exists(".MLEw_approx"))
+  expect_named(.MLEw_approx, expected = c("MCsim", "coef", "fun"))
+  expect_named(.MLEw_approx[["MCsim"]], expected = c("nObs", "W1", "W2"))
+  expect_named(.MLEw_approx[["coef"]], expected = c("W2", "W3_richards"))
+  expect_named(.MLEw_approx[["fun"]], expected = c("genLogisticF", "genLogisticJ", "w1F", "w2F", "w3FF"))
+  # all functions in .MLEw_approx[["fun"]]
+  purrr::walk(.x = names(.MLEw_approx[["fun"]]),
+              .f = \(nam) expect_type(.MLEw_approx[["fun"]][[nam]], "closure"))
+
+  w1F <- .MLEw_approx[["fun"]][["w1F"]]
+  w2F <- .MLEw_approx[["fun"]][["w2F"]]
+  w3FF <- .MLEw_approx[["fun"]][["w3FF"]]
+
+  expect_length(w1F(seq_len(3)), n = 3)
+  expect_type(w1F(5), type = "double")
+  expect_equal(w1F(1), expected = log(2))
+  expect_equal(w1F(-1), expected = log(2))
+  expect_equal(w1F(1.5), expected = log(2))
+  # W1 is (mostly) monotonically increasing
+  expect_gte(min(diff(w1F(seq_len(40)))), expected = 0)
+
+  # Cousineau: Nearly unbiased.. (Table 2)
+  expect_equal(w1F(6), expected = 0.945, tolerance = 1e-3)
+  expect_equal(w1F(14), expected = 0.976, tolerance = 1e-3)
+
+  expect_length(w2F(seq_len(3)), n = 3)
+  expect_type(w2F(5), type = "double")
+  expect_equal(w2F(1), expected = 0)
+  expect_equal(w2F(-1), expected = 0)
+  expect_equal(w2F(1.5), expected = 0)
+  # W2 is monotonically increasing
+  expect_gte(min(diff(w2F(seq_len(100)))), expected = 0)
+
+  # Cousineau: Nearly unbiased.. (Table 3)
+  expect_equal(w2F(8), expected = 0.817, tolerance = 1e-3)
+  expect_equal(w2F(15), expected = 0.902, tolerance = 1e-3)
+
+  # Cousineau: Nearly unbaised.. (Table 4)
+  # agreement here is not as high: W3 is more challenging, in particular for small shape
+  #+our median is based on higher sample size in our MC-sim
+  shapes <- seq.int(0.5, 2.5, by=.5)
+  expect_equal(w3FF(6)(shapes), expected = c(5.631, 2.808, 2.004, 1.669, 1.492), tolerance = 5e-2)
+  expect_equal(w3FF(16)(shapes), expected = c(12.743, 3.854, 2.324, 1.820, 1.586), tolerance = 3e-2)
+
+  # W3 for neighbouring nObs and some shapes
+  # we use also fractional nObs to test if the spline interpolation of coefficients works properly
+  w3Ex_mat <- purrr::map(.x = c(15.999, 16, 16.1, 16.11, 16.25, 16.3, 16.5, 16.6, 16.7, 16.9, 17, 17.1, 17.2, 17.3, 17.5, 18, 19.1, 50, 50.01, 50.1, 50.2, 51, 52, 53, 54, 55),
+                         .f = \(n_) w3FF(n_)(shapes)) |>
+    unlist() |> matrix(ncol = length(shapes), byrow = TRUE,
+                       dimnames = list(list(), shape = paste0("k=", shapes)))
+  # W3 decreases as function of shape (for given n)
+  expect_lte(w3Ex_mat |>
+               apply(1, FUN = diff) |>
+               # diffs between shapes are put in columns: hence, next apply with MARGIN=2
+               apply(2, FUN = max, simplify = TRUE) |>
+               max(), expected = 0)
+
+  # W3 increases as function of n (for given shape)
+  expect_gte(w3Ex_mat |>
+    apply(2, FUN = diff) |>
+    apply(2, FUN = min, simplify = TRUE) |>
+    min(), expected = 0)
+
+})
+
 test_that("Estimate rounding error from sample", {
   set.seed(1234)
   # some random data (around 0)
@@ -43,9 +113,10 @@ test_that("Estimate rounding error from sample", {
   expect_identical(estimRoundingError(round(obsList$obs3,0)*1000, roundDigits = -2:5), expected = 10**3)
 })
 
+
 test_that("Ties in data", {
 
-  set.seed(20230417)
+  set.seed(2023-04-17)
   # draw random data
   x <- sqrt(5 + stats::rpois(n = 17L, lambda = 9))
   # add ties

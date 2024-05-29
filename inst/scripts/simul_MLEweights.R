@@ -99,7 +99,8 @@ if (myWorkers > 1L) {
 nObs_vctr <- c(1:50, 55, 60, 65, 70, 75, 80, 90, 100, 125, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000) |>
   unique()
 #shape relevant for W3
-shape_vctr <- c(0.01, 0.05, 0.1, 0.25, 0.5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7,
+#XXX add further smaller shapes like .001?
+shape_vctr <- c(.01, .05, .1, .25, .5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7,
                 8:15, 20, 25, 30, 40, 50, 75, 100) |>
   unique()
 
@@ -183,6 +184,17 @@ W3_mcs_df <- tidyr::expand_grid(nObs = as.integer(nObs_vctr),
                                             .options = furrr_options(seed = TRUE)))
 
 
+
+
+# check results -----------------------------------------------------------
+
+# W1 is close to be monotonically increasing
+if (min(diff(W12_mcs_df$W1)) > -1e-5) warning("W1 not monotonely increasing!")
+if (min(diff(W12_mcs_df$W2)) > -1e-5) warning("W2 not monotonely increasing!")
+
+
+# save  & exit ------
+
 # Monte-Carlo simulation results for median
 .MLEw_mcs <- list(
   W12 = W12_mcs_df,
@@ -196,10 +208,10 @@ W3_mcs_df <- tidyr::expand_grid(nObs = as.integer(nObs_vctr),
                   mcnrep = myMCNrep)
 )
 
+
 try(expr = rm(W12_mcs_df, W3_mcs_df), silent = FALSE)
 
 
-# save  & exit ------
 
 # result of Monte-Carlo simulation
 saveRDS(.MLEw_mcs, file = file.path(myResultsDir, "MLEw_mcs.rds"))

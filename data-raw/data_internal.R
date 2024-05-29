@@ -462,7 +462,10 @@ w3FF <- function(nObs) {
   } #esle
 
 
-  # return: W3 as fn of shape k
+  # W3 as fn of shape k
+  # @param k shape
+  # @return: W3 (same length as k)
+  # XXX add gradient to this function as attribute?
   function(k) {
 
     # undo the transformation:
@@ -471,7 +474,6 @@ w3FF <- function(nObs) {
     exp(expm1(.MLEw_approx$fun$genLogisticF(theta = approx_W3_coefs,
                                             xVal = -log(k))))
 
-    # # use local instead?
     # evalq(expr = A + (K - A) / (1 + Q * k**-B)**(1/nu),
     #       envir = as.list(approx_W3_coefs),
     #       enclos = rlang::current_env())
