@@ -8,7 +8,7 @@ Authors@R:
            email = "matthias.kuhn@tu-dresden.de",
            comment = c(ORCID = "0000-0003-2868-5155"))
 Description: Fit parametric models for time-to-event data that show an initial
-    'incubation period', i.e., a variable delay phase where the hazard is zero.
+    'incubation period', i.e., a variable delay phase where no events occur.
     The delayed Weibull distribution serves as the foundational data model.
     For parameter estimation, different flavours of maximum likelihood estimation (MLE) and the
     specific method of maximum product of spacings estimation (MPSE) are implemented.

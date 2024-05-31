@@ -1579,7 +1579,7 @@ objFunFactory <- function(x, y = NULL, distO,
            message = "analytic solution for naive MLE ('MLEn')",
            counts = 0L)
     })
-  }
+  }#fi
 
   objFun
 } #fn objFunFactory
@@ -1630,7 +1630,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     optim_args[["fn"]] <- objFun
 
 
-    # optim: first attempts ----
+    # optimization: first attempt ----
 
     # initial start values for optimization
     par0 <- optim_args$par
@@ -1679,7 +1679,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     }## fi 2nd attempt necessary?
 
 
-    # optim: last attempt (alternative method) ----
+    # optimization: last attempt (alternative method) ----
 
     if (is.null(optObj) || optObj$convergence > 0L) {
       if (verbose > 0L) {

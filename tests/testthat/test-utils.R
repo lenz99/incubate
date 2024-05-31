@@ -47,26 +47,30 @@ test_that("Internal package data (related to weights functions for MLEw)", {
   # agreement here is not as high: W3 is more challenging, in particular for small shape
   #+our median is based on higher sample size in our MC-sim
   shapes <- seq.int(0.5, 2.5, by=.5)
-  expect_equal(w3FF(6)(shapes), expected = c(5.631, 2.808, 2.004, 1.669, 1.492), tolerance = 5e-2)
-  expect_equal(w3FF(16)(shapes), expected = c(12.743, 3.854, 2.324, 1.820, 1.586), tolerance = 3e-2)
+  expect_equal(w3FF(6)(shapes),  expected = c( 5.631, 2.808, 2.004, 1.669, 1.492), tolerance = 5e-2)
+  expect_equal(w3FF(11)(shapes), expected = c( 9.319, 3.462, 2.207, 1.774, 1.555), tolerance = 4e-2)
+  expect_equal(w3FF(12)(shapes), expected = c(10.051, 3.560, 2.239, 1.782, 1.565), tolerance = 3e-2)
+  expect_equal(w3FF(16)(shapes), expected = c(12.743, 3.854, 2.324, 1.820, 1.586), tolerance = 2e-2)
 
   # W3 for neighbouring nObs and some shapes
   # we use also fractional nObs to test if the spline interpolation of coefficients works properly
-  w3Ex_mat <- purrr::map(.x = c(15.999, 16, 16.1, 16.11, 16.25, 16.3, 16.5, 16.6, 16.7, 16.9, 17, 17.1, 17.2, 17.3, 17.5, 18, 19.1, 50, 50.01, 50.1, 50.2, 51, 52, 53, 54, 55),
-                         .f = \(n_) w3FF(n_)(shapes)) |>
+  w3Ex_mat <- c(15.999, 16, 16.1, 16.11, 16.25, 16.3, 16.5, 16.6, 16.7, 16.9, 17, 17.1, 17.2, 17.3, 17.5, 18, 19.1,
+                50, 50.01, 50.1, 50.2, 51, 52, 53, 54, 55, 55.1, 55.11, 55.13, 59, 60, 61, 61.01, 61.02, 61.5, 61.6, 61.9, 61.99, 62) |>
+    sort.int() |>
+    purrr::map(.f = \(n_) w3FF(n_)(shapes)) |>
     unlist() |> matrix(ncol = length(shapes), byrow = TRUE,
                        dimnames = list(list(), shape = paste0("k=", shapes)))
   # W3 decreases as function of shape (for given n)
   expect_lte(w3Ex_mat |>
-               apply(1, FUN = diff) |>
+               apply(MARGIN = 1, FUN = diff) |>
                # diffs between shapes are put in columns: hence, next apply with MARGIN=2
-               apply(2, FUN = max, simplify = TRUE) |>
+               apply(MARGIN = 2, FUN = max, simplify = TRUE) |>
                max(), expected = 0)
 
   # W3 increases as function of n (for given shape)
   expect_gte(w3Ex_mat |>
-    apply(2, FUN = diff) |>
-    apply(2, FUN = min, simplify = TRUE) |>
+    apply(MARGIN = 2, FUN = diff) |>
+    apply(MARGIN = 2, FUN = min, simplify = TRUE) |>
     min(), expected = 0)
 
 })
