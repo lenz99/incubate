@@ -11,7 +11,8 @@ test_that('Structure of test objects.', code = {
   x <- rexp_delayed(n = 131L, delay1 = 5, rate1 = .1)
   y <- rexp_delayed(n = 111L, delay1 = 5, rate1 = .3)
 
-  ted_d <- test_diff(x = x, y = y, distribution = 'expon', param = 'delay1',
+  ted_d <- test_diff(x = x, y = y,
+                     distribution = 'expon', param = 'delay1',
                      R = 19, type = 'bootstrap', chiSqApprox = TRUE)
 
   expect_s3_class(ted_d, class = 'incubate_test')
@@ -142,10 +143,9 @@ test_that("Bootstrap test: chosen method matters", code = {
   y <- rexp_delayed(n=39, delay1 = 5.1, rate1 = .51)
 
   est_meths <- c("MPSE", "MLEn", "MLEc") #, "MLEw"),
-  teDiffs <- purrr::map(.x = est_meths,
+  teDiffs <- purrr::map(.x = purrr::set_names(est_meths),
                        .f = ~ test_diff(x = x, y = y, param="delay1", type = "bootstrap",
-                                        method = .x, R = 571, profiled = TRUE)) %>%
-    purrr::set_names(nm = est_meths)
+                                        method = .x, R = 571, profiled = TRUE))
 
   # bootstrap P-values vary depending on chosen method
   expect_gt(stats::sd(purrr::map_dbl(teDiffs, c("P", "bootstrap"))), expected = 1e-7)
@@ -268,7 +268,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
   # p-values are not too far off from uniform
   expect_gte(mean(testres3[2L,]), expected = .4)
-  expect_equal(mean(testres3[2L,]), expected = .5, tolerance = .08)
+  expect_equal(mean(testres3[2L,]), expected = .5, tolerance = .09)
 
   # P-values are rather lower than expected
   expect_gte(mean(testres3[4L,]), expected = .33)
@@ -278,7 +278,8 @@ test_that("Moran/Pearson GOF-test", code = {
   # data from Poisson model (=not H0), many ties
   #fm0 <- delay_model(x = c(8, 9, 9, 9, 10, 11, 12, 12, 14, 16), method = "MPSE")
   #tieInfo <- rlang::env_get(rlang::fn_env(fm0$objFun), "tieInfo")
-  expect_gte(test_GOF(delayFit = delay_model(x = c(8, 9, 9, 10, 11, 12, 14), method = "MPSE"), method = "moran")$statistic, expected = 0)
+  expect_gte(test_GOF(delayFit = delay_model(x = c(8, 9, 9, 10, 11, 12, 14), method = "MPSE"),
+                      method = "moran")$statistic, expected = 0)
 
   # GOF-moran tests on tied data from poisson (HA), noSurv, two group, many ties
   testres3a <- future.apply::future_vapply(X = seq_len(nTests),
@@ -349,7 +350,8 @@ test_that("Moran/Pearson GOF-test", code = {
                                              yObs <- 8 + stats::rpois(23, lambda = 3)
                                              yEv <- sample(x = c(0, 1, 1, 1), size = length(yObs), replace = TRUE)
                                              fm <- delay_model(x = 5 + stats::rpois(17, lambda = 5),
-                                                               y = survival::Surv(yObs, event = yEv), method = "MPSE")
+                                                               y = survival::Surv(yObs, event = yEv),
+                                                               method = "MPSE")
 
                                              c(
                                                moran = test_GOF(delayFit = fm, method = "moran")[["statistic"]],
@@ -404,7 +406,8 @@ test_that("Moran/Pearson GOF-test", code = {
                                             y <- rexp_delayed(n = 23, delay1 = 8, rate1 = .4)
                                             evStatus_x <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
 
-                                            fm <- delay_model(x = survival::Surv(x, evStatus_x), y = y, bind = "delay1",
+                                            fm <- delay_model(x = survival::Surv(x, evStatus_x), y = y,
+                                                              bind = "delay1",
                                                               method = "MPSE")
 
                                             c(

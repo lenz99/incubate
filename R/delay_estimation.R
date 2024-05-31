@@ -191,7 +191,9 @@ objFunFactory <- function(x, y = NULL, distO,
 
     if (length(dupInd)) {
       stopifnot(dupInd[[1]] > 1L) # duplicated entries start at least 2
-      if (ties == "error") stop("Ties within data are not allowed (ties == 'error')!", call. = FALSE)
+      if (ties == "error") {
+        stop("Ties within data are not allowed (ties == 'error')!", call. = FALSE)
+      }
 
       gapsInDupInds <- c(1L, which(diff(dupInd)>1)+1) # +1 to be on dupInd-scale
       nbrTieGroups <- length(gapsInDupInds)
@@ -361,7 +363,9 @@ objFunFactory <- function(x, y = NULL, distO,
         } else {
           # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
           for (l in sort.int(unique(c(5, 10, 50, 100, 500, 1000, length(obs))))) {
-            if (l > length(obs)) break
+            if (l > length(obs)) {
+              break
+            }
             obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
             #which.max(obs_r > 1) # 1st index of 2nd obs
             firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
@@ -1738,35 +1742,39 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
 
 
-#' Fit a delayed Exponential or Weibull model to one or two given sample(s).
+#' Fit a delayed Exponential or Weibull model to one or two given sample(s)
 #'
 #' Maximum product of spacings estimation is used by default to fit the parameters. Estimation via naive maximum likelihood (`method = 'MLEn`) is available, too,
 #' but MLEn yields biased estimates. MLEc is a corrected version of MLE due to Cheng.
 #'
-#' Numerical optimization is done by `stats::optim`.
+#' @details
+#' The parameter `control=` allows to set specifics of the optimization process of the delay model fit.
+#' Possible list entries are
+#'
+#' * `profiled` aim to profile out a parameter
+#' * `pen_shape` penalize high values of shape (for Weibull distribution)
+#' * `verbose` level of verboseness. Default 0 is quiet
+#' * `ties` character. Strategy to handle ties for `method = "MPSE"`. Either 'density' (default), 'equispaced' or 'error'.
+#' * `optim_args` list. optimization arguments to use. `NULL` (default) uses the data-dependent default values.
+#'
+#' Numerical optimization is normally done by `stats::optim`. `minqa::bobyqa` is used as fall-back.
+#'
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
 #' @param distribution Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution object.
 #' @param twoPhase logical. Allow for two phases?
 #' @param bind character. parameter names that are bind together in 2-group situation.
-#' @param ties character. Strategy to handle ties for `method = "MPSE"`.
 #' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEw' = weighted MLE' *or* MLEc' = corrected MLE
-#' @param profiled logical. Profile out scale from log-likelihood if possible.
-#' @param optim_args list. optimization arguments to use. Use `NULL` to use the data-dependent default values.
-#' @param verbose integer. level of verboseness. Default 0 is quiet.
+#' @param control list. Details that control the optimization. E.g., profiling, penalization.
 #' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
 delay_model <- function(x = stop('Specify observations for first group x=!', call. = FALSE), y = NULL,
-                        distribution = c('exponential', 'weibull', 'normal'), twoPhase = FALSE,
-                        bind = NULL, ties = c('density', 'equispaced', 'error'),
-                        method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'), profiled = method == 'MLEw',
-                        optim_args = NULL, verbose = 0) {
+                        distribution = c('exponential', 'weibull', 'normal'),
+                        twoPhase = FALSE, bind = NULL,
+                        method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'),
+                        control = list()) {
 
   # setup -------------------------------------------------------------------
-
-  if (is.logical(verbose)) verbose <- as.numeric(verbose)
-  if (is.null(verbose) || !is.numeric(verbose) || !is.finite(verbose) ) verbose <- 0L
-  verbose <- verbose[[1L]]
 
 
   # unpack x if it is a list of two vectors
@@ -1786,9 +1794,42 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   method <- if (length(method) == 1L && toupper(method) == 'MSE') {
     message("The method name 'MPSE' is prefered over the previously used name 'MSE'!")
     "MPSE"
-  } else method[1L]
+  } else {
+    method[[1L]]
+  }
   method <- match.arg(method)
-  ties <- match.arg(ties)
+
+  stopifnot(is.list(control))
+  controlNms <- names(control)
+
+  # default control-settings
+  cntrl <- list(verbose = 0,
+                profiled = method == 'MLEw',
+                pen_shape = FALSE,
+                ties = 'density',
+                optim_args = NULL)
+  #XXX continue here: activate pen_shape!!
+
+  # overwrite control settings as given by control=
+  cntrl[controlNms] <- control
+  local({
+    if (length(badNms <- controlNms[!controlNms %in% names(cntrl)])) {
+      warning("Unknown names in control list: ", paste(badNms, collapse = ", "), call. = FALSE)
+    }
+  })
+
+
+  # check control arguments ---
+
+  if (is.logical(cntrl$verbose)) {
+    cntrl$verbose <- as.numeric(cntrl$verbose)
+  }
+  if (is.null(cntrl$verbose) || !is.numeric(cntrl$verbose) || !is.finite(cntrl$verbose)) {
+    cntrl$verbose <- 0L
+  }
+  cntrl$verbose <- cntrl$verbose[[1L]]
+
+  cntrl$ties <- match.arg(cntrl$ties, choices = c('density', 'equispaced', 'error'))
 
   if (is.character(bind)) {
     if (any(endsWith(bind, suffix = "_tr"))) {
@@ -1801,7 +1842,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
       unNmbrdIdx <- !grepl(pattern = "[12]", bind, fixed = FALSE)
       if (any(unNmbrdIdx)) {
         bind[unNmbrdIdx] <- paste0(bind[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
-        if (verbose > 0L) {
+        if (cntrl$verbose > 0L) {
           cat("The unnumbered parameter names in bind= are translated to canonical parameter names (=phase 1).\n")
         }
       }
@@ -1809,15 +1850,17 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   }#fi bind=
 
 
+
+
   # objective function ------------------------------------------------------
 
-  objFun <- objFunFactory(x = x, y = y, method = method, profiled = profiled, distO = distO,
-                          twoPhase = twoPhase, bind = bind, ties = ties, verbose = verbose)
+  objFun <- objFunFactory(x = x, y = y, method = method, profiled = cntrl$profiled, distO = distO,
+                          twoPhase = twoPhase, bind = bind, ties = cntrl$ties, verbose = cntrl$verbose)
   if (is.null(objFun)) return(invisible(NULL))
   objFunEnv <- rlang::fn_env(objFun)
 
   # optimise objective function
-  optObj <- delay_fit(objFun, optim_args = optim_args, verbose = verbose)
+  optObj <- delay_fit(objFun, optim_args = cntrl$optim_args, verbose = cntrl$verbose)
 
   if (is.null(optObj) || is.null(optObj$par_orig)) return(invisible(NULL))
 
@@ -1837,20 +1880,21 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
       twoGroup = twoGroup,
       method = method,
       bind = rlang::env_get(env = objFunEnv, nm = "bind"),
-      ties = ties,
+      ties = cntrl$ties,
       #isSurv = rlang::env_get(env = objFunEnv, nm = "isSurv"),
       cens = rlang::env_get(env = objFunEnv, nm = "cens", default = 0L), ##if (twoGroup)
       kmFit = rlang::env_get(env = objFunEnv, nm = "kmFit", default = NULL),
       objFun = objFun,
       par = optObj$par_orig,
       criterion = objFun(pars = optObj$par_orig, criterion = TRUE, aggregated = TRUE),
-      optimizer = purrr::compact(c(list(parOpt = optObj$par, valOpt = optObj$value, profiled = profiled),
+      optimizer = purrr::compact(c(list(parOpt = optObj$par, valOpt = optObj$value, profiled = cntrl$profiled),
                                    optObj[c("methodOpt", 'convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")
 }
 
 
-#' Refit an `incubate_fit`-object with specified optimization arguments.
+#' Refit an `incubate_fit`-object with specified optimization arguments
+#'
 #' This function is useful when only an optimization argument is to be changed.
 #' If more things need to be changed go back to `delay_model` and start from scratch.
 #' @param object `incubate_fit`-object
@@ -2023,11 +2067,12 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     stopifnot(!twoGroup) # for the time being only single group calls are supported!
     boot::boot(data = object$data,
                statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distO, twoPhase = object$twoPhase,
-                                                           ties = object$ties,
-                                                           method = object$method, bind = object$bind), transformed = FALSE),
+                                                           method = object$method, bind = object$bind,
+                                                           control = list(ties = object$ties)),
+                                               transformed = FALSE),
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
-                 if (smoothDelay){
+                 if (smoothDelay) {
                    coe[['delay1']] <- delayCandX[sample.int(n = R, size = 1L)]
                  }
                  rlang::exec(ranFun, !!! as.list(c(n=nObs[[1L]], coe)))
@@ -2044,8 +2089,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           y <- if (twoGroup) object$data$y[sample.int(n = nObs[[2L]], replace = TRUE)]
 
                           coef(delay_model(x=x, y=y, distribution = object$distO, twoPhase = object$twoPhase,
-                                           ties = object$ties,
-                                           method = object$method, bind = object$bind), transformed = FALSE)
+                                           method = object$method, bind = object$bind,
+                                           control = list(ties = object$ties)),
+                               transformed = FALSE)
                         },
                         parametric = {
                           # generate data from the fitted model
@@ -2056,7 +2102,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                           ranFunArgsY <- if (twoGroup) as.list(c(n=nObs[[2L]], coef.incubate_fit(object, transformed = FALSE, group = "y")))
 
                           function(ind) {
-                            if (smoothDelay){
+                            if (smoothDelay) {
                               #+smooth delay according to how sure are we about the delay-estimate:
                               #+the more sure the smaller is the smoothing
                               ranFunArgsX[['delay1']] <- delayCandX[ind]
@@ -2068,8 +2114,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
                             y <- if (twoGroup) rlang::exec(ranFun, !!! ranFunArgsY)
 
                             dm <- suppressWarnings(delay_model(x=x, y=y, distribution = object$distO, twoPhase = object$twoPhase,
-                                                               ties = object$ties,
-                                                               method = object$method, bind = object$bind))
+                                                               method = object$method, bind = object$bind,
+                                                               control = list(ties = object$ties)))
                             retVec <- rep.int(NA_real_, times = ncoef)
                             if (! is.null(dm) && inherits(dm, "incubate_fit")) retVec <- coef.incubate_fit(dm, transformed = FALSE)
 
@@ -2092,7 +2138,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 
     # more clear and shorter but less efficient!
     # future.apply::future_vapply(simulate(object, nsim = R), FUN.VALUE = numeric(length(cf)),
-    #  FUN = \(d) coef(delay_model(x=d, distribution = object$distO, ties = object$ties, method = object$method, bind = object$bind)))
+    #  FUN = \(d) coef(delay_model(x=d, distribution = object$distO, control = list(ties = object$ties), method = object$method, bind = object$bind)))
 
   }
 }
@@ -2114,7 +2160,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
 #' @export
 confint.incubate_fit <- function(object, parm, level = 0.95, R = 199L,
                                  bs_data, bs_infer = c('logquantile', 'lognormal', 'quantile', 'quantile0', 'normal', 'normal0'),
-                                 useBoot=FALSE, ...) {
+                                 useBoot = FALSE, ...) {
   stopifnot(inherits(object, 'incubate_fit'))
   stopifnot(is.numeric(level), length(level) == 1L, level < 1L, level > 0L)
   stopifnot(is.numeric(R), length(R) == 1L, R > 0)

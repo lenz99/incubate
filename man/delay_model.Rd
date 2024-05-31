@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{delay_model}
 \alias{delay_model}
-\title{Fit a delayed Exponential or Weibull model to one or two given sample(s).}
+\title{Fit a delayed Exponential or Weibull model to one or two given sample(s)}
 \usage{
 delay_model(
   x = stop("Specify observations for first group x=!", call. = FALSE),
@@ -10,11 +10,8 @@ delay_model(
   distribution = c("exponential", "weibull", "normal"),
   twoPhase = FALSE,
   bind = NULL,
-  ties = c("density", "equispaced", "error"),
   method = c("MPSE", "MLEn", "MLEw", "MLEc"),
-  profiled = method == "MLEw",
-  optim_args = NULL,
-  verbose = 0
+  control = list()
 )
 }
 \arguments{
@@ -28,15 +25,9 @@ delay_model(
 
 \item{bind}{character. parameter names that are bind together in 2-group situation.}
 
-\item{ties}{character. Strategy to handle ties for \code{method = "MPSE"}.}
-
 \item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLEn' = naive maximum likelihood estimation \emph{or} 'MLEw' = weighted MLE' \emph{or} MLEc' = corrected MLE}
 
-\item{profiled}{logical. Profile out scale from log-likelihood if possible.}
-
-\item{optim_args}{list. optimization arguments to use. Use \code{NULL} to use the data-dependent default values.}
-
-\item{verbose}{integer. level of verboseness. Default 0 is quiet.}
+\item{control}{list. Details that control the optimization. E.g., profiling, penalization.}
 }
 \value{
 \code{incubate_fit} the delay-model fit object. Or \code{NULL} if optimization failed (e.g. too few observations).
@@ -46,5 +37,15 @@ Maximum product of spacings estimation is used by default to fit the parameters.
 but MLEn yields biased estimates. MLEc is a corrected version of MLE due to Cheng.
 }
 \details{
-Numerical optimization is done by \code{stats::optim}.
+The parameter \verb{control=} allows to set specifics of the optimization process of the delay model fit.
+Possible list entries are
+\itemize{
+\item \code{profiled} aim to profile out a parameter
+\item \code{pen_shape} penalize high values of shape (for Weibull distribution)
+\item \code{verbose} level of verboseness. Default 0 is quiet
+\item \code{ties} character. Strategy to handle ties for \code{method = "MPSE"}. Either 'density' (default), 'equispaced' or 'error'.
+\item \code{optim_args} list. optimization arguments to use. \code{NULL} (default) uses the data-dependent default values.
+}
+
+Numerical optimization is normally done by \code{stats::optim}. \code{minqa::bobyqa} is used as fall-back.
 }

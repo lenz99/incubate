@@ -735,10 +735,14 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   # @param strict logical. Accept models only if they converged flawlessly, i.e., if convergence=0?
   # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
   testStat <- function(x, y, strict = TRUE) {
-    fit0 <- delay_model(x = x, y = y, distribution = distO$dist, twoPhase = twoPhase,
-                        method = method, profiled = profiled, ties = ties, bind = param)
-    fit1 <- delay_model(x = x, y = y, distribution = distO$dist, twoPhase = twoPhase,
-                        method = method, profiled = profiled, ties = ties)
+    fit0 <- delay_model(x = x, y = y,
+                        distribution = distO$dist, twoPhase = twoPhase,
+                        method = method, bind = param,
+                        control = list(profiled = profiled, ties = ties))
+    fit1 <- delay_model(x = x, y = y,
+                        distribution = distO$dist, twoPhase = twoPhase,
+                        method = method,
+                        control = list(profiled = profiled, ties = ties))
 
     if (is.null(fit0) || is.null(fit1) ||
         is.null(fit0$optimizer) || is.null(fit1$optimizer) ||
