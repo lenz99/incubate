@@ -125,12 +125,14 @@ test_that("Ties in data", {
   x <- sqrt(5 + stats::rpois(n = 17L, lambda = 9))
   # add ties
   x <- sort(sample(x = x, size = length(x)+1, replace = TRUE))
-
   xs <- sort(survival::Surv(time = x, event = sample(x = c(0, 1, 1), size = length(x), replace = TRUE), type = "right"))
 
-  expect_error(objFunFactory(x = x, ties = "error"))
+  expect_error(objFunFactory(x = x,
+                             distO = buildDist("exponential"),
+                             control = buildControl(verbose = 0, profiled = FALSE, pen_shape = FALSE, ties = "error")),
+               regexp = "ties")
 
-  # objFunEqui1 <- objFunFactory(x = x, ties = "equi")
+  # objFunEqui1 <- objFunFactory(x = x, control = buildControl(ties = "equi"))
   # x_pp <- rlang::env_get(rlang::fn_env(objFunEqui1), nm = "x")
   # # there are no duplicates any more!
   # expect_false(any(duplicated(x_pp)))
@@ -138,7 +140,7 @@ test_that("Ties in data", {
   # # deviations through tie-break are below and above tie and sum to zer0
   # expect_identical(sum(x_pp - x), expected = 0)
 
-  # objFunEqui2 <- objFunFactory(x = xs, ties = "equi")
+  # objFunEqui2 <- objFunFactory(x = xs, control = buildControl(ties = "equi"))
   # xs_pp <- rlang::env_get(rlang::fn_env(objFunEqui2), nm = "x")
   # # there are no duplicates any more!
   # #+ for array/matrix: it means no duplicate rows, here: no time + status duplicates!

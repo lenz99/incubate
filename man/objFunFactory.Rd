@@ -8,12 +8,10 @@ objFunFactory(
   x,
   y = NULL,
   distO,
+  method = c("MPSE", "MLEn", "MLEc", "MLEw"),
   twoPhase = FALSE,
   bind = NULL,
-  method = c("MPSE", "MLEn", "MLEc", "MLEw"),
-  profiled = FALSE,
-  ties = "density",
-  verbose = 0
+  control
 )
 }
 \arguments{
@@ -23,17 +21,13 @@ objFunFactory(
 
 \item{distO}{distribution object}
 
+\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLEn} is the naive MLE-method, calculating the likelihood function as the product of density values. \code{MLEc} is the modified MLE.}
+
 \item{twoPhase}{logical flag. Do we allow for two delay phases where event rate may change? Default is \code{FALSE}, i.e., a single delay phase.}
 
 \item{bind}{character. parameter names that are bind together (i.e. equated) between both groups}
 
-\item{method}{character(1). Specifies the method for which to build the objective function. Default value is \code{MPSE}. \code{MLEn} is the naive MLE-method, calculating the likelihood function as the product of density values. \code{MLEc} is the modified MLE.}
-
-\item{profiled}{logical. Should scale parameter be profiled out prior to optimization?}
-
-\item{ties}{character. How to handle ties within data of a group.}
-
-\item{verbose}{integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.}
+\item{control}{list. Fine-tune arguments}
 }
 \value{
 the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or \code{NULL} upon errors

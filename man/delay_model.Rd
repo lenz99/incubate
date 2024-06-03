@@ -19,7 +19,7 @@ delay_model(
 
 \item{y}{numeric. observations from 2nd group}
 
-\item{distribution}{Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution object.}
+\item{distribution}{Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution list-object.}
 
 \item{twoPhase}{logical. Allow for two phases?}
 
@@ -40,10 +40,10 @@ but MLEn yields biased estimates. MLEc is a corrected version of MLE due to Chen
 The parameter \verb{control=} allows to set specifics of the optimization process of the delay model fit.
 Possible list entries are
 \itemize{
-\item \code{profiled} aim to profile out a parameter
-\item \code{pen_shape} penalize high values of shape (for Weibull distribution)
 \item \code{verbose} level of verboseness. Default 0 is quiet
 \item \code{ties} character. Strategy to handle ties for \code{method = "MPSE"}. Either 'density' (default), 'equispaced' or 'error'.
+\item \code{profiled} aim to profile out a parameter
+\item \code{pen_shape} logical. Should high values of shape (for Weibull distribution) be penalized? Default is FALSE.
 \item \code{optim_args} list. optimization arguments to use. \code{NULL} (default) uses the data-dependent default values.
 }
 

@@ -207,10 +207,12 @@ test_that("Parameter extraction and transformation", {
   }
 
   dummydat <- c(6, 7, 9, 11)
-  extPars_exp1 <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE, profiled = FALSE) |>
+  extPars_exp1 <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE,
+                                           control = buildControl(profiled = FALSE)) |>
     rlang::fn_env() |> rlang::env_get("extractPars")
 
-  extPars_exp1P <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE, profiled = TRUE) |>
+  extPars_exp1P <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE,
+                                            control = buildControl(profiled = TRUE)) |>
     rlang::fn_env() |> rlang::env_get("extractPars")
 
   par_exp1 <- c(delay1 = 3, rate1 = .8)
@@ -236,7 +238,8 @@ test_that("Parameter extraction and transformation", {
 
   # exponential, two groups, unbound
   objFun_exp2 <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2),
-                                          y = rexp_delayed(n=3, delay1 = 3, rate1 = .1), distO = distO_e, twoPhase = FALSE)
+                                          y = rexp_delayed(n=3, delay1 = 3, rate1 = .1),
+                                          distO = distO_e, twoPhase = FALSE)
   extPars_exp2 <- rlang::env_get(rlang::fn_env(objFun_exp2), "extractPars")
 
   par_exp2 <- c(delay1.x = 2.8, rate1.x = .81, delay1.y = 5.1, rate1.y = 1.1)
@@ -387,8 +390,8 @@ test_that("Fit delayed Exponentials", {
               5.21641483083995, 5.4131497041096, 5.62188922194764,
               5.75496241915971, 5.98260715969298, 6.18675520061515, 7.41160508326157,
               9.36626494375473, 10.5935673083787, 10.8441290040006)
-  fd_exp1_mpseNP <- delay_model(exp_d5, method = "MPSE", control = list(profiled = FALSE))
-  fd_exp1_mpseP  <- delay_model(exp_d5, method = "MPSE", control = list(profiled = TRUE))
+  fd_exp1_mpseNP <- delay_model(exp_d5, method = "MPSE", control = buildControl(profiled = FALSE))
+  fd_exp1_mpseP  <- delay_model(exp_d5, method = "MPSE", control = buildControl(profiled = TRUE))
   expect_identical(fd_exp1_mpseNP$optimizer$convergence, expected = 0L)
   expect_identical(fd_exp1_mpseP$optimizer$convergence, expected = 0L)
   expect_named(fd_exp1_mpseNP$optimizer$parOpt, expected = c("delay1_tr", "rate1_tr"))
@@ -1343,6 +1346,7 @@ test_that("Fit delayed Weibull", {
 
 test_that("Confidence intervals", code = {
   testthat::skip_on_cran()
+
   set.seed(1234)
 
   obs_sim <- rexp_delayed(n = 29L, delay = 5, rate = .3)

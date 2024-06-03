@@ -14,17 +14,13 @@
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
 #' @param distO distribution object
+#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
 #' @param twoPhase logical flag. Do we allow for two delay phases where event rate may change? Default is `FALSE`, i.e., a single delay phase.
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
-#' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
-#' @param profiled logical. Should scale parameter be profiled out prior to optimization?
-#' @param ties character. How to handle ties within data of a group.
-#' @param verbose integer flag. How much verbosity in output? The higher the more output. Default value is 0 which is no output.
+#' @param control list. Fine-tune arguments
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
-objFunFactory <- function(x, y = NULL, distO,
-                          twoPhase = FALSE, bind = NULL,
-                          method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'), profiled = FALSE, ties = "density",
-                          verbose = 0) {
+objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'),
+                          twoPhase = FALSE, bind = NULL, control) {
 
   # setup ----
   stopifnot(is.numeric(x), length(x) > 0, is.null(y) || is.numeric(y) && length(y) > 0)
@@ -32,16 +28,25 @@ objFunFactory <- function(x, y = NULL, distO,
   stopifnot(!missing(distO), is.list(distO))
   stopifnot(is.null(bind) || is.character(bind) && length(bind) >= 1)
 
-
   stopifnot(is.logical(twoPhase), length(twoPhase) == 1L)
-  stopifnot(is.logical(profiled), length(profiled) == 1L)
   # enforce either TRUE or FALSE
   twoPhase <- isTRUE(twoPhase) && distO$twoPhaseAllowed
-  profiled <- isTRUE(profiled)
-
 
   # original names: standard names of distribution (say, for a single group)
   oNames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = FALSE, profiled = FALSE)
+
+  # unpack control list
+  if (missing(control)) {
+    control <- buildControl()
+  }
+  stopifnot(is.list(control), all(c("verbose", "profiled", "ties", "pen_shape") %in% names(control)))
+  verbose <- control$verbose
+  profiled <- control$profiled
+  stopifnot(is.logical(profiled), length(profiled) == 1)
+  ties <- control$ties
+  pen_shape <- control$pen_shape
+  stopifnot(is.logical(pen_shape), length(pen_shape) == 1)
+
 
 
 
@@ -1174,8 +1179,6 @@ objFunFactory <- function(x, y = NULL, distO,
   # @param nObs number of observations in group
   # @return non-negative penalty value. Big values mean higher penalty (it gets subtracted from the criterion to be maximized)
   penF <- function(k, nObs = 1) {
-    # set FALSE to turn off penalty
-    pen_shape <- distO$dist == 'weibull' && method == 'MLEw'
 
     if (!isTRUE(pen_shape)) return(0)
 
@@ -1741,6 +1744,22 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 }
 
 
+#' Build control list for `delay_model` and `objFunFactory`
+#'
+#' Default values are set as default argument values in this constructor.
+#'
+#' This is an internal function. The function might change without precautionary measures taken.
+#' @return list. Control settings for fitting routine `delay_model`
+buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE, ties = "density", optim_args = NULL) {
+  # default control-settings
+  list(verbose = verbose[1],
+       profiled = profiled[1],
+       #pen_shape = FALSE,
+       pen_shape = pen_shape[1],
+       ties = ties[1],
+       optim_args = optim_args)
+}
+
 
 #' Fit a delayed Exponential or Weibull model to one or two given sample(s)
 #'
@@ -1751,17 +1770,17 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' The parameter `control=` allows to set specifics of the optimization process of the delay model fit.
 #' Possible list entries are
 #'
-#' * `profiled` aim to profile out a parameter
-#' * `pen_shape` penalize high values of shape (for Weibull distribution)
 #' * `verbose` level of verboseness. Default 0 is quiet
 #' * `ties` character. Strategy to handle ties for `method = "MPSE"`. Either 'density' (default), 'equispaced' or 'error'.
+#' * `profiled` aim to profile out a parameter
+#' * `pen_shape` logical. Should high values of shape (for Weibull distribution) be penalized? Default is FALSE.
 #' * `optim_args` list. optimization arguments to use. `NULL` (default) uses the data-dependent default values.
 #'
 #' Numerical optimization is normally done by `stats::optim`. `minqa::bobyqa` is used as fall-back.
 #'
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
-#' @param distribution Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution object.
+#' @param distribution Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution list-object.
 #' @param twoPhase logical. Allow for two phases?
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEw' = weighted MLE' *or* MLEc' = corrected MLE
@@ -1776,7 +1795,6 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 
   # setup -------------------------------------------------------------------
 
-
   # unpack x if it is a list of two vectors
   if (is.list(x)) {
     if (length(x) != 2L) {
@@ -1784,12 +1802,23 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
     }
     y <- x[[2L]]
     x <- x[[1L]]
-  }
+  }#fi
 
   # enforce that the first argument x= is properly instantiated
   stopifnot(!is.null(x), is.numeric(x), length(x) > 0)
 
-  distO <- if (is.list(distribution)) distribution else buildDist(match.arg(distribution))
+  distO <- switch(mode(distribution),
+                  list = {
+                    stopifnot(all(c("dist", "dist_name", "pdf", "random") %in% names(distribution)))
+                    distribution
+                  },
+                  character = {
+
+                    distribution <- match.arg(distribution)
+                    buildDist(distribution)
+                  },
+                  stop("Argument to distribuiton= not supported here!", call. = FALSE)
+  )
 
   method <- if (length(method) == 1L && toupper(method) == 'MSE') {
     message("The method name 'MPSE' is prefered over the previously used name 'MSE'!")
@@ -1799,18 +1828,15 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   }
   method <- match.arg(method)
 
+
+  # build up default control-settings for current situation
+  cntrl <- buildControl(profiled = method == "MLEw",
+                        pen_shape = distO$dist == 'weibull' && method == 'MLEw')
+
+  # overwrite control settings as given by control=
   stopifnot(is.list(control))
   controlNms <- names(control)
 
-  # default control-settings
-  cntrl <- list(verbose = 0,
-                profiled = method == 'MLEw',
-                pen_shape = FALSE,
-                ties = 'density',
-                optim_args = NULL)
-  #XXX continue here: activate pen_shape!!
-
-  # overwrite control settings as given by control=
   cntrl[controlNms] <- control
   local({
     if (length(badNms <- controlNms[!controlNms %in% names(cntrl)])) {
@@ -1854,8 +1880,9 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 
   # objective function ------------------------------------------------------
 
-  objFun <- objFunFactory(x = x, y = y, method = method, profiled = cntrl$profiled, distO = distO,
-                          twoPhase = twoPhase, bind = bind, ties = cntrl$ties, verbose = cntrl$verbose)
+  objFun <- objFunFactory(x = x, y = y, distO = distO, method = method,
+                          twoPhase = twoPhase, bind = bind,
+                          control = cntrl)
   if (is.null(objFun)) return(invisible(NULL))
   objFunEnv <- rlang::fn_env(objFun)
 
@@ -1979,9 +2006,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
   del1_ind <- grep('delay1', names(coefVect)) # indices of coefficients that involve delay1, e.g. 'delay1' or 'delay1.y'
   ncoef <- length(coefVect)
 
-  stopifnot( ncoef > 0L )
+  stopifnot(ncoef > 0L)
 
-  stopifnot( is.numeric(smd_factor), length(smd_factor) == 1L, smd_factor >= 0L )
+  stopifnot(is.numeric(smd_factor), length(smd_factor) == 1L, smd_factor >= 0L)
   smoothDelay <- isTRUE(smd_factor > 0L)
 
   if (smoothDelay && bs_data != 'parametric') {
@@ -1996,15 +2023,17 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
   # This reflects the certainty we have in the delay estimation.
   # Low variability in event time data (or high sample size) will lead to a quickly deteriorating objective function.
   # return vector of length R with candidate values for first delay
-  getSMDCandidates <- function(group = 'x'){
+  getSMDCandidates <- function(group = 'x') {
     obs <- if (twoGroup) object$data[[group]] else object$data
     obs1 <- obs[[1L]]
     del_coef <- coef.incubate_fit(object, transformed = FALSE, group = group)[['delay1']]
 
     # avoid smoothing if 1st observation or estimated delay is too close to zer0
-    if ( min(obs1, del_coef) < TOL_NUM ) return(rep_len(del_coef, length.out = R))
+    if (min(obs1, del_coef) < TOL_NUM) {
+      return(rep_len(del_coef, length.out = R))
+    }
 
-    stopifnot( is.function(object$objFun) )
+    stopifnot(is.function(object$objFun))
 
     groupIdx <- 1L + (twoGroup && group == 'y')
     # in case of a delay per group ('delay.x' and 'delay.y') use the right one
@@ -2014,7 +2043,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     # look at differences of first observations
     obs_d <- diff(obs[seq_len(min(23L, nObs[[groupIdx]]))])
     obs_d <- obs_d[is.finite(obs_d) & obs_d > 0L] #get rid of ties
-    obs_d <- if (! length(obs_d)) .0001 else min(obs_d)
+    obs_d <- if (!length(obs_d)) .0001 else min(obs_d)
 
     # candidate region for delay parameters
     #+min(..) ensures that we are not too close at obs1, otherwise for MLE we have only a single point
@@ -2068,7 +2097,7 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     boot::boot(data = object$data,
                statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distO, twoPhase = object$twoPhase,
                                                            method = object$method, bind = object$bind,
-                                                           control = list(ties = object$ties)),
+                                                           control = buildControl(ties = object$ties)),
                                                transformed = FALSE),
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap
