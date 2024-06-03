@@ -136,7 +136,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     } #esle isSurv
 
     obs
-  } #fn preprocessF
+  }#fn preprocessF
 
   # overwrite the data vectors with pre-processed data
   if (is.null({x <- preprocessF(obs = x)})) return(invisible(NULL))
@@ -414,8 +414,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   stopifnot(method != 'MLEw' || profiled)
 
   # check that there is enough data (here we also look at bind= if twoGroup)
-  if (!twoGroup && length(x) < length(oNames) ||
-      twoGroup && length(x) + length(y) < 2L * length(oNames) - length(bind) && min(length(x), length(y)) < length(oNames) - length(bind)) {
+  if ((!twoGroup && length(x) < length(oNames)) ||
+      (twoGroup && length(x) + length(y) < 2L * length(oNames) - length(bind) && min(length(x), length(y)) < length(oNames) - length(bind))) {
     warning("Too few valid observations provided!", call. = FALSE)
     return(invisible(NULL))
   }
@@ -528,15 +528,14 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                },
                stop("This Surv-type is not handled here!", call. = FALSE)
         )
-      } #fn zF
+      }#fn zF
 
       z_x <- zF(group = "x", propagateTies = TRUE)
       z_y <- if (twoGroup) zF(group = "y", propagateTies = TRUE)
 
-      # how to calculate the weights W1-W3?
-      method_w1 <- if (isSurv) "sample" else "sdist_median"
-      method_w2 <- if (isSurv) "sample" else "sdist_median"
-      method_w3 <- if (isSurv) "sample" else "sdist_median"
+      # How to calculate the weights W1-W3?
+      #we use now always 'sdist_median' (also for isSurv-data, cf test-delay_estimation.R, line 802)
+      #method_w <- if (isSurv) "sample" else "sdist_median"
 
       # little helper function to calculate W1-weight (as function of n)
       # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n and we estimate W1 as median of it.
@@ -544,7 +543,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       # We count all events because it is used to get scale parameter (and in this formula we already correct for censorings),
       #+e.g., nObs = length(x), even when there is cens$n$x[["any"]]
       # @param method By which method to calculate weights W1? 'sample' will use the mean of the provided sample of z-values, sdist_median uses the median of the sampling distribution (MC-sim)
-      w1F <- function(nObs, z, method = c("sample", "sdist_median", "hybrid")) {
+      w1F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid")) {
         method <- match.arg(method)
 
         #Using a MC-simulation
@@ -552,31 +551,26 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         #+"Nearly unbiased estimators.." (2009), Table 2, column J_1
 
         switch(EXPR = method,
+               sdist_median = {
+                 # use W1-function
+                 .MLEw_approx$fun$w1F(nObs)
+               },
                sample = {
                  if (missing(z) || !is.numeric(z) || length(z) == 0L) {
                    stop("Please provide the vector of z's to estimate W1!", call. = FALSE)
                  }
                  mean(z)
                },
-               sdist_median = {
-                 # use W1-function
-                 .MLEw_approx$fun$w1F(nObs)
-               },
                hybrid = {
                  (.MLEw_approx$fun$w1F(nObs) + mean(z)) / 2L
                },
                stop("This method for estimating W1 is not handled here!", call. = FALSE)
         )
-      } #w1F
-
-      # W1 weights: use full length (even when censored obs are present?!)
-      W1_x <- w1F(nObs = length(x), z = z_x, method = method_w1) #or # nObs = length(x) - cens$n$x[["any"]]),
-      W1_y <- if (twoGroup) w1F(nObs = length(y), z = z_y, method = method_w1) else 1 #length(y) - cens$n$y[["any"]])
+      }#fn w1F
 
 
-      w2F <- function(z, method = c("sample", "sdist_median", "hybrid")) {
+      w2F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid")) {
         method <- match.arg(method)
-        nz <- length(z)
 
         # MC-simulation on W2 for n=1..16
         # cf. Cousineau's simulation results for median of W2's sampling distribution
@@ -585,15 +579,15 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         # We hence model: W2 = 1 + (R0 - 1) * n^(-r)
 
         switch(EXPR = method,
+               sdist_median = {
+                 .MLEw_approx$fun$w2F(nObs)
+               },
                sample = {
                  sum(z * log(z)) / sum(z) - mean(log(z))
                },
-               sdist_median = {
-                 .MLEw_approx$fun$w2F(nz)
-               },
                hybrid = {
                  # mean betw med-approx and sample estimate
-                 (.MLEw_approx$fun$w2F(nz) + sum(z * log(z)) / sum(z) - mean(log(z))) / 2L
+                 (.MLEw_approx$fun$w2F(nObs) + sum(z * log(z)) / sum(z) - mean(log(z))) / 2L
                },
                stop("This method for W2-estimation is not handled here!", call. = FALSE)
         )
@@ -601,22 +595,14 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
 
       # w3 function. Not vectorized in argument k
-      w3FF <- function(group = "x", method = c("sample", "sdist_median", "hybrid")) {
-        method <- match.arg(method)
-
-        if (!twoGroup || group != "y") {
-          obs <- x
-          z <- z_x
-          W1 <- W1_x
-        } else {
-          obs <- y
-          z <- z_y
-          W1 <- W1_y
-        }
-        nObs <- length(obs)
+      w3FF <- function(nObs, z, method = c("sdist_median", "sample", "hybrid")) {
 
         # catch all for n = 1
         if (nObs < 2L) return(function(k) 1)
+
+
+        # case nObs > 1
+        method <- match.arg(method)
 
         # fn of shape k
         switch(EXPR = method,
@@ -624,18 +610,20 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                  .MLEw_approx$fun$w3FF(nObs)
                },
                sample = function(k) {
-                 W1 * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k))
+                 w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k))
                },
                stop("This method for W3 approximation is not handled here!", call. = FALSE))
       }#nf w3FF
 
       # return list of weights
-      list(W1 = c(x = W1_x, y = W1_y),
-           W2 = c(x = w2F(z = z_x, method = method_w2),
-                  y = if (twoGroup) w2F(z = z_y, method = method_w2)),
-           #function(k) W1_x * if (log(k) < -5) 1 else if (k==1) mean(1/z_x) else sum(1/z_x^(1/k)) / sum(z_x^((k-1)/k)),
-           W3 = purrr::compact(list(x = w3FF(group = "x", method = method_w3),
-                                    y = if (twoGroup) w3FF(group = "y", method = method_w3))))
+      # W1 weights: use full length (even when censored obs are present?!) #or #nObs = length(x) - cens$n$x[["any"]]),
+      list(W1 = c(x = w1F(nObs = length(x), z = z_x, method = control$weight_method),
+                  # else 1: do we need W1$y also when only single group??
+                  y = if (twoGroup) w1F(nObs = length(y), z = z_y, method = control$weight_method) else 1),
+           W2 = c(x = w2F(nObs = length(x), z = z_x, method = control$weight_method),
+                  y = if (twoGroup) w2F(nObs = length(y), z = z_y, method = control$weight_method)),
+           W3 = purrr::compact(list(x = w3FF(nObs = length(x), z = z_x, method = control$weight_method),
+                                    y = if (twoGroup) w3FF(nObs = length(y), z = z_y, method = control$weight_method))))
     })#lacol
   } #esle weights
 
@@ -1750,12 +1738,19 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #'
 #' This is an internal function. The function might change without precautionary measures taken.
 #' @return list. Control settings for fitting routine `delay_model`
-buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE, ties = "density", optim_args = NULL) {
+buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
+                         weight_method = "sdist_median",
+                         ties = "density", optim_args = NULL) {
+  #We used to let depend weight_method on surv-type, but this is not known here nor in delay_model (only within objFunFactory)
+  #+was before:
+  #+weight_method = if (isSurv) "sample" else "sdist_median"
+
   # default control-settings
   list(verbose = verbose[1],
        profiled = profiled[1],
        #pen_shape = FALSE,
        pen_shape = pen_shape[1],
+       weight_method = weight_method[1],
        ties = ties[1],
        optim_args = optim_args)
 }
@@ -1830,6 +1825,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 
 
   # build up default control-settings for current situation
+  # we used to set weighting method depending on isSurv or not! (determined in objFunFactory)
   cntrl <- buildControl(profiled = method == "MLEw",
                         pen_shape = distO$dist == 'weibull' && method == 'MLEw')
 

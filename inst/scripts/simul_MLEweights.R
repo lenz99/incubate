@@ -165,6 +165,9 @@ message("Start simulation for W3")
 #+this works for median but for instance not for mean!
 stopifnot(isMedian)
 
+# W3 needs corresponding W1
+stopifnot(exists("W1_mcs"), length(W1_mcs) == length(nObs_vctr))
+
 W3_mcs_df <- tidyr::expand_grid(nObs = as.integer(nObs_vctr),
                                 shape = shape_vctr) |>
   dplyr::mutate(W3 = furrr::future_map2_dbl(.x = nObs, .y = shape,

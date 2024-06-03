@@ -2,12 +2,13 @@
 % Please edit documentation in R/delay_estimation.R
 \name{buildControl}
 \alias{buildControl}
-\title{Build control list for \code{delay_model}}
+\title{Build control list for \code{delay_model} and \code{objFunFactory}}
 \usage{
 buildControl(
   verbose = 0,
   profiled = FALSE,
   pen_shape = FALSE,
+  weight_method = "sdist_median",
   ties = "density",
   optim_args = NULL
 )
@@ -17,4 +18,7 @@ list. Control settings for fitting routine \code{delay_model}
 }
 \description{
 Default values are set as default argument values in this constructor.
+}
+\details{
+This is an internal function. The function might change without precautionary measures taken.
 }

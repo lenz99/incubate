@@ -136,7 +136,8 @@ estimRoundingError <- function(obs, roundDigits = seq.int(from = -4L, to = 6L), 
 }
 
 
-#' Check and prepare the survival response(s).
+#' Check and prepare the survival response(s)
+#'
 #' Allowed censoring types are right-, left-, and interval-censoring.
 #' If `y0` is not `NULL` this function will return either both numeric, non-Surv or both Surv-objects of the same type.
 #' @param x0 response as numeric or [survival::Surv] using left, right or interval-coding
@@ -152,7 +153,7 @@ prepResponseVar <- function(x0, y0=NULL, simplify = TRUE) {
   isSurv.y <- is.Surv(y0)
 
   # check if both are numeric, non-Surv (also y0=NULL)
-  if (! isSurv.x && ! isSurv.y) {
+  if (!isSurv.x && !isSurv.y) {
     # if simplify=FALSE: right-censored, all observed
     return(if (simplify) list(x=x0, y=y0) else list(x=Surv(time = x0), y=if (is.null(y0)) NULL else Surv(time = y0)))
   }
@@ -198,8 +199,8 @@ prepResponseVar <- function(x0, y0=NULL, simplify = TRUE) {
     }
   } else {
     # x is numeric, non-Surv. y is Surv
-    stopifnot( is.character(survType.y), nzchar(survType.y) )
-    if (! survType.y %in% SURV_TYPES_ALLOWED ){
+    stopifnot(is.character(survType.y), nzchar(survType.y))
+    if (!survType.y %in% SURV_TYPES_ALLOWED) {
       stop("Survival-objects must be of type {",
            paste(SURV_TYPES_ALLOWED, collapse = ", "), "}!",
            call. = FALSE)

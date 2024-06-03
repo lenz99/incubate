@@ -2,9 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{prepResponseVar}
 \alias{prepResponseVar}
-\title{Check and prepare the survival response(s).
-Allowed censoring types are right-, left-, and interval-censoring.
-If \code{y0} is not \code{NULL} this function will return either both numeric, non-Surv or both Surv-objects of the same type.}
+\title{Check and prepare the survival response(s)}
 \usage{
 prepResponseVar(x0, y0 = NULL, simplify = TRUE)
 }
@@ -19,7 +17,6 @@ prepResponseVar(x0, y0 = NULL, simplify = TRUE)
 a list of the two responses, either both as \link[survival:Surv]{survival::Surv} or plain numeric (if no censorings and \code{simplify=TRUE})
 }
 \description{
-Check and prepare the survival response(s).
 Allowed censoring types are right-, left-, and interval-censoring.
 If \code{y0} is not \code{NULL} this function will return either both numeric, non-Surv or both Surv-objects of the same type.
 }
