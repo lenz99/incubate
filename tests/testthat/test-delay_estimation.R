@@ -764,41 +764,45 @@ test_that("Fit delayed exponentials with censoring", {
   #plot(fmCR1_mpse)
   fmCR1_mlen <-  delay_model(x = ticr1, distribution = "exponential", method = "MLEn")
   #plot(fmCR1_mlen)
-  fmCR1_mlenp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEn",
-                             control = list(profiled = TRUE))
+  expect_warning(fmCR1_mlenp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEn",
+                                            control = list(profiled = TRUE)))
+  expect_false(fmCR1_mlenp$optimizer$profiled)
   #plot(fmCR1_mlenp)
   fmCR1_mlec <- delay_model(x = ticr1, distribution = "exponential", method = "MLEc",
                             control = list(profiled = FALSE))
   #plot(fmCR1_mlec)
-  fmCR1_mlecp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEc",
-                             control = list(profiled = TRUE))
+  expect_warning(fmCR1_mlecp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEc",
+                                            control = list(profiled = TRUE)))
+  expect_false(fmCR1_mlecp$optimizer$profiled)
   #plot(fmCR1_mlecp)
-  fmCR1_mlewp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEw",
-                             control = list(profiled = TRUE))
+  #XXX think about censoring at MLEw:
+  #+MLEw needs profiling, but we disable profiling for censored observations
+  # fmCR1_mlewp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEw",
+  #                            control = list(profiled = TRUE))
   #plot(fmCR1_mlewp)
 
 
   ## Weibull model fits --
-  fmCR1w_mpse <- delay_model(x = ticr1, distribution = "wei")
+  fmCR1w_mpse <- delay_model(x = ticr1, distribution = "weibu")
   #plot(fmCR1w_mpse)
-  fmCR1w_mlen <-  delay_model(x = ticr1, distribution = "wei", method = "MLEn")
+  fmCR1w_mlen <-  delay_model(x = ticr1, distribution = "weibu", method = "MLEn")
   #plot(fmCR1w_mlen)
-  fmCR1w_mlenp <- delay_model(x = ticr1, distribution = "wei", method = "MLEn",
-                              control = list(profiled = TRUE))
-  #plot(fmCR1w_mlenp)
+  expect_warning(fmCR1w_mlenp <- delay_model(x = ticr1, distribution = "wei", method = "MLEn",
+                                             control = list(profiled = TRUE)))
+                 #plot(fmCR1w_mlenp)
   fmCR1w_mlec <- delay_model(x = ticr1, distribution = "wei", method = "MLEc",
                              control = list(profiled = FALSE))
   #plot(fmCR1w_mlec)
-  fmCR1w_mlecp <- delay_model(x = ticr1, distribution = "wei", method = "MLEc",
-                              control = list(profiled = TRUE))
+  expect_warning(fmCR1w_mlecp <- delay_model(x = ticr1, distribution = "wei", method = "MLEc",
+                                             control = list(profiled = TRUE)))
   #plot(fmCR1w_mlecp)
-  fmCR1w_mlewp <- delay_model(x = ticr1, distribution = "weibu", method = "MLEw",
-                              control = list(profiled = TRUE))
+  #fmCR1w_mlewp <- delay_model(x = ticr1, distribution = "weibu", method = "MLEw",
+  #                            control = list(profiled = TRUE))
   #plot(fmCR1w_mlewp)
 
 
-  purrr::walk(.x = list(fmCR1_mpse, fmCR1_mlec, fmCR1_mlewp,
-                        fmCR1w_mpse, fmCR1w_mlen, fmCR1w_mlenp, fmCR1w_mlec, fmCR1w_mlecp, fmCR1w_mlewp),
+  purrr::walk(.x = list(fmCR1_mpse, fmCR1_mlec, #fmCR1_mlewp,
+                        fmCR1w_mpse, fmCR1w_mlen, fmCR1w_mlenp, fmCR1w_mlec, fmCR1w_mlecp), #, fmCR1w_mlewp),
               .f = ~ {
                 expect_named(.x, expected = c("data", "nobs", "distO", "twoPhase", "twoGroup", "method", "bind",
                                               "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
@@ -808,16 +812,15 @@ test_that("Fit delayed exponentials with censoring", {
               })
 
 
-  # delay estimate does hardly change when profiling
-  expect_equal(coef(fmCR1_mlenp)[1], expected = coef(fmCR1_mlen)[1], tolerance = 1e-4)
-  expect_equal(coef(fmCR1_mlecp)[1], expected = coef(fmCR1_mlec)[1], tolerance = 1e-4)
+  # profiling is reversed for Surv-data: so identical coefs
+  expect_identical(coef(fmCR1_mlenp)[1], expected = coef(fmCR1_mlen)[1])
+  expect_identical(coef(fmCR1_mlecp)[1], expected = coef(fmCR1_mlec)[1])
 
-  # rate estimate somewhat different when profiling (due to unprofiling of scale was developed for non-censored observations)
-  expect_equal(coef(fmCR1_mlenp)[2], expected = coef(fmCR1_mlen)[2], tolerance = .15)
-  expect_equal(coef(fmCR1_mlecp)[2], expected = coef(fmCR1_mlec)[2], tolerance = .15)
+  expect_identical(coef(fmCR1_mlenp)[2], expected = coef(fmCR1_mlen)[2])
+  expect_identical(coef(fmCR1_mlecp)[2], expected = coef(fmCR1_mlec)[2])
   # MLEw similar to MLEc
-  expect_equal(coef(fmCR1_mlewp)[1], expected = coef(fmCR1_mlec)[1], tolerance = 1e-2)
-  expect_equal(coef(fmCR1_mlewp)[2], expected = coef(fmCR1_mlec)[2], tolerance = .15)
+  #expect_equal(coef(fmCR1_mlewp)[1], expected = coef(fmCR1_mlec)[1], tolerance = 1e-2)
+  #expect_equal(coef(fmCR1_mlewp)[2], expected = coef(fmCR1_mlec)[2], tolerance = .15)
 
 
   # delay and shape parameters do not change much when profiling (in particular, if enough data is available)
@@ -827,11 +830,11 @@ test_that("Fit delayed exponentials with censoring", {
   expect_equal(fmCR1w_mlenp$criterion, expected = fmCR1w_mlen$criterion, tolerance = .02)
 
   # MLEw worse than MLEc
-  expect_gte(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion)
-  expect_equal(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion, tolerance = .25)
+  #expect_gte(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion)
+  #expect_equal(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion, tolerance = .25)
   # roughly similar parameter estimates
-  expect_gte(coef(fmCR1w_mlewp)[1], expected = 2)
-  expect_equal(coef(fmCR1w_mlewp), expected = coef(fmCR1w_mpse), tolerance = .45)
+  #expect_gte(coef(fmCR1w_mlewp)[1], expected = 2)
+  #expect_equal(coef(fmCR1w_mlewp), expected = coef(fmCR1w_mpse), tolerance = .45)
 
 
   # shorter surv-data that has censorings & ties

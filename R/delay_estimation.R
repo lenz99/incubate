@@ -22,7 +22,9 @@
 objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'),
                           twoPhase = FALSE, bind = NULL, control) {
 
-  # setup ----
+
+  # setup -----
+
   stopifnot(is.numeric(x), length(x) > 0, is.null(y) || is.numeric(y) && length(y) > 0)
   method <- match.arg(method)
   stopifnot(!missing(distO), is.list(distO))
@@ -44,9 +46,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   profiled <- control$profiled
   stopifnot(is.logical(profiled), length(profiled) == 1)
   ties <- control$ties
-  pen_shape <- control$pen_shape
-  stopifnot(is.logical(pen_shape), length(pen_shape) == 1)
-
+  stopifnot(is.logical(control$pen_shape), length(control$pen_shape) == 1)
 
 
 
@@ -142,10 +142,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   if (is.null({x <- preprocessF(obs = x)})) return(invisible(NULL))
   y <- preprocessF(obs = y)
 
-
   # do we have two groups after pre-processing?
   twoGroup <- isTRUE(!is.null(y) && is.numeric(y) && length(y))
-
 
   # tie-informations for a group
   # @param obs data from a single group.
@@ -251,13 +249,16 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
   # adjust profiled:
   #+profiling is not implemented for some cases! Then, we reverse it to FALSE and just issue a warning
-  #+profiling is only possible if rate1/scale1 is not bound and single phase
+  #+profiling is only possible if rate1/scale1 is not bound and single phase and no surv data
   profiled0 <- profiled
-  profiled <- profiled && (! any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) && ! twoPhase
+  profiled <- profiled && (!any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) &&
+    !twoPhase && !isSurv
   #&& method %in% c("MLEn", "MLEc", "MLEw") #&& distribution == 'weibull' &&
 
   if (xor(profiled0, profiled)) {
     warning(glue("Option `profiled={profiled0}` was reversed to profiled={profiled}!"), call. = FALSE)
+    # update control-list as well
+    control$profiled <- profiled
   }
   rm("profiled0")
 
@@ -329,70 +330,72 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # kmFit and rcens have same number of rows
   stopifnot(length(kmFit$surv) == length(cens$rcens$surv))
 
-  # indices of first two relevant observations (for MLEc)
-  indForefront <- if (method != "MLEc") NULL else local({
-    # little helper function to get the indices for the first two smallest observed values (non-censorings)
-    #+in a sorted vector of observations
-    forefrontIndF <- function(group) {
-      stopifnot(!missing(group), is.character(group), length(group) == 1L)
-      obs <- if (group == "y") y else x
+  # indices of first two relevant observations (for MLEc only)
+  indForefront <- if (method == "MLEc") {
+    local({
+      # little helper function to get the indices for the first two smallest observed values (non-censorings)
+      #+in a sorted vector of observations
+      forefrontIndF <- function(group) {
+        stopifnot(!missing(group), is.character(group), length(group) == 1L)
+        obs <- if (group == "y") y else x
 
-      ind_obs1 <- ind_next <- integer()
+        ind_obs1 <- ind_next <- integer()
 
-      if (isSurv) {
-        # Surv-response
-        cindo_gr <- cens$ind[[group]]$obs
-        stopifnot(length(cindo_gr) >= 2L)
+        if (isSurv) {
+          # Surv-response
+          cindo_gr <- cens$ind[[group]]$obs
+          stopifnot(length(cindo_gr) >= 2L)
 
-        # check for easy case: no tie at first two observed event times
-        if (obs[cindo_gr[2L], 1L] > obs[cindo_gr[1L], 1L] + TOL_NUM) {
-          ind_obs1 <- cindo_gr[1L]
-          ind_next <- cindo_gr[2L]
-        } else {
-          # walk down the observed event times
-          i1 <- 2L
-          while (obs[cindo_gr[i1], 1L] == obs[cindo_gr[1L], 1L]) {
-            i1 <- i1 + 1L
-          }
-          ind_obs1 <- cindo_gr[seq_len(i1-1L)]
-          if (length(cindo_gr) >= i1) ind_next <- cindo_gr[i1]
-        }#esle
-
-      } else {
-        # numeric response, non-Surv
-        stopifnot(length(obs) >= 2L)
-        # check for easy case: no tie at beginning
-        if (obs[[2L]] > obs[[1L]] + TOL_NUM) {
-          ind_obs1 <- 1L
-          ind_next <- 2L
-        } else {
-          # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
-          for (l in sort.int(unique(c(5, 10, 50, 100, 500, 1000, length(obs))))) {
-            if (l > length(obs)) {
-              break
+          # check for easy case: no tie at first two observed event times
+          if (obs[cindo_gr[2L], 1L] > obs[cindo_gr[1L], 1L] + TOL_NUM) {
+            ind_obs1 <- cindo_gr[1L]
+            ind_next <- cindo_gr[2L]
+          } else {
+            # walk down the observed event times
+            i1 <- 2L
+            while (obs[cindo_gr[i1], 1L] == obs[cindo_gr[1L], 1L]) {
+              i1 <- i1 + 1L
             }
-            obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
-            #which.max(obs_r > 1) # 1st index of 2nd obs
-            firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
-            # check that there are two distinct values
-            if (anyNA(firstTwoRanks)) {
-              if (l < length(obs)) next
-              if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
-              #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
-            }#fi
+            ind_obs1 <- cindo_gr[seq_len(i1-1L)]
+            if (length(cindo_gr) >= i1) ind_next <- cindo_gr[i1]
+          }#esle
 
-            ind_obs1 <- which(obs_r == firstTwoRanks[1L])
-            ind_next <- which(obs_r == firstTwoRanks[2L])
-            if (length(ind_next)) ind_next <- ind_next[1L]
-          }#rof l
-        }#esle
-      } #esle (non-Surv)
+        } else {
+          # numeric response, non-Surv
+          stopifnot(length(obs) >= 2L)
+          # check for easy case: no tie at beginning
+          if (obs[[2L]] > obs[[1L]] + TOL_NUM) {
+            ind_obs1 <- 1L
+            ind_next <- 2L
+          } else {
+            # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
+            for (l in sort.int(unique(c(5, 10, 50, 100, 500, 1000, length(obs))))) {
+              if (l > length(obs)) {
+                break
+              }#fi
+              obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
+              #which.max(obs_r > 1) # 1st index of 2nd obs
+              firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
+              # check that there are two distinct values
+              if (anyNA(firstTwoRanks)) {
+                if (l < length(obs)) next
+                if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
+                #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
+              }#fi
 
-      list(inds_obs1 = ind_obs1, ind_next = ind_next)
-    }
+              ind_obs1 <- which(obs_r == firstTwoRanks[1L])
+              ind_next <- which(obs_r == firstTwoRanks[2L])
+              if (length(ind_next)) ind_next <- ind_next[1L]
+            }#rof l
+          }#esle
+        } #esle (non-Surv)
 
-    purrr::compact(list(x = forefrontIndF(group = "x"), y = if (twoGroup) forefrontIndF(group = "y")))
-  })
+        list(inds_obs1 = ind_obs1, ind_next = ind_next)
+      }
+
+      purrr::compact(list(x = forefrontIndF(group = "x"), y = if (twoGroup) forefrontIndF(group = "y")))
+    })
+  }#fi method == MLEc
 
   # set some coefficient names:
   # coefficient names (now that we have settled the profiling flag)
@@ -663,7 +666,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                  # calculate mean from sdist_median and sample
                  (.MLEw_approx$fun$w3FF(nObs)(k) + w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)))/2
                },
-               stop("This method for W3 approximation is not handled here!", call. = FALSE))
+               stop("This method for W3 approximation is not handled here!", call. = FALSE)
+        )
       }#nf w3FF
 
       # QQQ for W1 weights: do we use full length (even when censored obs are present?!) (W1 is used for un-profiling scale!)
@@ -681,7 +685,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   } #esle weights
 
 
-  stopifnot(!twoPhase) #XXX not implemented yet!!
+  stopifnot(!twoPhase) #XXX twoPhase not implemented yet!!
 
   # provide indices for x and for y
   # where to find the parameters per group in the parameter vector of the objective function
@@ -747,8 +751,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
           x = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".x")), oNamesFullProf), nm = c(bind, nonbind))[oNames]),
           y = as.vector(rlang::set_names(charmatch(c(bind, paste0(nonbind, ".y")), oNamesFullProf), nm = c(bind, nonbind))[oNames])
         )
-      })
-    }
+      })#lacol
+    }#esle
   }#esle twoGroup
 
   # provide indices for x and for y
@@ -790,7 +794,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         }
       }
     }
-  } #esle !profiled
+  }#esle !profiled
 
   # parameter transformation matrices (for single group)
   paramTransf <- list(
@@ -842,8 +846,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                 normal = c(identity, identity))[[distO$dist]]
   )
 
-  # transform parameter vector for a single group. Does not use parameter names.
+  # transform parameter vector for a single group
+  #
   # transformed parameters are used within optimization.
+  # It does not use parameter names.
   # The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativity of original parameter)
   # @param parV1 parameter vector for a single group
   # @param inverse logical. `inverse=TRUE` takes optimization parameters back to original parameters
@@ -921,7 +927,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         }
         res0
       }))
-    } #fi is.null(group)
+    }#fi is.null(group)
 
     # index vector for specified group
     ind <- if (isOpt) extractParOptInd[[group]] else extractParInd[[group]]
@@ -961,7 +967,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
             # extract only remaining parameters
             res0 <- res0[extractParOptInd[[group]]]
           }
-        }# profiled
+        }#fi profiled
 
         res0
       })
@@ -974,7 +980,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     } else {
       as.vector(res)
     }
-  } #fn extractPars
+  }#fn extractPars
 
 
   # optimization arguments -----
@@ -1016,7 +1022,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                      # drop scale if profiling
                      if (profiled) {
                        stopifnot(!twoPhase) #XXX not implemented, yet!
-                       parV0 <- parV0[1L] # drop "rate1"
+                       parV0 <- parV0[1L] #keep delay (and drop "rate1")
                      }
                      parV0
                    },
@@ -1127,7 +1133,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   if (verbose > 2) cat("Start parameters for opt, group x: ",
                        paste(round(par0_x$par, 3), collapse = ", "), "\n")
   parV <-
-    if (! twoGroup) {
+    if (!twoGroup) {
       # set parameter vector for group 1 and finish upper bound: match delay1 and delay2
       upperB[['delay1_tr']]  <- par0_x[['delay1_upper']]
       if (twoPhase) upperB[['delay2_tr']] <- par0_x[['delay2_upper']]
@@ -1203,6 +1209,9 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   )
 
 
+
+  # objective function ----
+
   # Penalization for high values of shape per group
   #
   # For Weibull distribution in MLEw method it penalizes high shape values.
@@ -1221,7 +1230,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # @return non-negative penalty value. Big values mean higher penalty (it gets subtracted from the criterion to be maximized)
   penF <- function(k, nObs = 1) {
 
-    if (!isTRUE(pen_shape)) return(0)
+    if (!isTRUE(control$pen_shape)) return(0)
 
     pen_shape_shift <- 9.5 #shift parameter of softplus penalty
     pen_shape_steep <- .91 #steepness of softplus penality
@@ -1230,8 +1239,6 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   }#fn penF
 
 
-
-  # objective function ----
 
   # Calculate value to be maximized based on the log-likelihood
   #
@@ -1242,6 +1249,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # @param pars complete vector of parameters (can refer to two groups)
   # @param group which group?
   # @param criterion logical. If `TRUE`, then pars are on original scale *and* the proper log-likelihood is returned. This flag currently serves a double purpose! (Disentangle maybe?)
+  # @return log-likelihood (certain flavour or related like negative L2-norm of gradient of log-likelihood) for specified group
   getLogLik <- function(pars, group, criterion = FALSE) {
 
     # Old idea was to
@@ -1358,6 +1366,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
              stopifnot(profiled)
              stopifnot(distO$hasDelay, distO$dist != "normal")
 
+             # W3 function
              w3F <- weights$W3[[group]]
 
              # return value (to be maximized)
@@ -1564,10 +1573,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # Depending on method, it is negative mean log-spacings for MPSE or negative log-likelihood for MLEn
   # One can estimate parameters by minimizing this objective function.
   #
-  # param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
-  # param `criterion` logical. If `TRUE`, give the original criterion to minimize (e.g., neg. log-likelihood). In this case, the parameters must be on original scale.
-  # param `aggregated` logical. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
-  # param `ties.` How to handle ties for the MPSE-function? Default value is 'density'.
+  # @param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
+  # @param `criterion` logical. If `TRUE`, give the original criterion to minimize (e.g., neg. log-likelihood). In this case, the parameters must be on original scale.
+  # @param `aggregated` logical. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
+  # @param `ties.` How to handle ties for the MPSE-function? Default value is 'density'.
+  # @return value of objective function (to be minimized)
   objFun <- function(pars, criterion = FALSE, aggregated = TRUE, ties. = ties) {
 
     if (verbose > 1) cat("pars:", pars, "\n")
@@ -1597,6 +1607,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                          if (!twoGroup) {
                            getLogLik(pars, group = "x", criterion = criterion)
                          } else {
+                           #XXX think here: can we use sum of log-lik from two groups in case of derivative-based solutions (MLEw, min or root)
                            local({
                              res0 <- c(getLogLik(pars, group = "x", criterion = criterion),
                                        getLogLik(pars, group = "y", criterion = criterion))
@@ -1653,7 +1664,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 
   # gather information from objective function environment
   objFunObjs <- rlang::env_get_list(env = objFunEnv,
-                                    nms = c("bind", "method", "optim_args" ,"trNamesFull", "profiled", "twoGroup", "twoPhase", "x", "y", "extractPars", "oNames"))
+                                    nms = c("bind", "method", "optim_args", "control", "trNamesFull", "profiled", "twoGroup", "twoPhase", "x", "y", "extractPars", "oNames"))
 
   # check if there is already a solution provided by the objective function
   optObj <- attr(objFun, which = "opt", exact = TRUE)
@@ -1665,16 +1676,16 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
     # numeric optimization
     if (verbose > 0L) message("Start with numeric optimiziation of objective function.")
 
-    if (is.null(optim_args)) {
-      # set standard optim-args
-      optim_args <- objFunObjs[["optim_args"]]
-    }
+    # ensure optim-args is set
+    optim_args <- optim_args %||% objFunObjs[["optim_args"]]
 
-    stopifnot(is.list(optim_args), "par" %in% names(optim_args),
+    stopifnot(is.list(optim_args))
+    stopifnot("par" %in% names(optim_args),
               is.numeric(optim_args$par), length(optim_args$par) == length(objFunObjs$trNamesFull))
     # ensure that transformed parameters are named
     if (!rlang::is_named(optim_args$par)) rlang::names2(optim_args$par) <- objFunObjs$trNamesFull
     stopifnot(identical(names(optim_args$par), objFunObjs$trNamesFull))
+
     # set objective function (overwrite entry 'fn' if it is already present)
     optim_args[["fn"]] <- objFun
 
@@ -1801,10 +1812,6 @@ buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
 
   MLEw_optim <- match.arg(MLEw_optim)
 
-  #XXX
-  #XXXXX continue here: 1/ profiled=FALSE for isSurv 2/ implement MLEw_optim = "root"
-  #XXX
-
   # default control-settings
   list(verbose = verbose[1],
        profiled = profiled[1],
@@ -1914,7 +1921,6 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
     cntrl$verbose <- 0L
   }
   cntrl$verbose <- cntrl$verbose[[1L]]
-
   cntrl$ties <- match.arg(cntrl$ties, choices = c('density', 'equispaced', 'error'))
 
   if (is.character(bind)) {
@@ -1946,8 +1952,12 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   if (is.null(objFun)) return(invisible(NULL))
   objFunEnv <- rlang::fn_env(objFun)
 
+  # update cntrl settings: profiled was set to FALSE (e.g., when isSurv)
+  # [alternative: read out control from objFunEnv and overwrite cntrl]
+  cntrl$profiled <- rlang::env_get(env = objFunEnv, nm = "profiled")
+
   # optimise objective function
-  optObj <- delay_fit(objFun, optim_args = cntrl$optim_args, verbose = cntrl$verbose)
+  optObj <- delay_fit(objFun, optim_args = NULL, verbose = cntrl$verbose)
 
   if (is.null(optObj) || is.null(optObj$par_orig)) return(invisible(NULL))
 
