@@ -8,9 +8,9 @@ buildControl(
   verbose = 0,
   profiled = FALSE,
   pen_shape = FALSE,
-  weight_method = "sdist_median",
-  ties = "density",
-  optim_args = NULL
+  MLEw_weight = "sdist_median",
+  MLEw_optim = c("min", "root"),
+  ties = "density"
 )
 }
 \value{

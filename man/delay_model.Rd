@@ -44,8 +44,10 @@ Possible list entries are
 \item \code{ties} character. Strategy to handle ties for \code{method = "MPSE"}. Either 'density' (default), 'equispaced' or 'error'.
 \item \code{profiled} aim to profile out a parameter
 \item \code{pen_shape} logical. Should high values of shape (for Weibull distribution) be penalized? Default is FALSE.
-\item \code{optim_args} list. optimization arguments to use. \code{NULL} (default) uses the data-dependent default values.
+\item \code{MLEw_weight} character. Name of method to build weights for MLEw-method.
+\item \code{MLEw_optim} character. Name for strategy to find extremum: either minimization of L2-norm of 1st partial derivatives (as stated in Cousineau, 2009) or using root-finding
 }
 
-Numerical optimization is normally done by \code{stats::optim}. \code{minqa::bobyqa} is used as fall-back.
+Numerical minimization is normally done by \code{stats::optim}. If this minimization attempt fails \code{minqa::bobyqa} is used as fall-back.
+For MLEw, we can also use root finding of gradient function instead of minimization of L2-norm of gradient of MLEw-objective function.
 }

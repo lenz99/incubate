@@ -670,13 +670,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       ##or #nObs = length(x) - cens$n$x[["any"]]),
       #+==> maybe best to turn off profiling when data isSurv
       # return list of weights
-      list(W1 = c(x = w1F(nObs = length(x), z = z_x, method = control$weight_method),
+      list(W1 = c(x = w1F(nObs = length(x), z = z_x, method = control$MLEw_weight),
                   # else 1: do we need W1$y also when only single group??
-                  y = if (twoGroup) w1F(nObs = length(y), z = z_y, method = control$weight_method) else 1),
-           W2 = c(x = w2F(nObs = length(x), z = z_x, method = control$weight_method),
-                  y = if (twoGroup) w2F(nObs = length(y), z = z_y, method = control$weight_method)),
-           W3 = purrr::compact(list(x = w3FF(nObs = length(x), z = z_x, method = control$weight_method),
-                                    y = if (twoGroup) w3FF(nObs = length(y), z = z_y, method = control$weight_method))))
+                  y = if (twoGroup) w1F(nObs = length(y), z = z_y, method = control$MLEw_weight) else 1),
+           W2 = c(x = w2F(nObs = length(x), z = z_x, method = control$MLEw_weight),
+                  y = if (twoGroup) w2F(nObs = length(y), z = z_y, method = control$MLEw_weight)),
+           W3 = purrr::compact(list(x = w3FF(nObs = length(x), z = z_x, method = control$MLEw_weight),
+                                    y = if (twoGroup) w3FF(nObs = length(y), z = z_y, method = control$MLEw_weight))))
     })#lacol
   } #esle weights
 
@@ -1178,8 +1178,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
           mergePars(parx = start_x, pary = start_y, isOpt = TRUE)
         }
-      } #twoGrp, not all params bound!
-    } # twoGrp
+      }#esle not all params bound!
+    }#esle twoGrp
 
   # ensure we have names of transformed parameters
   parV <- rlang::set_names(parV, nm = trNamesFull)
@@ -1228,6 +1228,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
     nObs * log1p(exp(pen_shape_steep * (k - pen_shape_shift)) / pen_shape_steep)
   }#fn penF
+
 
 
   # objective function ----
@@ -1792,20 +1793,26 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' This is an internal function. The function might change without precautionary measures taken.
 #' @return list. Control settings for fitting routine `delay_model`
 buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
-                         weight_method = "sdist_median",
-                         ties = "density", optim_args = NULL) {
-  #We used to let depend weight_method on surv-type, but this is not known here nor in delay_model (only within objFunFactory)
-  #+was before:
-  #+weight_method = if (isSurv) "sample" else "sdist_median"
+                         MLEw_weight = "sdist_median",
+                         MLEw_optim = c("min", "root"),
+                         ties = "density") {
+  #MLEw_weight used to depend on surv-type of data, but this is not known here nor in delay_model (only within objFunFactory)
+  #+was before: MLEw_weight = if (isSurv) "sample" else "sdist_median"
+
+  MLEw_optim <- match.arg(MLEw_optim)
+
+  #XXX
+  #XXXXX continue here: 1/ profiled=FALSE for isSurv 2/ implement MLEw_optim = "root"
+  #XXX
 
   # default control-settings
   list(verbose = verbose[1],
        profiled = profiled[1],
        #pen_shape = FALSE,
        pen_shape = pen_shape[1],
-       weight_method = weight_method[1],
-       ties = ties[1],
-       optim_args = optim_args)
+       MLEw_weight = MLEw_weight[1],
+       MLEw_optim = MLEw_optim[1],
+       ties = ties[1])
 }
 
 
@@ -1822,9 +1829,11 @@ buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
 #' * `ties` character. Strategy to handle ties for `method = "MPSE"`. Either 'density' (default), 'equispaced' or 'error'.
 #' * `profiled` aim to profile out a parameter
 #' * `pen_shape` logical. Should high values of shape (for Weibull distribution) be penalized? Default is FALSE.
-#' * `optim_args` list. optimization arguments to use. `NULL` (default) uses the data-dependent default values.
+#' * `MLEw_weight` character. Name of method to build weights for MLEw-method.
+#' * `MLEw_optim` character. Name for strategy to find extremum: either minimization of L2-norm of 1st partial derivatives (as stated in Cousineau, 2009) or using root-finding
 #'
-#' Numerical optimization is normally done by `stats::optim`. `minqa::bobyqa` is used as fall-back.
+#' Numerical minimization is normally done by `stats::optim`. If this minimization attempt fails `minqa::bobyqa` is used as fall-back.
+#' For MLEw, we can also use root finding of gradient function instead of minimization of L2-norm of gradient of MLEw-objective function.
 #'
 #' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
 #' @param y numeric. observations from 2nd group
@@ -1880,7 +1889,9 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   # build up default control-settings for current situation
   # we used to set weighting method depending on isSurv or not! (determined in objFunFactory)
   cntrl <- buildControl(profiled = method == "MLEw",
-                        pen_shape = distO$dist == 'weibull' && method == 'MLEw')
+                        pen_shape = distO$dist == 'weibull' && method == 'MLEw',
+                        # use root-finding in 2-dim parameter space
+                        MLEw_optim = "min")
 
   # overwrite control settings as given by control=
   stopifnot(is.list(control))

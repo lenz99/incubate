@@ -1064,11 +1064,12 @@ test_that("Fit delayed Weibull", {
   expect_equal(fd_wbc_mlen$criterion,
                expected = fd_wbc_mlen$objFun(pars = cousPar_mle2, criterion = TRUE),
                tolerance = .0005)
+
   # MLEw
 
   # weights from Cousineau (2009)
   fd_wbc_mlew0 <- delay_model(x = cousEx, distribution = "weib", method = "MLEw",
-                              control = list(profiled = TRUE, weight_method = "cousineau2009"))
+                              control = list(profiled = TRUE, MLEw_weight = "cousineau2009"))
   expect_identical(fd_wbc_mlew0$optimizer$convergence, expected = 0L)
   expect_identical(fd_wbc_mlew0$optimizer$methodOpt, expected = "L-BFGS-B")
   expect_true(fd_wbc_mlew0$optimizer$profiled)
@@ -1086,6 +1087,12 @@ test_that("Fit delayed Weibull", {
   # weights from our own bigger MC-simulation
   fd_wbc_mlew1 <- delay_model(x = cousEx, distribution = "weib", method = "MLEw",
                              control = list(profiled = TRUE))
+  # wrongly specified control option triggers warning
+  expect_warning(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
+                             control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")), regexp = "Unknown names")
+  # wrongly named arguments are ignored!
+  expect_identical(suppressWarnings(coef(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
+              control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")))), expected = coef(fd_wbc_mlew1))
   expect_identical(fd_wbc_mlew1$optimizer$convergence, expected = 0L)
   expect_identical(fd_wbc_mlew1$optimizer$methodOpt, expected = "L-BFGS-B")
   expect_true(fd_wbc_mlew1$optimizer$profiled)
