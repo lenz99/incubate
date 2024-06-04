@@ -42,14 +42,63 @@ stopifnot(identical(MLEw_mcs$W3 |>
                       dplyr::slice_head(n=N_DIRECT) |>
                       dplyr::pull(nObs), seq_len(N_DIRECT)))
 
-# MLEw_mcs is not exported to internal data.
-# Instead, we save relevant infos for MLEw-approximation in .MLEw_approx
-#+that we export as internal data
+
+# read in weights from publication of Cousineau (2009):
+# Cousineay did a relatively small MC-simulation study
+W_cousineau2009 <- local({
+  # from Cousineau Table 2
+  W1_mcss_str <- "1 1.000 0.561 0.693 2 1.000 0.763 0.839 3 1.000 0.839 0.891 4 1.000 0.878 0.918 5 1.000 0.902 0.934 6 1.000 0.918 0.945 7 1.000 0.929 0.953 8 1.000 0.938 0.959 9 1.000 0.945 0.963 10 1.000 0.950 0.967 11 1.000 0.955 0.970 12 1.000 0.959 0.972 13 1.000 0.962 0.974 14 1.000 0.965 0.976 15 1.000 0.967 0.978 16 1.000 0.969 0.979"
+  # from Cousineau Table 3
+  W2_mcss_str <- "1 0.000 0.000 0.000 2 0.500 0.163 0.275 3 0.667 0.409 0.517 4 0.750 0.553 0.638 5 0.800 0.642 0.711 6 0.833 0.702 0.759 7 0.857 0.742 0.791 8 0.875 0.775 0.817 9 0.889 0.800 0.838 10 0.900 0.820 0.853 11 0.909 0.835 0.867 12 0.917 0.849 0.877 13 0.923 0.860 0.886 14 0.929 0.871 0.895 15 0.933 0.879 0.902 16 0.938 0.887 0.908"
+  # from Cousineau Table 4
+  W3_mcss_str <- "1 12.429 20.157 11.371 12.483 24.796 2 19.452 11.567 4.183 3.147 2.771 3 33.320 14.372 3.701 2.596 2.225 4 73.132 36.570 3.480 2.411 2.043 5 66.530 14.812 3.431 2.309 1.948 6 87.540 11.751 3.297 2.235 1.888 7 124.230 21.331 3.270 2.198 1.852 8 99.608 13.230 3.192 2.170 1.831 9 97.148 14.622 3.178 2.154 1.808 10 447.600 19.335 3.244 2.143 1.794 11 105.660 13.879 3.195 2.120 1.779 12 164.510 13.765 3.154 2.113 1.769 13 136.390 12.762 3.109 2.109 1.759 14 342.220 14.270 3.111 2.099 1.755 15 168.430 14.737 3.110 2.091 1.746 16 198.130 13.641 3.101 2.093 1.742 1 1.004 1.001 1.001 1.006 1.002 2 2.395 1.851 1.524 1.360 1.268 3 3.682 2.375 1.775 1.520 1.383 4 4.854 2.753 1.934 1.603 1.438 5 6.005 3.046 2.042 1.665 1.479 6 7.097 3.295 2.119 1.704 1.506 7 8.103 3.497 2.184 1.740 1.528 8 9.145 3.665 2.229 1.766 1.543 9 10.133 3.842 2.278 1.778 1.552 10 11.104 3.966 2.312 1.800 1.564 11 12.190 4.083 2.354 1.817 1.572 12 13.019 4.192 2.378 1.829 1.583 13 13.898 4.280 2.403 1.839 1.582 14 14.857 4.367 2.423 1.842 1.591 15 15.819 4.493 2.440 1.854 1.595 16 16.604 4.561 2.464 1.862 1.598 1 1.001 0.999 0.999 0.995 0.998 2 2.096 1.668 1.456 1.339 1.262 3 3.081 2.082 1.680 1.479 1.367 4 3.950 2.381 1.822 1.567 1.428 5 4.806 2.631 1.920 1.625 1.464 6 5.631 2.808 2.004 1.669 1.492 7 6.433 2.982 2.056 1.698 1.509 8 7.150 3.114 2.105 1.722 1.525 9 7.931 3.252 2.151 1.739 1.537 10 8.643 3.365 2.180 1.758 1.552 11 9.319 3.462 2.207 1.774 1.555 12 10.051 3.560 2.239 1.782 1.565 13 10.746 3.642 2.262 1.793 1.570 14 11.379 3.713 2.285 1.804 1.578 15 12.069 3.780 2.301 1.813 1.581 16 12.743 3.854 2.324 1.820 1.586"
+
+  W1_mcss <- strsplit(W1_mcss_str, split = " ", fixed = TRUE)[[1]] |>
+    as.numeric() |>
+    matrix(ncol = 4, byrow = TRUE, dimnames = list(1:16, c("n", "E", "G", "J"))) |>
+    as.data.frame() |>
+    tidyr::pivot_longer(cols = c(E, G, J), names_to = "location", values_to = "value") |>
+    dplyr::mutate(shape = NA_real_, .before = value) |>
+    dplyr::relocate(location)
+
+
+  W2_mcss <- strsplit(W2_mcss_str, split = " ", fixed = TRUE)[[1]] |>
+    as.numeric() |>
+    matrix(ncol = 4, byrow = TRUE, dimnames = list(1:16, c("n", "E", "G", "J"))) |>
+    as.data.frame() |>
+    tidyr::pivot_longer(cols = c(E, G, J), names_to = "location", values_to = "value") |>
+    dplyr::mutate(shape = NA_real_, .before = value) |>
+    dplyr::relocate(location)
+
+  W3_mcss <- strsplit(W3_mcss_str, split = " ", fixed = TRUE)[[1]] |>
+    as.numeric() |>
+    matrix(ncol = 6, byrow = TRUE, dimnames = list(paste0(rep(c("E", "G", "J"), each = 16), rep.int(1:16, times = 3)),
+                                                   c("n", paste("shape", c(0.5, 1, 1.5, 2, 2.5), sep = "_")))) |>
+    as.data.frame() |>
+    tibble::rownames_to_column(var = "rown") |>
+    dplyr::mutate(location = stringr::str_sub(rown, end = 1), .before = n,
+                  rown = NULL) |>
+    tidyr::pivot_longer(cols = starts_with("shape_"),
+                        names_to = "shape", names_prefix = "^shape_", names_transform = as.numeric,
+                        values_to = "value")
+
+
+  dplyr::bind_rows(list(W1 = W1_mcss, W2 = W2_mcss, W3 = W3_mcss), .id = "type")
+})
+
+
+# build internal data -----------------------------------------------------
+
+#.MLEw_approx is exported as internal data!
+
+# MLEw_mcs is not exported in its entirety to internal data.
+# Instead, we save only relevant bits for MLEw-approximation
 .MLEw_approx <- list(
   # store simulation results for W1 and W2
   MCsim = MLEw_mcs$W12 |>
     dplyr::slice_head(n=N_DIRECT) |>
-    as.list()
+    as.list(),
+  MCsim_cousineau2009 = W_cousineau2009
 )
 
 

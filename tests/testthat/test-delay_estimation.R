@@ -1065,23 +1065,45 @@ test_that("Fit delayed Weibull", {
                expected = fd_wbc_mlen$objFun(pars = cousPar_mle2, criterion = TRUE),
                tolerance = .0005)
   # MLEw
-  fd_wbc_mlew <- delay_model(x = cousEx, distribution = "weib", method = "MLEw",
-                             control = list(profiled = TRUE))
-  expect_identical(fd_wbc_mlew$optimizer$convergence, expected = 0L)
-  expect_identical(fd_wbc_mlew$optimizer$methodOpt, expected = "L-BFGS-B")
-  expect_true(fd_wbc_mlew$optimizer$profiled)
-  expect_equal(coef(fd_wbc_mlew), expected = cousPar_mlew, tolerance = .15)
-  # our implementation finds a smaller value of our objective function (to be minimized)
-  expect_lte(fd_wbc_mlew$optimizer$valOpt,
-             expected = fd_wbc_mlew$objFun(c(delay1=cousPar_mlew[["delay1"]],
-                                             shape1=log(cousPar_mlew[["shape1"]]))))
+
+  # weights from Cousineau (2009)
+  fd_wbc_mlew0 <- delay_model(x = cousEx, distribution = "weib", method = "MLEw",
+                              control = list(profiled = TRUE, weight_method = "cousineau2009"))
+  expect_identical(fd_wbc_mlew0$optimizer$convergence, expected = 0L)
+  expect_identical(fd_wbc_mlew0$optimizer$methodOpt, expected = "L-BFGS-B")
+  expect_true(fd_wbc_mlew0$optimizer$profiled)
+  expect_equal(coef(fd_wbc_mlew0), expected = cousPar_mlew, tolerance = .15)
+
+  expect_lte(fd_wbc_mlew0$optimizer$valOpt,
+             expected = fd_wbc_mlew0$objFun(c(delay1=cousPar_mlew[["delay1"]],
+                                              shape1=log(cousPar_mlew[["shape1"]]))))
   # but neg. log-likelihood criterion is in fact quite similar
   #+actually, Cousineau's solution is slightly better (=smaller)
-  expect_equal(fd_wbc_mlew$criterion,
-               expected = fd_wbc_mlew$objFun(pars = cousPar_mlew, criterion = TRUE),
+  expect_equal(fd_wbc_mlew0$criterion,
+               expected = fd_wbc_mlew0$objFun(pars = cousPar_mlew, criterion = TRUE),
                tolerance = 0.07)
 
+  # weights from our own bigger MC-simulation
+  fd_wbc_mlew1 <- delay_model(x = cousEx, distribution = "weib", method = "MLEw",
+                             control = list(profiled = TRUE))
+  expect_identical(fd_wbc_mlew1$optimizer$convergence, expected = 0L)
+  expect_identical(fd_wbc_mlew1$optimizer$methodOpt, expected = "L-BFGS-B")
+  expect_true(fd_wbc_mlew1$optimizer$profiled)
+  expect_equal(coef(fd_wbc_mlew1), expected = cousPar_mlew, tolerance = .15)
+  # our implementation finds a smaller value of our objective function (to be minimized)
+  expect_lte(fd_wbc_mlew1$optimizer$valOpt,
+             expected = fd_wbc_mlew1$objFun(c(delay1=cousPar_mlew[["delay1"]],
+                                             shape1=log(cousPar_mlew[["shape1"]]))))
+  # but neg. log-likelihood criterion is in fact quite similar
+  #+actually, Cousineau's solution is slightly better (=smaller) in terms of MLEn (which was not optimized, though)
+  expect_equal(fd_wbc_mlew1$criterion,
+               expected = fd_wbc_mlew1$objFun(pars = cousPar_mlew, criterion = TRUE),
+               tolerance = 0.07)
 
+  # weights (cousineau or our own MC-sim) matter
+  expect_gt(abs(coef(fd_wbc_mlew1)[1] - coef(fd_wbc_mlew0)[1]), expected = .5) #delay1 estimate
+  expect_gt(abs(coef(fd_wbc_mlew1)[2] - coef(fd_wbc_mlew0)[2]), expected = .01) #shape1 estimate
+  expect_gt(abs(coef(fd_wbc_mlew1)[3] - coef(fd_wbc_mlew0)[3]), expected = .5) #scale1 estimate
 
 
   # simulate data set with true shape > 1

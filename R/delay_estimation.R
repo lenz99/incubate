@@ -543,17 +543,29 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       # We count all events because it is used to get scale parameter (and in this formula we already correct for censorings),
       #+e.g., nObs = length(x), even when there is cens$n$x[["any"]]
       # @param method By which method to calculate weights W1? 'sample' will use the mean of the provided sample of z-values, sdist_median uses the median of the sampling distribution (MC-sim)
-      w1F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid")) {
+      w1F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineau2009")) {
         method <- match.arg(method)
 
-        #Using a MC-simulation
-        #+cf. Cousineau's simulation results for median of W1's sampling distribution
-        #+"Nearly unbiased estimators.." (2009), Table 2, column J_1
+        stopifnot(is.numeric(nObs))
+        if (method %in% c("sample", "hybrid") && length(nObs) > 1) {
+          stop("Please provide only a single group sample size.", call. = FALSE)
+        }#fi
+
 
         switch(EXPR = method,
                sdist_median = {
-                 # use W1-function
+                 # Use results of own MC-simulation
                  .MLEw_approx$fun$w1F(nObs)
+               },
+               cousineau2009 = {
+                 #+cf. Cousineau's simulation results for median of W1's sampling distribution
+                 #+"Nearly unbiased estimators.." (2009), Table 2, column J_1
+                 W1_cous09 <- .MLEw_approx$MCsim_cousineau2009[.MLEw_approx$MCsim_cousineau2009$type == "W1" &
+                                                                 .MLEw_approx$MCsim_cousineau2009$location == "J",]
+                 if (!all(nObs %in% W1_cous09$n)) {
+                   stop("W1-weights from Cousineau are not available for all requested sample group size n.", call. = FALSE)
+                 }
+                 W1_cous09$value[W1_cous09$n %in% nObs]
                },
                sample = {
                  if (missing(z) || !is.numeric(z) || length(z) == 0L) {
@@ -569,18 +581,31 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       }#fn w1F
 
 
-      w2F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid")) {
+      w2F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineau2009")) {
         method <- match.arg(method)
 
-        # MC-simulation on W2 for n=1..16
-        # cf. Cousineau's simulation results for median of W2's sampling distribution
-        #+"Nearly unbiased estimators.." (2009), Table 3, column J_2
-        # W2-approximation via asymptotic regression model SSasymp on log(n):
-        # We hence model: W2 = 1 + (R0 - 1) * n^(-r)
+        stopifnot(is.numeric(nObs))
+        if (method %in% c("sample", "hybrid") && length(nObs) > 1) {
+          stop("Please provide only a single group sample size.", call. = FALSE)
+        }#fi
+
 
         switch(EXPR = method,
                sdist_median = {
+                 # W2-approximation via asymptotic regression model SSasymp on log(n):
+                 # We hence model: W2 = 1 + (R0 - 1) * n^(-r)
                  .MLEw_approx$fun$w2F(nObs)
+               },
+               cousineau2009 = {
+                 # MC-simulation on W2 for n=1..16
+                 # cf. Cousineau's simulation results for median of W2's sampling distribution
+                 #+"Nearly unbiased estimators.." (2009), Table 3, column J_2
+                 W2_cous09 <- .MLEw_approx$MCsim_cousineau2009[.MLEw_approx$MCsim_cousineau2009$type == "W2" &
+                                                                 .MLEw_approx$MCsim_cousineau2009$location == "J",]
+                 if (!all(nObs %in% W2_cous09$n)) {
+                   stop("W2-weights from Cousineau are not available for all requested sample group size n.", call. = FALSE)
+                 }
+                 W2_cous09$value[W2_cous09$n %in% nObs]
                },
                sample = {
                  sum(z * log(z)) / sum(z) - mean(log(z))
@@ -595,11 +620,14 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
 
       # w3 function. Not vectorized in argument k
-      w3FF <- function(nObs, z, method = c("sdist_median", "sample", "hybrid")) {
+      w3FF <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineau2009")) {
 
         # catch all for n = 1
+        stopifnot(is.numeric(nObs))
+        if (length(nObs) > 1) {
+          stop("Please provide only a single group sample size.", call. = FALSE)
+        }#fi
         if (nObs < 2L) return(function(k) 1)
-
 
         # case nObs > 1
         method <- match.arg(method)
@@ -609,14 +637,39 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                sdist_median = {
                  .MLEw_approx$fun$w3FF(nObs)
                },
+               cousineau2009 = {
+                 W3_cous09 <- .MLEw_approx$MCsim_cousineau2009[.MLEw_approx$MCsim_cousineau2009$type == "W3" &
+                                                                 .MLEw_approx$MCsim_cousineau2009$location == "J",]
+                 if (!nObs %in% W3_cous09$n) {
+                   stop("W3-weights from Cousineau are not available for requested sample group size n.", call. = FALSE)
+                 }
+
+                 # use approximation function with linear interpolation: we add points for extreme shape:
+                 #+ for huge shape W3 approaches 1
+                 #+ for minimal shape there is a linear dependence on nObs:
+                 ##df <- tibble(nObs = seq_len(501)) |> rowwise() |> mutate(W3_minShape = .MLEw_approx$fun$w3FF(nObs = {nObs})(1e-7))
+                 ##summary(lm(W3_minShape ~ nObs, data = df)) #==> regression line is: 0.229066 + 1.427202 * nObs
+                 #XXX approxfun is potentially unsafe (as it relies on current R version, but it is more safe since R v3.0.0)
+                 stats::approxfun(x = c(1e-7, W3_cous09$shape[W3_cous09$n == nObs], 1e3),
+                                  y = c(0.229066 + 1.427202 * nObs, W3_cous09$value[W3_cous09$n == nObs], 1),
+                                  ties = "ordered", rule = 2)
+               },
                sample = function(k) {
+                 stopifnot(is.numeric(k), length(k) == 1)
                  w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k))
+               },
+               hybrid = function(k) {
+                 stopifnot(is.numeric(k), length(k) == 1)
+                 # calculate mean from sdist_median and sample
+                 (.MLEw_approx$fun$w3FF(nObs)(k) + w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)))/2
                },
                stop("This method for W3 approximation is not handled here!", call. = FALSE))
       }#nf w3FF
 
+      # QQQ for W1 weights: do we use full length (even when censored obs are present?!) (W1 is used for un-profiling scale!)
+      ##or #nObs = length(x) - cens$n$x[["any"]]),
+      #+==> maybe best to turn off profiling when data isSurv
       # return list of weights
-      # W1 weights: use full length (even when censored obs are present?!) #or #nObs = length(x) - cens$n$x[["any"]]),
       list(W1 = c(x = w1F(nObs = length(x), z = z_x, method = control$weight_method),
                   # else 1: do we need W1$y also when only single group??
                   y = if (twoGroup) w1F(nObs = length(y), z = z_y, method = control$weight_method) else 1),
@@ -1833,12 +1886,12 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   stopifnot(is.list(control))
   controlNms <- names(control)
 
-  cntrl[controlNms] <- control
   local({
     if (length(badNms <- controlNms[!controlNms %in% names(cntrl)])) {
-      warning("Unknown names in control list: ", paste(badNms, collapse = ", "), call. = FALSE)
+      warning("Unknown names in control list: ", paste0(badNms, "=", collapse = ", "), call. = FALSE)
     }
   })
+  cntrl[controlNms] <- control
 
 
   # check control arguments ---

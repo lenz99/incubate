@@ -7,7 +7,7 @@ TOL_NUM <- sqrt(.Machine$double.eps)
 #' Format a number as percentage.
 #'
 #' Internal helper function that is not exported.
-#' @param x numeric vector to be formated as percentage
+#' @param x numeric vector to be formatted as percentage
 #' @param digits requested number of decimal digits of the percentage
 #' @return number formatted as percentage character
 as_percent <- function(x, digits = 1) {
