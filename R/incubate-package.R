@@ -14,4 +14,5 @@
 #' @name incubate
 #' @docType package
 #' @keywords internal
+#' @useDynLib incubate, .registration = TRUE
 "_PACKAGE"

@@ -1435,7 +1435,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
              if (!isSurv) {
                # numeric response, non-Surv
-               length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(1L, ind12[["ind_next"]])]), pars.gr)))) +
+               length(ind12[["inds_obs1"]]) * logspace_sub2_cpp(rlang::exec(distO$cdf, !!! c(list(q=obs[c(1, ind12[["ind_next"]])], log.p = TRUE), pars.gr))) +
                  sum(rlang::exec(distO$pdf, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr))) +
                  # optional penalization term
                  -penF(k, nObs = nObs)
@@ -1447,8 +1447,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                         stopifnot(nObs - cens$n[[group]]["any"] >= 2L)
 
                         # first event-time needs correction
-                        length(ind12[["inds_obs1"]]) * log(diff(rlang::exec(distO$cdf, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]),
-                                                                                             pars.gr)))) +
+                        length(ind12[["inds_obs1"]]) * logspace_sub2_cpp(rlang::exec(distO$cdf, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]),
+                                                                                             pars.gr))) +
                           # remaining observed event times
                           sum(rlang::exec(distO$pdf, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
                               # right-censored observations do not need correction

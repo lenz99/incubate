@@ -46,6 +46,7 @@ Config/testthat/edition: 3
 Depends: 
     R (>= 3.5.0)
 Collate: 
+    'cpp11.R'
     'data.R'
     'delay_estimation.R'
     'delay.R'
@@ -54,3 +55,4 @@ Collate:
     'integration.R'
     'utils.R'
 VignetteBuilder: knitr
+LinkingTo: cpp11
