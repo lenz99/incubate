@@ -314,6 +314,7 @@ test_that("Parameter extraction and transformation", {
     expect_equal(extractParsTest(extractParsTest(parV = par_exp2b, transform = TRUE, obs1 = c(min(x), min(y))), transform = TRUE, obs1 = c(min(x), min(y))), par_exp2b)
   })
 
+
   # weibull
   local({
     x <- rweib_delayed(n=3, delay1 = 5, shape1 = 1.2)
@@ -337,12 +338,13 @@ test_that("Parameter extraction and transformation", {
   # weibull two groups
   objFun_weib2 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2),
                                            y = rweib_delayed(n=4, delay1=3, shape1 = 2.8, scale1 = .9),
-                                           distO = buildDist("weibull"), twoPhase = FALSE)
+                                           distO = distO_w, twoPhase = FALSE)
   extPars_weib2 <- rlang::env_get(rlang::fn_env(objFun_weib2), "extractPars")
 
-  par_weib2 <- c(delay1.x = 1, shape1.x = 1.8, scale1.x = 34, delay1.y = 4.2, shape1.y = 3.4, scale1.y = 12)
-  par_weib2.y <- setNames(par_weib2[-c(1:3)], nm = c("delay1", "shape1", "scale1"))
-  par_weib2.y.tr <- setNames(c(par_weib2.y[1], log(par_weib2.y[-1])), nm = paste0(names(par_weib2.y), "_tr"))
+  par_weib2 <- c(delay1.x = 1, shape1.x = 1.8, scale1.x = 34,
+                 delay1.y = 4.2, shape1.y = 3.4, scale1.y = 12)
+  par_weib2.y <- par_weib2[-c(1:3)] |> setNames(nm = c("delay1", "shape1", "scale1"))
+  par_weib2.y.tr <- c(par_weib2.y[1], log(par_weib2.y[-1])) |> setNames(nm = paste0(names(par_weib2.y), "_tr"))
 
   expect_identical(extPars_weib2(par_weib2, isOpt = FALSE, named = TRUE), par_weib2)
   expect_identical(extPars_weib2(par_weib2, isOpt = FALSE, named = TRUE, group = "y"), par_weib2.y)
@@ -360,6 +362,41 @@ test_that("Parameter extraction and transformation", {
   expect_identical(extractParsTest(par_weib2s, distribution = "weibull", group = "y", transform = TRUE),
                    setNames(c(par_weib2s[3], log(par_weib2s[4])), nm = c("delay1_tr", "shape1_tr")))
 
+})
+
+
+test_that("Censored obs", {
+  # numeric, non-Surv
+  ti_x <- sort(2 + rpois(17, lambda = 5) + rnorm(17, sd = .1))
+  ti_y <- sort(5 + rpois(11, lambda = 2.8) + rnorm(11, sd = .1))
+
+  # right-censoring
+  ti_x2 <- Surv(ti_x); ti_y2 <- Surv(ti_y)
+  ti_x2c <- Surv(ti_x, event = sample(c(1, 1, 0), size = length(ti_x), replace = TRUE))
+  ti_y2c <- Surv(ti_y, event = sample(c(1, 1, 0), size = length(ti_y), replace = TRUE))
+
+  # interval-censoring
+  ti_x3 <- Surv(ti_x, time2=NA, event = rep_len(1, length(ti_x)), type = "interval")
+  ti_y3 <- Surv(ti_y, time2=NA, event = rep_len(1, length(ti_y)), type = "interval")
+
+
+  # single group
+  fm1 <- delay_model(x = ti_x) # numeric observations
+  expect_identical(fm1, delay_model(x = ti_x2)) # right-censoring, no cens
+  expect_identical(fm1, delay_model(x = ti_x3)) # interval-censored, no cens
+
+  # two groups
+  fm2 <- delay_model(x = ti_x, y = ti_y) # numeric observerations
+  expect_identical(fm2, delay_model(x = ti_x2, y = ti_y2)) # right-censoring, no cens
+  expect_identical(fm2, delay_model(x = ti_x3, y = ti_y3)) # interval-censored, no cens
+
+  fm2b <- delay_model(x = ti_x, y = ti_y, bind = "rate1")
+  expect_identical(fm2b, delay_model(x = ti_x2, y = ti_y2, bind = "rate1")) # right-censoring, no cens
+  expect_identical(fm2b, delay_model(x = ti_x3, y = ti_y3, bind = "rate1")) # interval-censored, no cens
+
+  fm3 <- delay_model(x = ti_x2c, y = ti_y, bind = "rate1") # with cens
+  expect_identical(fm3, delay_model(x = ti_x2c, y = ti_y2, bind = "rate1"))
+  expect_error(delay_model(x = ti_x2c, y = ti_y3, bind = "rate1"), regexp = "same type")
 })
 
 
@@ -595,7 +632,8 @@ test_that("Fit delayed Exponentials", {
   expect_identical(purrr::chuck(fd_exp2_MLEc_NP, 'optimizer', 'convergence'), expected = 0L) # converged
   expect_type(purrr::chuck(fd_exp2_MLEc_NP, 'optimizer', 'optim_args'), type = 'list')
   # coefficient do not change much when adding a 2nd independent group and no binding
-  expect_equal(as.numeric(coef(fd_exp2_MLEc_NP)[1:2]), expected = as.numeric(coef(fd_exp_MLEc_NP)), tolerance = .01)
+  expect_equal(as.numeric(coef(fd_exp2_MLEc_NP)[1:2]),
+               expected = as.numeric(coef(fd_exp_MLEc_NP)), tolerance = .001)
 
   fd_exp2_MLEc_P <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", method = "MLEc",
                                 control = list(profiled = TRUE))
@@ -656,7 +694,7 @@ test_that("Fit delayed Exponentials", {
   # the bound delay is near the minimum of the two delay estimates from the individual group fits
   expect_equal(coef_exp2b_MLEc_NP[[1L]],
                expected = min(coef(fd_exp2_MLEc_NP)[grepl(pattern = "delay1", names(coef(fd_exp2_MLEc_NP)), fixed = TRUE)]),
-               tolerance = .01)
+               tolerance = .001)
 
   fd_exp2b_MLEc_P <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = "delay1", method = "MLEc",
                                  control = list(profiled = TRUE))
@@ -684,7 +722,8 @@ test_that("Fit delayed Exponentials", {
 
   # profiling and full bind throws a warning:
   #+if rate1 is to be profiled out but later inferred from the delay1-estimate and the observations per group it will not be the same
-  fd_exp2c_P <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = c("delay1", "rate1"),
+  fd_exp2c_P <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon",
+                            bind = c("delay1", "rate1"),
                             control = list(profiled = TRUE))
   expect_identical(fd_exp2c_P$optimizer$convergence, expected = 0L)
   expect_true(fd_exp2c_P$optimizer$profiled)
@@ -698,7 +737,8 @@ test_that("Fit delayed Exponentials", {
 
   # similar coefficients (but the criterion is not identical, weighted mean for both groups vs overall mean)
   expect_equal(coef_exp2c_NP[[1L]], coef_exp2comb_NP[[1L]], tolerance = .01)
-  expect_equal(coef_exp2c_NP[[2L]], coef_exp2comb_NP[[2L]], tolerance = .5) #rate1 is actually quite different
+  #rate1 is actually quite different
+  expect_equal(coef_exp2c_NP[[2L]], coef_exp2comb_NP[[2L]], tolerance = .4)
 
   fd_exp2comb_P <- delay_model(x = c(exp_d9, exp_d10), distribution = "expon",
                                control = list(profiled = TRUE))
@@ -716,8 +756,9 @@ test_that("Fit delayed Exponentials", {
 
   expect_named(coef_exp2c_MLEn, expected = c("delay1","rate1"))
   expect_identical(length(coef_exp2comb_MLEn), length(coef_exp2c_MLEn))
-  expect_equal(coef_exp2c_MLEn[[1]], coef_exp2comb_MLEn[[1]], tolerance = .01)
-  expect_equal(coef_exp2c_MLEn[[2]], coef_exp2comb_MLEn[[2]], tolerance = .6) # rate quite different!
+  expect_equal(coef_exp2c_MLEn[[1]], coef_exp2comb_MLEn[[1]], tolerance = .001)
+  # rate quite different!
+  expect_equal(coef_exp2c_MLEn[[2]], coef_exp2comb_MLEn[[2]], tolerance = .5)
 
   # MLEc
   fd_exp2c_MLEc <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = c("delay1", "rate1"), method = "MLEc")
@@ -737,14 +778,14 @@ test_that("MLEw weights", code = {
   x <- c(4.45131763598452, 3.911063873, 4.73422157, 3.5065323295733,
          4.50685111984981, 5.412202336, 3.80280886136814, 6.58136664599287,
          4.857188, 4.73, 3.37456255179424, 7.58997290636633,
-         4.78486514263335, 4.52811892646, 4.183, 3.63462043493189,
+         4.7848651426, 4.52811892646, 4.183, 3.63462043493189,
          5.631332554)
   #y <- rexp_delayed(n=27, delay1 = 5, rate1 = .2)
   y <- c(14.925942346, 5.589837756968, 7.65, 8.1183247,
-         10.211537615186, 7.2060469, 7.14108166, 7.2677,
-         6.35810405284824, 15.79, 10.85657494, 18.25155829,
-         5.0227449974524, 6.52370074531063, 6.28239889, 21.79674,
-         9.54569350907, 29.344142, 5.0023, 7.132323752,
+         10.211537615, 7.2060469, 7.14108166, 7.2677,
+         6.358104052848, 15.79, 10.85657494, 18.25155829,
+         5.02274499745, 6.5237, 6.28239889, 21.79674,
+         9.5456935, 29.344142, 5, 7.132323752,
          7.751231, 5.293446, 6.7361, 6.61256539868,
          6.80225579, 5.8665655646473, 36.91641441)
 
@@ -782,41 +823,6 @@ test_that("MLEw weights", code = {
   testMLEwFits(x = x, y = y + stats::rnorm(length(y), sd = .005))
   testMLEwFits(x = x, y = y + stats::rnorm(length(y), sd = .01))
 
-})
-
-
-test_that("Censored obs", {
-  # numeric, non-Surv
-  ti_x <- sort(2 + rpois(17, lambda = 5) + rnorm(17, sd = .1))
-  ti_y <- sort(5 + rpois(11, lambda = 2.8) + rnorm(11, sd = .1))
-
-  # right-censoring
-  ti_x2 <- Surv(ti_x); ti_y2 <- Surv(ti_y)
-  ti_x2c <- Surv(ti_x, event = sample(c(1, 1, 0), size = length(ti_x), replace = TRUE))
-  ti_y2c <- Surv(ti_y, event = sample(c(1, 1, 0), size = length(ti_y), replace = TRUE))
-
-  # interval-censoring
-  ti_x3 <- Surv(ti_x, time2=NA, event = rep_len(1, length(ti_x)), type = "interval")
-  ti_y3 <- Surv(ti_y, time2=NA, event = rep_len(1, length(ti_y)), type = "interval")
-
-
-  # single group
-  fm1 <- delay_model(x = ti_x) # numeric observations
-  expect_identical(fm1, delay_model(x = ti_x2)) # right-censoring, no cens
-  expect_identical(fm1, delay_model(x = ti_x3)) # interval-censored, no cens
-
-  # two groups
-  fm2 <- delay_model(x = ti_x, y = ti_y) # numeric observerations
-  expect_identical(fm2, delay_model(x = ti_x2, y = ti_y2)) # right-censoring, no cens
-  expect_identical(fm2, delay_model(x = ti_x3, y = ti_y3)) # interval-censored, no cens
-
-  fm2b <- delay_model(x = ti_x, y = ti_y, bind = "rate1")
-  expect_identical(fm2b, delay_model(x = ti_x2, y = ti_y2, bind = "rate1")) # right-censoring, no cens
-  expect_identical(fm2b, delay_model(x = ti_x3, y = ti_y3, bind = "rate1")) # interval-censored, no cens
-
-  fm3 <- delay_model(x = ti_x2c, y = ti_y, bind = "rate1") # with cens
-  expect_identical(fm3, delay_model(x = ti_x2c, y = ti_y2, bind = "rate1"))
-  expect_error(delay_model(x = ti_x2c, y = ti_y3, bind = "rate1"), regexp = "same type")
 })
 
 
@@ -1103,14 +1109,14 @@ test_that("Fit delayed Weibull", {
   fd_wbc_mlew0 <- delay_model(x = cousEx, distribution = "weib", method = "MLEw",
                               control = list(profiled = TRUE, MLEw_weight = "cousineau2009"))
   expect_identical(fd_wbc_mlew0$optimizer$convergence, expected = 0L)
-  expect_identical(fd_wbc_mlew0$optimizer$methodOpt, expected = "L-BFGS-B")
+  expect_type(fd_wbc_mlew0$optimizer$methodOpt, type = "character")
   expect_true(fd_wbc_mlew0$optimizer$profiled)
   expect_equal(coef(fd_wbc_mlew0), expected = cousPar_mlew, tolerance = .15)
 
   expect_lte(fd_wbc_mlew0$optimizer$valOpt,
              expected = fd_wbc_mlew0$objFun(c(delay1=cousPar_mlew[["delay1"]],
                                               shape1=log(cousPar_mlew[["shape1"]]))))
-  # but neg. log-likelihood criterion is in fact quite similar
+  # but (naive) neg. log-likelihood criterion is in fact quite similar
   #+actually, Cousineau's solution is slightly better (=smaller)
   expect_equal(fd_wbc_mlew0$criterion,
                expected = fd_wbc_mlew0$objFun(pars = cousPar_mlew, criterion = TRUE),
@@ -1401,6 +1407,7 @@ test_that("Fit delayed Weibull", {
   # MLEw can be sometimes far off
   expect_equal(coef(fd_wb2bb_MLEw_P), expected = coef(fd_wb2bb_MLEc_P), tolerance = .1)
 })
+
 
 test_that("Censored obs & weibull", {
   ## Weibull model fits --

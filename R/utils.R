@@ -62,6 +62,7 @@ minObjFunAlt <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0,
                                                     # trust region setting: see ?bobyqa
                                                     rhobeg = rhob,
                                                     rhoend = rhob / 1e6))
+             optObj$value <- optObj$fval
              optObj$counts <- optObj$feval
              optObj$methodOpt <- "minqa::bobyqa"
              optObj$convergence <- optObj$ierr

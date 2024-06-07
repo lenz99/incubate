@@ -1997,7 +1997,8 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
       objFun = objFun,
       par = optObj$par_orig,
       criterion = objFun(pars = optObj$par_orig, criterion = TRUE, aggregated = TRUE),
-      optimizer = purrr::compact(c(list(parOpt = optObj$par, valOpt = optObj$value, profiled = cntrl$profiled),
+      optimizer = purrr::compact(c(list(parOpt = optObj$par,
+                                        valOpt = optObj$value, profiled = cntrl$profiled),
                                    optObj[c("methodOpt", 'convergence', 'message', 'counts', 'optim_args')]))),
     class = "incubate_fit")
 }
