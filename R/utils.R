@@ -3,6 +3,7 @@
 
 
 TOL_NUM <- sqrt(.Machine$double.eps)
+DELAY_MIN <- .Machine$double.eps #.Machine$double.xmin even smaller ##1e-9
 
 #' Format a number as percentage.
 #'
@@ -90,9 +91,12 @@ scalePars <- function(parV, lowerB = 1e-5, upperB = 1e5){
   # scale vector: default value is 1
   scVect <- rlang::rep_along(along = parV, x = 1)
 
-  # non-log parameters get scaling depending on their initial value
-  idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
-  scVect[idx.nonLog] <- parV[idx.nonLog]^.1 #10th root pushes towards 1
+  # # non-log parameters get scaling depending on their initial value
+  # idx.nonLog <- which(startsWith(names(parV), "delay1") & parV > 0)
+  # scVect[idx.nonLog] <- parV[idx.nonLog]^.1 #10th root pushes towards 1
+  # delay1 parameter is now also on log-scale
+  idx.nonLog <- which(startsWith(names(parV), "delay1"))
+  scVect[idx.nonLog] <- 1+abs(parV[idx.nonLog])/2
 
   # enforce upper and lower bounds
   pmax.int(lowerB, pmin.int(upperB, scVect))

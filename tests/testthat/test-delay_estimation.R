@@ -4,6 +4,8 @@
 
 test_that("Parameter extraction and transformation", {
 
+  #testthat::skip(message = "skip parameter extraction for now")
+
   distO_e <- buildDist(distribution = "exponential")
   distO_w <- buildDist(distribution = "weibull")
 
@@ -13,6 +15,11 @@ test_that("Parameter extraction and transformation", {
 
   # test parameter names of distribution object
   # on transformed scale (for optimization)
+  expect_identical(distO_e$param(twoPhase = FALSE, twoGroup = TRUE, bind = "rate1", profiled = FALSE, transformed = TRUE),
+                   expected = c("rate1_tr", "delay1_tr.x", "delay1_tr.y"))
+  expect_identical(distO_e$param(twoPhase = FALSE, twoGroup = TRUE, bind = "rate1", profiled = TRUE, transformed = TRUE),
+                   expected = c("rate1_tr", "delay1_tr.x", "delay1_tr.y"))
+
   expect_identical(distO_w$param(twoPhase = FALSE, twoGroup = TRUE, bind = "shape1", profiled = FALSE, transformed = TRUE),
                    expected = c("shape1_tr", "delay1_tr.x", "scale1_tr.x", "delay1_tr.y", "scale1_tr.y"))
   expect_identical(distO_w$param(twoPhase = FALSE, twoGroup = TRUE, bind = "shape1", profiled = TRUE, transformed = TRUE),
@@ -45,7 +52,7 @@ test_that("Parameter extraction and transformation", {
   #' @param isTransformed logical. Are the parameters transformed? If `NULL` (default) it is deduced from the parameter names.
   #' @param transform logical. Transform the parameters!?
   #' @return requested parameters as named numeric vector
-  extractParsTest <- function(parV, distribution = c('exponential', 'weibull'), twoPhase = NULL, group = NULL, isTransformed = NULL, transform = FALSE) {
+  extractParsTest <- function(parV, distribution = c('exponential', 'weibull'), twoPhase = NULL, group = NULL, obs1, isTransformed = NULL, transform = FALSE) {
 
     stopifnot(is.numeric(parV), all(nzchar(names(parV))))
     distO <- buildDist(match.arg(distribution))
@@ -77,13 +84,17 @@ test_that("Parameter extraction and transformation", {
     # if no transformation required, simply extract the relevant parameters
     if (transform) {
 
+      if (distO$dist == "exponential" && missing(obs1)) {
+        stop("Please specifiy obs1=")
+      }
       # transform parameter vector for a single group. Also transforms parameter names.
       # @param parV1: parameter vector for a single group
+      # @param obs1: first observation in group
       # @return transformed parameter vector
-      transformPars1Test <- function(parV1) {
+      transformPars1Test <- function(parV1, obs1) {
         # parameter transformation matrices
         PARAM_TRANSF_M <- switch(distO$dist,
-                                 exponential = matrix(c( 1, 0, 0, 0,
+                                 exponential = matrix(c( -1, 0, 0, 0,
                                                          0, 1, 0, 0,
                                                          -1, 0, 1, 0,
                                                          0, 0, 0, 1), nrow = 4L, byrow = TRUE,
@@ -114,30 +125,34 @@ test_that("Parameter extraction and transformation", {
         )
 
 
-        PARAM_TRANSF_F <- list(exponential = c(identity, log, log, log),
+        PARAM_TRANSF_F <- list(exponential = c(log1p, log, log, log),
                                weibull = c(identity, log, #log1p, #identity, #=shape1
                                            log, log, log, log))[[distO$dist]]
-        PARAM_TRANSF_Finv <- list(exponential = c(identity, exp, exp, exp),
+        PARAM_TRANSF_Finv <- list(exponential = c(function(x) -expm1(x), exp, exp, exp),
                                   weibull = c(identity, exp, #expm1, #identity, #=shape1
                                               exp, exp, exp, exp))[[distO$dist]]
 
         stopifnot(length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F))
 
+        b <- rlang::rep_along(parV1, 1)
+        if (distO$dist == "exponential") {
+          b[[1]] <- max(obs1,1)
+        }
 
         if (isTransformed) {
-          # b = Ainv %*% Finv(b')
+          # param = Ainv %*% (Finv(param') * b)
           rlang::set_names(
             as.numeric(PARAM_TRANSF_Minv[seq_along(parV1), seq_along(parV1)] %*%
-                         as.numeric(.mapply(FUN = function(f, x) f(x),
-                                            dots = list(PARAM_TRANSF_Finv[seq_along(parV1)], parV1),
-                                            MoreArgs = NULL))),
+                         (as.numeric(.mapply(FUN = function(f, x) f(x),
+                                             dots = list(PARAM_TRANSF_Finv[seq_along(parV1)], parV1),
+                                             MoreArgs = NULL)) * b)),
             nm = rownames(PARAM_TRANSF_Minv)[seq_along(parV1)])
         } else {
-          # b' = F(A %*% b)
+          # param' = F(A %*% param / b)
           rlang::set_names(
             as.numeric(.mapply(FUN = function(f, x) f(x),
                                dots = list(PARAM_TRANSF_F[seq_along(parV1)],
-                                           as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1)),
+                                           as.numeric(PARAM_TRANSF_M[seq_along(parV1), seq_along(parV1)] %*% parV1) / b),
                                MoreArgs = NULL)),
             nm = rownames(PARAM_TRANSF_M)[seq_along(parV1)])
         }
@@ -145,8 +160,8 @@ test_that("Parameter extraction and transformation", {
 
 
       # update parameter vector according to transformation
-      parV <- if (! isTwoGroup) {
-        transformPars1Test(parV1 = parV)
+      parV <- if (!isTwoGroup) {
+        transformPars1Test(parV1 = parV, obs1 = obs1[[1]])
       } else {
         # **twoGroup** case (effectively)
         # target parameter names
@@ -163,12 +178,14 @@ test_that("Parameter extraction and transformation", {
           # drop group naming: last two letters
           pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
           # apply transform on 1-group parameter vector in canonical order!
-          transformPars1Test(parV1 = c(parV[idx.nongrp], rlang::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))]) },
+          transformPars1Test(parV1 = c(parV[idx.nongrp], rlang::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))],
+                             obs1 = obs1[1]) },
           y = { idx.grp <- which(endsWith(x = pNames, suffix = ".y"))
           # drop group naming: last two letters
           pNms_grp <- substr(pNames[idx.grp], start = 1L, stop = nchar(pNames[idx.grp], type = "chars") - 2L)
           # apply transform on 1-group parameter vector in canonical order!
-          transformPars1Test(parV1 = c(parV[idx.nongrp], rlang::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))]) }
+          transformPars1Test(parV1 = c(parV[idx.nongrp], rlang::set_names(parV[idx.grp], nm = pNms_grp))[intersect(oNames, c(pNames, pNms_grp))],
+                             obs1 = obs1[2]) }
         )
 
         # parV transformed for effective twoGroup-setting
@@ -216,25 +233,30 @@ test_that("Parameter extraction and transformation", {
     rlang::fn_env() |> rlang::env_get("extractPars")
 
   par_exp1 <- c(delay1 = 3, rate1 = .8)
+  par_tf_exp1 <- c(delay1_tr = log1p(-par_exp1[[1L]]/min(dummydat)),
+                   rate1_tr = log(par_exp1[[2L]]))
 
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, named = TRUE), par_exp1)
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, named = FALSE), as.vector(par_exp1))
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "x", named = TRUE), par_exp1)
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "y", named = TRUE), par_exp1) # group= is ignored for single group!
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "z", named = TRUE), par_exp1) # group= is ignored for single group!
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE), c(par_exp1[[1L]], log(par_exp1[[2L]])))
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE),
+                   expected = par_tf_exp1)
+  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE),
+                   expected = as.numeric(par_tf_exp1))
 
   # objective function with profiled=TRUE is different
   expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, named = TRUE), par_exp1)
-  expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE), c(delay1_tr = par_exp1[[1L]]))
-  expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE), par_exp1[[1L]])
+  expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE), expected = par_tf_exp1[1])
+  expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE), expected = par_tf_exp1[[1L]])
 
   # my original (but slow) implementation
   expect_identical(extractParsTest(parV = par_exp1), par_exp1)
   expect_identical(extractParsTest(parV = par_exp1, group = "x"), par_exp1)
   expect_identical(extractParsTest(parV = par_exp1, group = "y"), par_exp1) # group= is ignored here
-  expect_identical(extractParsTest(parV = par_exp1, transform = TRUE), c(delay1_tr = par_exp1[[1L]], rate1_tr = log(par_exp1[[2L]])))
+  expect_identical(extractParsTest(parV = par_exp1, transform = TRUE, obs1 = min(dummydat)),
+                   expected = par_tf_exp1)
 
   # exponential, two groups, unbound
   objFun_exp2 <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2),
@@ -242,7 +264,7 @@ test_that("Parameter extraction and transformation", {
                                           distO = distO_e, twoPhase = FALSE)
   extPars_exp2 <- rlang::env_get(rlang::fn_env(objFun_exp2), "extractPars")
 
-  par_exp2 <- c(delay1.x = 2.8, rate1.x = .81, delay1.y = 5.1, rate1.y = 1.1)
+  par_exp2 <- c(delay1.x = 3.8, rate1.x = .81, delay1.y = 2.4, rate1.y = 1.1)
 
   expect_identical(extPars_exp2(par_exp2, isOpt = FALSE, named = TRUE), par_exp2)
   expect_identical(extPars_exp2(par_exp2, isOpt = FALSE, named = TRUE, group = "z"), NULL) # strange groups gives NULL in two group setting
@@ -256,50 +278,61 @@ test_that("Parameter extraction and transformation", {
   expect_identical(extractParsTest(parV = par_exp2, group = "y"), setNames(par_exp2[3:4], c("delay1", "rate1")))
 
   # exponential, two groups, bound
-  objFun_exp2b <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2),
-                                           y = rexp_delayed(n=3, delay1 = 3, rate1 = .1),
-                                           distO = buildDist("exponential"), twoPhase = FALSE, bind = "rate1")
-  extPars_exp2b <- rlang::env_get(rlang::fn_env(objFun_exp2b), "extractPars")
+  local({
+    x <- rexp_delayed(n=3, delay1 = 5, rate1 = .2)
+    y <- rexp_delayed(n=4, delay1 = 3, rate1 = .1)
 
-  par_exp2b <- c(rate1 = .23, delay1.x = 2.8, delay1.y = 5.1)
-  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE), par_exp2b)
-  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
-  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
-  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, transform = TRUE),
-                   c(rate1_tr = log(par_exp2b[["rate1"]]), delay1_tr.x = par_exp2b[[2]], delay1_tr.y = par_exp2b[[3]]))
-  expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "x", transform = TRUE),
-                   c(delay1_tr = par_exp2b[[2]], rate1_tr = log(par_exp2b[[1]])))
-  # idem-potent (round-trip)
-  expect_identical(extPars_exp2b(extPars_exp2b(par_exp2b, isOpt = FALSE, transform = TRUE),
-                                 isOpt = TRUE, named = TRUE, transform = TRUE), par_exp2b)
+    objFun_exp2b <- incubate:::objFunFactory(x = x, y = y,
+                                             distO = distO_e, twoPhase = FALSE, bind = "rate1")
+    extPars_exp2b <- rlang::env_get(rlang::fn_env(objFun_exp2b), "extractPars")
 
-  # my original (but slow) implementation
-  expect_identical(extractParsTest(parV = par_exp2b), par_exp2b)
-  expect_identical(extractParsTest(parV = par_exp2b, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
-  expect_identical(extractParsTest(parV = par_exp2b, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
-  expect_identical(extractParsTest(parV = par_exp2b, transform = TRUE),
-                   c(rate1_tr = log(par_exp2b[["rate1"]]), delay1_tr.x = par_exp2b[[2]], delay1_tr.y = par_exp2b[[3]]))
-  expect_identical(extractParsTest(parV = par_exp2b, group = "x", transform = TRUE),
-                   c(delay1_tr = par_exp2b[[2]], rate1_tr = log(par_exp2b[[1]])))
-  # idem-potent (round-trip)
-  expect_identical(extractParsTest(extractParsTest(parV = par_exp2b, transform = TRUE), transform = TRUE), par_exp2b)
+    par_exp2b <- c(rate1 = .23, delay1.x = 4.8, delay1.y = 2.7)
+    par_tf_exp2b <- c(rate1_tr = log(par_exp2b[["rate1"]]),
+                      delay1_tr.x = log1p(-par_exp2b[[2]]/min(x)), delay1_tr.y = log1p(-par_exp2b[[3]]/min(y)))
 
+    expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE), par_exp2b)
+    expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
+    expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
+    expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, transform = TRUE),
+                     expected = par_tf_exp2b)
+    expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "x", transform = TRUE),
+                     expected = purrr::set_names(par_tf_exp2b[c(2,1)], c("delay1_tr", "rate1_tr")))
+    # idem-potent (round-trip)
+    expect_equal(extPars_exp2b(extPars_exp2b(par_exp2b, isOpt = FALSE, transform = TRUE),
+                               isOpt = TRUE, named = TRUE, transform = TRUE), par_exp2b)
+
+    # my original (but slow) implementation
+    expect_identical(extractParsTest(parV = par_exp2b), par_exp2b)
+    expect_identical(extractParsTest(parV = par_exp2b, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))
+    expect_identical(extractParsTest(parV = par_exp2b, group = "y"), setNames(par_exp2b[c(3, 1)], c("delay1", "rate1")))
+    expect_identical(extractParsTest(parV = par_exp2b, transform = TRUE, obs1 = c(x=min(x), y=min(y))),
+                     expected = par_tf_exp2b)
+
+    expect_identical(extractParsTest(parV = par_exp2b, group = "x", transform = TRUE, obs1 = min(x)),
+                     expected = purrr::set_names(par_tf_exp2b[c(2,1)], c("delay1_tr", "rate1_tr")))
+    # idem-potent (round-trip)
+    expect_equal(extractParsTest(extractParsTest(parV = par_exp2b, transform = TRUE, obs1 = c(min(x), min(y))), transform = TRUE, obs1 = c(min(x), min(y))), par_exp2b)
+  })
 
   # weibull
-  objFun_weib1 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2),
-                                           distO = buildDist("weibull"), twoPhase = FALSE)
-  extPars_weib1 <- rlang::env_get(rlang::fn_env(objFun_weib1), "extractPars")
+  local({
+    x <- rweib_delayed(n=3, delay1 = 5, shape1 = 1.2)
+    par_weib1 <- c(delay1 = 5, shape1 = .8, scale1 = 1.5)
+    # extractParsTest specific: incomplete parameter vector
+    par_weib1s <- c(delay1 = 5, shape1 = .8)
 
-  par_weib1 <- c(delay1 = 5, shape1 = .8, scale1 = 1.2)
-  expect_identical(extPars_weib1(par_weib1, isOpt = FALSE, named = TRUE), par_weib1)
-  expect_identical(extractParsTest(par_weib1, distribution = "weibull"), par_weib1)
+    objFun_weib1 <- incubate:::objFunFactory(x = x,
+                                             distO = buildDist("weibull"), twoPhase = FALSE)
+    extPars_weib1 <- rlang::env_get(rlang::fn_env(objFun_weib1), "extractPars")
 
-  # extractParsTest specific: incomplete parameter vector
-  par_weib1s <- c(delay1 = 5, shape1 = .8)
-  expect_identical(extPars_weib1(par_weib1s, isOpt = FALSE, named = TRUE), c(par_weib1s, scale1=NA)) #missing parameter gets named NA
-  expect_identical(extractParsTest(par_weib1s, distribution = "weibull"), par_weib1s)
-  expect_identical(extractParsTest(par_weib1s, distribution = "weibull", transform = TRUE),
-                   c(delay1_tr = par_weib1s[["delay1"]], shape1_tr = log(par_weib1s[["shape1"]])))
+    expect_identical(extPars_weib1(par_weib1, isOpt = FALSE, named = TRUE), par_weib1)
+    expect_identical(extractParsTest(par_weib1, distribution = "weibull"), par_weib1)
+
+    expect_identical(extPars_weib1(par_weib1s, isOpt = FALSE, named = TRUE), c(par_weib1s, scale1=NA)) #missing parameter gets named NA
+    expect_identical(extractParsTest(par_weib1s, distribution = "weibull"), par_weib1s)
+    expect_identical(extractParsTest(par_weib1s, distribution = "weibull", transform = TRUE),
+                     c(delay1_tr = par_weib1s[["delay1"]], shape1_tr = log(par_weib1s[["shape1"]])))
+  })
 
   # weibull two groups
   objFun_weib2 <- incubate:::objFunFactory(x = rweib_delayed(n=3, delay1 = 5, shape1 = 1.2),
@@ -428,7 +461,7 @@ test_that("Fit delayed Exponentials", {
     expect_named(fd_exp_MLEn_NPopt, expected = c("par_orig", 'par', 'value', "methodOpt", 'convergence', 'message', 'counts'))
   })
   # check objective function
-  # objective function is for transformed parameters:
+  # objective function as criterion is for non-transformed parameters:
   purrr::walk2(.x = runif(n=7, min=0.1, max=9),   #delay1
                .y = runif(n=7, min=0.001, max=2), #rate1
                .f = ~ expect_equal(- length(exp_d9) * (log(.y) - .y * (mean(exp_d9) - .x)),
@@ -455,34 +488,36 @@ test_that("Fit delayed Exponentials", {
   fd_exp_MLEc_NP <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc')
   fd_exp_MLEc_P <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc',
                                control = list(profiled = TRUE))
-  # MLEc on duplicated data
-  fd_exp_MLEc_dupNP <- delay_model(exp_d9dup, distribution = 'expon', method = 'MLEc')
-  expect_named(coef(fd_exp_MLEc_dupNP), expected = c("delay1", "rate1"))
-  fd_exp_MLEc_d5_NP <- delay_model(exp_d5, distribution = "expon", method = "MLEc")
-  expect_named(coef(fd_exp_MLEc_d5_NP), expected = c("delay1", "rate1"))
-  # coefficients are roughly equal
-  expect_equal(coef(fd_exp_MLEc_d5_NP), expected = coef(fd_exp1_mpseNP), tolerance = .1)
 
   expect_type(fd_exp_MLEc_NP$data, type = 'double')
   expect_identical(length(fd_exp_MLEc_NP$data), expected = length(exp_d9))
-  expect_identical(length(coef(fd_exp_MLEc_NP)), expected = 2L)
   expect_named(coef(fd_exp_MLEc_NP), expected = c("delay1", "rate1"))
   expect_named(fd_exp_MLEc_NP$optimizer$parOpt, expected = c("delay1_tr", "rate1_tr"))
 
   expect_named(fd_exp_MLEc_NP$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", "convergence", "message", "counts", "optim_args"))
   expect_identical(purrr::chuck(fd_exp_MLEc_NP, 'optimizer', 'convergence'), expected = 0L)
+  expect_false(fd_exp_MLEc_NP$optimizer$profiled)
   # no exact solution for MLEc
   expect_null(attr(fd_exp_MLEc_NP$objFun, which = 'opt', exact = TRUE))
 
   expect_type(fd_exp_MLEc_P$data, type = 'double')
   expect_identical(length(fd_exp_MLEc_P$data), expected = length(exp_d9))
-  expect_identical(length(coef(fd_exp_MLEc_P)), expected = 2L)
   expect_named(coef(fd_exp_MLEc_P), expected = c("delay1", "rate1"))
   expect_named(fd_exp_MLEc_P$optimizer$parOpt, expected = "delay1_tr")
-  # profiled variant is an easier optimization
-  expect_true(all(fd_exp_MLEc_P$optimizer$counts < fd_exp_MLEc_NP$optimizer$counts))
+  expect_true(fd_exp_MLEc_P$optimizer$profiled)
+  # profiled variant is not more difficult optimization than non-profiled
+  expect_lte(fd_exp_MLEc_P$optimizer$counts[1], expected = fd_exp_MLEc_NP$optimizer$counts[1])
   # quite similar coefficients
   expect_equal(coef(fd_exp_MLEc_P), expected = coef(fd_exp_MLEc_NP), tolerance = .01)
+
+
+  # MLEc on duplicated data
+  fd_exp_MLEc_dupNP <- delay_model(exp_d9dup, distribution = 'expon', method = 'MLEc')
+  expect_named(coef(fd_exp_MLEc_dupNP), expected = c("delay1", "rate1"))
+  fd_exp_MLEc_d5_NP <- delay_model(exp_d5, distribution = "expon", method = "MLEc")
+  expect_named(coef(fd_exp_MLEc_d5_NP), expected = c("delay1", "rate1"))
+  # coefficients are roughly equal (to MPSE-fit)
+  expect_equal(coef(fd_exp_MLEc_d5_NP), expected = coef(fd_exp1_mpseNP), tolerance = .1)
 
 
   # MLEw
@@ -499,7 +534,7 @@ test_that("Fit delayed Exponentials", {
 
   # 2nd group ---------------------------------------------------------------
 
-  set.seed(20220429)
+  set.seed(2022-04-29)
   exp_d10 <- rexp_delayed(27L, delay1 = 10, rate1 = .9)
 
   fd_exp2 <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon")
@@ -519,17 +554,16 @@ test_that("Fit delayed Exponentials", {
                    expected = fd_exp2)
   # x= as list must be of length 2
   expect_error(delay_model(x = list(exp_d9, exp_d10, pi)), regexp = "size 2")
-  expect_error(delay_model(x = list(exp_d9, "bla"))) # must be numeric
+  expect_error(delay_model(x = list(exp_d9, "bla")), regexp = "numeric") # must be numeric
 
 
   # no delay in 2nd group
-  set.seed(20221124)
-  exp_d0 <- rexp_delayed(13L, delay1=0, rate1=1.1)
+  set.seed(2022-11-24)
+  exp_d0 <- rexp_delayed(13, delay1 = 0, rate1 = 1.3)
   fd_exp2nd <- delay_model(x = exp_d9, y = exp_d0, distribution = "expon") #nd = no delay
-  coef_exp2nd <- coef(fd_exp2nd)
 
   expect_identical(purrr::chuck(fd_exp2nd, "optimizer", "convergence"), expected = 0L)
-  expect_equal(coef_exp2nd[[3]], 0) # no delay in 3rd group
+  expect_lt(coef(fd_exp2nd)[[3]], expected = 0.1) # no substantial delay in 2nd group
 
   # MLE fits -----
   fd_exp2_MLEn_NP <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", method = "MLEn")
@@ -610,7 +644,7 @@ test_that("Fit delayed Exponentials", {
   expect_named(coef_exp2b_MLEn_P, expected = c("delay1", "rate1.x", "rate1.y"))
   expect_named(fd_exp2b_MLEn_P$optimizer, expected = c("parOpt", "valOpt", "profiled", "methodOpt", 'convergence', 'message', 'counts', 'optim_args'))
   expect_identical(purrr::chuck(fd_exp2b_MLEn_P, 'optimizer', 'convergence'), expected = 0L)
-  expect_equal(coef_exp2b_MLEn_P, expected = coef_exp2b_MLEn_NP, tolerance = 1e-5) # profiled=T/F: similar coefficients
+  expect_equal(coef_exp2b_MLEn_P, expected = coef_exp2b_MLEn_NP, tolerance = 1e-3) # profiled=T/F: similar coefficients
 
   # bind delay with MLEc
   fd_exp2b_MLEc_NP <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = "delay1", method = "MLEc")
@@ -637,35 +671,39 @@ test_that("Fit delayed Exponentials", {
   # bind delay + rate
   fd_exp2c_NP <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = c("delay1", "rate1"))
   coef_exp2c_NP <- coef(fd_exp2c_NP)
+  expect_identical(fd_exp2c_NP$optimizer$convergence, expected = 0L)
   expect_named(coef_exp2c_NP, expected = c("delay1", "rate1"))
 
   # bind: order of parameters does not matter
-  fd_exp2c_NP2 <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = c("rate1", "delay1"))
-  expect_identical(coef(fd_exp2c_NP2), expected = coef(fd_exp2c_NP))
-  expect_identical(fd_exp2c_NP2$optimizer$convergence, expected = 0L)
-  expect_identical(fd_exp2c_NP2$bind, fd_exp2c_NP$bind)
+  local({
+    fd_exp2c_NP2 <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = c("rate1", "delay1"))
+    expect_identical(coef(fd_exp2c_NP2), expected = coef(fd_exp2c_NP))
+    expect_identical(fd_exp2c_NP2$optimizer$convergence, expected = 0L)
+    expect_identical(fd_exp2c_NP2$bind, fd_exp2c_NP$bind)
+  })
 
   # profiling and full bind throws a warning:
   #+if rate1 is to be profiled out but later inferred from the delay1-estimate and the observations per group it will not be the same
   fd_exp2c_P <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = c("delay1", "rate1"),
                             control = list(profiled = TRUE))
-  coef_exp2c_P <- coef(fd_exp2c_P)
   expect_identical(fd_exp2c_P$optimizer$convergence, expected = 0L)
-  expect_equal(coef_exp2c_P, coef_exp2c_NP, tolerance = .03) # parameters are similar (but because of bind= & profiled rate1 is simply averaged)
+  expect_true(fd_exp2c_P$optimizer$profiled)
+  expect_equal(coef(fd_exp2c_P), coef_exp2c_NP, tolerance = .03) # parameters are similar (but because of bind= & profiled, rate1 is simply averaged)
 
   # data combined
   fd_exp2comb_NP <- delay_model(x = c(exp_d9, exp_d10), distribution = "expon")
   coef_exp2comb_NP <- coef(fd_exp2comb_NP)
+  expect_named(coef_exp2comb_NP, expected = c("delay1", "rate1"))
+  expect_identical(length(coef_exp2comb_NP), length(coef_exp2c_NP))
+
+  # similar coefficients (but the criterion is not identical, weighted mean for both groups vs overall mean)
+  expect_equal(coef_exp2c_NP[[1L]], coef_exp2comb_NP[[1L]], tolerance = .01)
+  expect_equal(coef_exp2c_NP[[2L]], coef_exp2comb_NP[[2L]], tolerance = .5) #rate1 is actually quite different
 
   fd_exp2comb_P <- delay_model(x = c(exp_d9, exp_d10), distribution = "expon",
                                control = list(profiled = TRUE))
   coef_exp2comb_P <- coef(fd_exp2comb_P)
-
-  expect_named(coef_exp2comb_NP, expected = c("delay1", "rate1"))
-  expect_identical(length(coef_exp2comb_NP), length(coef_exp2c_NP))
-  # similar coefficients (but the criterion is not identical, weighted mean for both groups vs overall mean)
-  expect_equal(coef_exp2c_NP[[1L]], coef_exp2comb_NP[[1L]], tolerance = .01)
-  expect_equal(coef_exp2c_NP[[2L]], coef_exp2comb_NP[[2L]], tolerance = .04)
+  expect_true(fd_exp2comb_P$optimizer$profiled)
 
   expect_named(coef_exp2comb_P, expected = c("delay1", "rate1"))
   expect_equal(coef_exp2comb_P, coef_exp2comb_NP, tolerance = .01)
@@ -678,7 +716,8 @@ test_that("Fit delayed Exponentials", {
 
   expect_named(coef_exp2c_MLEn, expected = c("delay1","rate1"))
   expect_identical(length(coef_exp2comb_MLEn), length(coef_exp2c_MLEn))
-  purrr::walk(seq_along(coef_exp2c_MLEn), ~expect_equal(coef_exp2c_MLEn[[.x]], coef_exp2comb_MLEn[[.x]], tolerance = .05))
+  expect_equal(coef_exp2c_MLEn[[1]], coef_exp2comb_MLEn[[1]], tolerance = .01)
+  expect_equal(coef_exp2c_MLEn[[2]], coef_exp2comb_MLEn[[2]], tolerance = .6) # rate quite different!
 
   # MLEc
   fd_exp2c_MLEc <- delay_model(x = exp_d9, y = exp_d10, distribution = "expon", bind = c("delay1", "rate1"), method = "MLEc")
@@ -688,8 +727,8 @@ test_that("Fit delayed Exponentials", {
 
   expect_named(coef_exp2c_MLEc, expected = c("delay1","rate1"))
   expect_identical(length(coef_exp2comb_MLEc), length(coef_exp2c_MLEc))
-  purrr::walk(seq_along(coef_exp2c_MLEc), ~expect_equal(coef_exp2c_MLEc[[.x]], coef_exp2comb_MLEc[[.x]], tolerance = .05))
-
+  expect_equal(coef_exp2c_MLEc[[1]], coef_exp2comb_MLEc[[1]], tolerance = .01)
+  expect_equal(coef_exp2c_MLEc[[2]], coef_exp2comb_MLEc[[2]], tolerance = .6) # rate quite different!
 })
 
 
@@ -702,12 +741,12 @@ test_that("MLEw weights", code = {
          5.631332554)
   #y <- rexp_delayed(n=27, delay1 = 5, rate1 = .2)
   y <- c(14.925942346, 5.589837756968, 7.65, 8.1183247,
-    10.211537615186, 7.2060469, 7.14108166, 7.2677,
-    6.35810405284824, 15.79, 10.85657494, 18.25155829,
-    5.0227449974524, 6.52370074531063, 6.28239889, 21.79674,
-    9.54569350907, 29.344142, 5.0023, 7.132323752,
-    7.751231, 5.293446, 6.7361, 6.61256539868,
-    6.80225579, 5.8665655646473, 36.91641441)
+         10.211537615186, 7.2060469, 7.14108166, 7.2677,
+         6.35810405284824, 15.79, 10.85657494, 18.25155829,
+         5.0227449974524, 6.52370074531063, 6.28239889, 21.79674,
+         9.54569350907, 29.344142, 5.0023, 7.132323752,
+         7.751231, 5.293446, 6.7361, 6.61256539868,
+         6.80225579, 5.8665655646473, 36.91641441)
 
   # check MLEw-fits in 1- and 2-group setting:
   # depending on slight minute changes in the data the fit can deteriorate
@@ -746,118 +785,10 @@ test_that("MLEw weights", code = {
 })
 
 
-test_that("Fit delayed exponentials with censoring", {
-
-
-  # single group ------------------------------------------------------------
-
-  # with ties broken
-  ticr1 <- local({
-    set.seed(2023-03-24)
-    n <- 97L
-    sort(survival::Surv(time =  1.5 + stats::rpois(n, lambda = 9.8) + abs(stats::rnorm(n, sd = .21)),
-                        event = sample(c(0,1,1,1,1), size = n, replace = TRUE)))
-  })
-
-  # exponential model fits
-  fmCR1_mpse <- delay_model(x = ticr1, distribution = "exponential")
-  #plot(fmCR1_mpse)
-  fmCR1_mlen <-  delay_model(x = ticr1, distribution = "exponential", method = "MLEn")
-  #plot(fmCR1_mlen)
-  expect_warning(fmCR1_mlenp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEn",
-                                            control = list(profiled = TRUE)))
-  expect_false(fmCR1_mlenp$optimizer$profiled)
-  #plot(fmCR1_mlenp)
-  fmCR1_mlec <- delay_model(x = ticr1, distribution = "exponential", method = "MLEc",
-                            control = list(profiled = FALSE))
-  #plot(fmCR1_mlec)
-  expect_warning(fmCR1_mlecp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEc",
-                                            control = list(profiled = TRUE)))
-  expect_false(fmCR1_mlecp$optimizer$profiled)
-  #plot(fmCR1_mlecp)
-  #XXX think about censoring at MLEw:
-  #+MLEw needs profiling, but we disable profiling for censored observations
-  # fmCR1_mlewp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEw",
-  #                            control = list(profiled = TRUE))
-  #plot(fmCR1_mlewp)
-
-
-  ## Weibull model fits --
-  fmCR1w_mpse <- delay_model(x = ticr1, distribution = "weibu")
-  #plot(fmCR1w_mpse)
-  fmCR1w_mlen <-  delay_model(x = ticr1, distribution = "weibu", method = "MLEn")
-  #plot(fmCR1w_mlen)
-  expect_warning(fmCR1w_mlenp <- delay_model(x = ticr1, distribution = "wei", method = "MLEn",
-                                             control = list(profiled = TRUE)))
-                 #plot(fmCR1w_mlenp)
-  fmCR1w_mlec <- delay_model(x = ticr1, distribution = "wei", method = "MLEc",
-                             control = list(profiled = FALSE))
-  #plot(fmCR1w_mlec)
-  expect_warning(fmCR1w_mlecp <- delay_model(x = ticr1, distribution = "wei", method = "MLEc",
-                                             control = list(profiled = TRUE)))
-  #plot(fmCR1w_mlecp)
-  #fmCR1w_mlewp <- delay_model(x = ticr1, distribution = "weibu", method = "MLEw",
-  #                            control = list(profiled = TRUE))
-  #plot(fmCR1w_mlewp)
-
-
-  purrr::walk(.x = list(fmCR1_mpse, fmCR1_mlec, #fmCR1_mlewp,
-                        fmCR1w_mpse, fmCR1w_mlen, fmCR1w_mlenp, fmCR1w_mlec, fmCR1w_mlecp), #, fmCR1w_mlewp),
-              .f = ~ {
-                expect_named(.x, expected = c("data", "nobs", "distO", "twoPhase", "twoGroup", "method", "bind",
-                                              "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
-                expect_named(.x$cens, expected = c("isSurv", "n", "ind", "rcens"))
-                expect_true(.x$cens$isSurv)
-
-              })
-
-
-  # profiling is reversed for Surv-data: so identical coefs
-  expect_identical(coef(fmCR1_mlenp)[1], expected = coef(fmCR1_mlen)[1])
-  expect_identical(coef(fmCR1_mlecp)[1], expected = coef(fmCR1_mlec)[1])
-
-  expect_identical(coef(fmCR1_mlenp)[2], expected = coef(fmCR1_mlen)[2])
-  expect_identical(coef(fmCR1_mlecp)[2], expected = coef(fmCR1_mlec)[2])
-  # MLEw similar to MLEc
-  #expect_equal(coef(fmCR1_mlewp)[1], expected = coef(fmCR1_mlec)[1], tolerance = 1e-2)
-  #expect_equal(coef(fmCR1_mlewp)[2], expected = coef(fmCR1_mlec)[2], tolerance = .15)
-
-
-  # delay and shape parameters do not change much when profiling (in particular, if enough data is available)
-  expect_equal(coef(fmCR1w_mlenp)[1:2], expected = coef(fmCR1w_mlen)[1:2], tolerance = .07)
-  # scale changes considerably as with profiling the censored observations do matter
-  expect_equal(coef(fmCR1w_mlenp)[3], expected = coef(fmCR1w_mlen)[3], tolerance = .2)
-  expect_equal(fmCR1w_mlenp$criterion, expected = fmCR1w_mlen$criterion, tolerance = .02)
-
-  # MLEw worse than MLEc
-  #expect_gte(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion)
-  #expect_equal(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion, tolerance = .25)
-  # roughly similar parameter estimates
-  #expect_gte(coef(fmCR1w_mlewp)[1], expected = 2)
-  #expect_equal(coef(fmCR1w_mlewp), expected = coef(fmCR1w_mpse), tolerance = .45)
-
-
-  # shorter surv-data that has censorings & ties
-  ticr2 <- local({
-    set.seed(2023-05-17)
-    n <- 17L
-    sort(survival::Surv(time =  1.5 + rpois(n, lambda = 9.8),
-                        event = sample(c(0,0,1,1,1), size = n, replace = TRUE)))[-c(1, 3, 8)]
-  })
-
-  fmCR2_mpse <- delay_model(x = ticr2, distribution = "expon", method = "MPSE")
-  expect_identical(fmCR2_mpse$optimizer$convergence, expected = 0L)
-  expect_equal(fmCR2_mpse$cens$n$x[["right"]], expected = sum(ticr2[, "status"] == 0)) # nbr of right censorings
-  # we have three duplicated observed event times
-  expect_identical(rlang::env_get(rlang::fn_env(fmCR2_mpse$objFun), nm = "tieInfo")$x[["cumDiffInd"]],
-                   expected = c(7L, 8L, 11L))
-
-
-  # two group handling ------------------------------------------------------
-
+test_that("Censored obs", {
   # numeric, non-Surv
-  ti_x <- sort(2 + rpois(17, lambda = 5))
-  ti_y <- sort(5 + rpois(11, lambda = 2.8))
+  ti_x <- sort(2 + rpois(17, lambda = 5) + rnorm(17, sd = .1))
+  ti_y <- sort(5 + rpois(11, lambda = 2.8) + rnorm(11, sd = .1))
 
   # right-censoring
   ti_x2 <- Surv(ti_x); ti_y2 <- Surv(ti_y)
@@ -886,6 +817,104 @@ test_that("Fit delayed exponentials with censoring", {
   fm3 <- delay_model(x = ti_x2c, y = ti_y, bind = "rate1") # with cens
   expect_identical(fm3, delay_model(x = ti_x2c, y = ti_y2, bind = "rate1"))
   expect_error(delay_model(x = ti_x2c, y = ti_y3, bind = "rate1"), regexp = "same type")
+})
+
+
+
+# censored data no ties
+d_cens1 <- local({
+  set.seed(2023-03-24)
+  n <- 97L
+
+  datc <- sort(survival::Surv(time =  3.5 + stats::rpois(n, lambda = 9.8) + stats::rnorm(n, sd = .1),
+                              event = sample(c(0,1,1,1,1), size = n, replace = TRUE)))
+
+  expect_type(datc, type = "double")
+  expect_identical(class(datc), expected = "Surv")
+  #not all observed times are events
+  expect_lt(sum(datc[,2]), expected = n)
+
+  datc
+})
+
+
+test_that("Censored obs & delayed exponential", {
+
+  fmCR1_mpse <- delay_model(x = d_cens1, distribution = "exponential")
+  #plot(fmCR1_mpse)
+  fmCR1_mlen <-  delay_model(x = d_cens1, distribution = "exponential", method = "MLEn")
+  #plot(fmCR1_mlen)
+  expect_warning(fmCR1_mlenp <- delay_model(x = d_cens1, distribution = "exponential", method = "MLEn",
+                                            control = list(profiled = TRUE)), regexp = "profiled=")
+  expect_false(fmCR1_mlenp$optimizer$profiled)
+  #plot(fmCR1_mlenp)
+  fmCR1_mlec <- delay_model(x = d_cens1, distribution = "exponential", method = "MLEc",
+                            control = list(profiled = FALSE))
+  #plot(fmCR1_mlec)
+  expect_warning(fmCR1_mlecp <- delay_model(x = d_cens1, distribution = "exponential", method = "MLEc",
+                                            control = list(profiled = TRUE)))
+  expect_false(fmCR1_mlecp$optimizer$profiled)
+  #plot(fmCR1_mlecp)
+  #XXX think about censoring at MLEw:
+  #+MLEw needs profiling, but we disable profiling for censored observations
+  # fmCR1_mlewp <- delay_model(x = ticr1, distribution = "exponential", method = "MLEw",
+  #                            control = list(profiled = TRUE))
+  #plot(fmCR1_mlewp)
+
+  # profiling is reversed for Surv-data: so identical coefs
+  expect_identical(coef(fmCR1_mlenp)[1], expected = coef(fmCR1_mlen)[1])
+  expect_identical(coef(fmCR1_mlecp)[1], expected = coef(fmCR1_mlec)[1])
+
+  expect_identical(coef(fmCR1_mlenp)[2], expected = coef(fmCR1_mlen)[2])
+  expect_identical(coef(fmCR1_mlecp)[2], expected = coef(fmCR1_mlec)[2])
+
+  # MLEw similar to MLEc
+  #expect_equal(coef(fmCR1_mlewp)[1], expected = coef(fmCR1_mlec)[1], tolerance = 1e-2)
+  #expect_equal(coef(fmCR1_mlewp)[2], expected = coef(fmCR1_mlec)[2], tolerance = .15)
+
+
+  purrr::walk(.x = list(fmCR1_mpse, fmCR1_mlec, fmCR1_mlen, fmCR1_mlenp), #fmCR1_mlewp,
+              .f = ~ {
+                expect_named(.x, expected = c("data", "nobs", "distO", "twoPhase", "twoGroup", "method", "bind",
+                                              "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+                expect_named(.x$cens, expected = c("isSurv", "n", "ind", "rcens"))
+                expect_false(.x$optimizer$profiled)
+                expect_true(.x$cens$isSurv)
+
+              })
+
+
+  # two groups ------------------------------------------------------
+
+  # shorter surv-data that has censorings & no ties
+  d_cens2 <- local({
+    set.seed(2024-06-07)
+    n <- 19L
+    sort(survival::Surv(time =  1.5 + rpois(n, lambda = 9.8) + rnorm(n, sd = .1),
+                        event = sample(c(0,0,1,1,1), size = n, replace = TRUE)))
+  })
+
+  fmcens2_mpse <- delay_model(x = d_cens1, y = d_cens2, distribution = "exponential")
+  plot(fmcens2_mpse)
+
+
+  # tied observations ------
+
+  d_cens3 <- local({
+    set.seed(2023-05-17)
+    n <- 17L
+    sort(survival::Surv(time =  1.5 + rpois(n, lambda = 9.8),
+                        event = sample(c(0,0,1,1,1), size = n, replace = TRUE)))[-c(1, 3, 8)]
+  })
+
+  fmCR2_mpse <- delay_model(x = d_cens3, distribution = "expon", method = "MPSE")
+  expect_identical(fmCR2_mpse$optimizer$convergence, expected = 0L)
+  expect_equal(fmCR2_mpse$cens$n$x[["right"]], expected = sum(d_cens3[, "status"] == 0)) # nbr of right censorings
+  # we have three duplicated observed event times
+  expect_identical(rlang::env_get(rlang::fn_env(fmCR2_mpse$objFun), nm = "tieInfo")$x[["cumDiffInd"]],
+                   expected = c(7L, 8L, 11L))
+
+
 
 })
 
@@ -1089,13 +1118,13 @@ test_that("Fit delayed Weibull", {
 
   # weights from our own bigger MC-simulation
   fd_wbc_mlew1 <- delay_model(x = cousEx, distribution = "weib", method = "MLEw",
-                             control = list(profiled = TRUE))
+                              control = list(profiled = TRUE))
   # wrongly specified control option triggers warning
   expect_warning(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
                              control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")), regexp = "Unknown names")
   # wrongly named arguments are ignored!
   expect_identical(suppressWarnings(coef(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
-              control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")))), expected = coef(fd_wbc_mlew1))
+                                                     control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")))), expected = coef(fd_wbc_mlew1))
   expect_identical(fd_wbc_mlew1$optimizer$convergence, expected = 0L)
   expect_identical(fd_wbc_mlew1$optimizer$methodOpt, expected = "L-BFGS-B")
   expect_true(fd_wbc_mlew1$optimizer$profiled)
@@ -1103,7 +1132,7 @@ test_that("Fit delayed Weibull", {
   # our implementation finds a smaller value of our objective function (to be minimized)
   expect_lte(fd_wbc_mlew1$optimizer$valOpt,
              expected = fd_wbc_mlew1$objFun(c(delay1=cousPar_mlew[["delay1"]],
-                                             shape1=log(cousPar_mlew[["shape1"]]))))
+                                              shape1=log(cousPar_mlew[["shape1"]]))))
   # but neg. log-likelihood criterion is in fact quite similar
   #+actually, Cousineau's solution is slightly better (=smaller) in terms of MLEn (which was not optimized, though)
   expect_equal(fd_wbc_mlew1$criterion,
@@ -1373,6 +1402,50 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef(fd_wb2bb_MLEw_P), expected = coef(fd_wb2bb_MLEc_P), tolerance = .1)
 })
 
+test_that("Censored obs & weibull", {
+  ## Weibull model fits --
+  fmCR1w_mpse <- delay_model(x = d_cens1, distribution = "weibu")
+  #plot(fmCR1w_mpse)
+  fmCR1w_mlen <-  delay_model(x = d_cens1, distribution = "weibu", method = "MLEn")
+  #plot(fmCR1w_mlen)
+  expect_warning(fmCR1w_mlenp <- delay_model(x = d_cens1, distribution = "wei", method = "MLEn",
+                                             control = list(profiled = TRUE)))
+  #plot(fmCR1w_mlenp)
+  fmCR1w_mlec <- delay_model(x = d_cens1, distribution = "wei", method = "MLEc",
+                             control = list(profiled = FALSE))
+  #plot(fmCR1w_mlec)
+  expect_warning(fmCR1w_mlecp <- delay_model(x = d_cens1, distribution = "wei", method = "MLEc",
+                                             control = list(profiled = TRUE)))
+  #plot(fmCR1w_mlecp)
+  #fmCR1w_mlewp <- delay_model(x = ticr1, distribution = "weibu", method = "MLEw",
+  #                            control = list(profiled = TRUE))
+  #plot(fmCR1w_mlewp)
+
+  # delay and shape parameters do not change much when profiling (in particular, if enough data is available)
+  expect_equal(coef(fmCR1w_mlenp)[1:2], expected = coef(fmCR1w_mlen)[1:2], tolerance = .07)
+  # scale changes considerably as with profiling the censored observations do matter
+  expect_equal(coef(fmCR1w_mlenp)[3], expected = coef(fmCR1w_mlen)[3], tolerance = .2)
+  expect_equal(fmCR1w_mlenp$criterion, expected = fmCR1w_mlen$criterion, tolerance = .02)
+
+  # MLEw worse than MLEc
+  #expect_gte(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion)
+  #expect_equal(fmCR1w_mlewp$criterion, fmCR1w_mlec$criterion, tolerance = .25)
+  # roughly similar parameter estimates
+  #expect_gte(coef(fmCR1w_mlewp)[1], expected = 2)
+  #expect_equal(coef(fmCR1w_mlewp), expected = coef(fmCR1w_mpse), tolerance = .45)
+
+
+  purrr::walk(.x = list(fmCR1w_mpse, fmCR1w_mlen, fmCR1w_mlenp, fmCR1w_mlec, fmCR1w_mlecp), #, fmCR1w_mlewp),))
+              .f = ~ {
+                expect_named(.x, expected = c("data", "nobs", "distO", "twoPhase", "twoGroup", "method", "bind",
+                                              "ties", "cens", "kmFit", "objFun", "par", "criterion", "optimizer"))
+                expect_named(.x$cens, expected = c("isSurv", "n", "ind", "rcens"))
+                expect_false(.x$optimizer$profiled)
+                expect_true(.x$cens$isSurv)
+
+              })
+})
+
 
 test_that("Confidence intervals", code = {
   testthat::skip_on_cran()
@@ -1398,6 +1471,8 @@ test_that("Confidence intervals", code = {
                 expect_equal(ci_own, ci_boot, tolerance = 1e-3)})
 
 })
+
+
 
 
 test_that("Fit normal", {

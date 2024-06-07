@@ -330,72 +330,70 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # kmFit and rcens have same number of rows
   stopifnot(length(kmFit$surv) == length(cens$rcens$surv))
 
-  # indices of first two relevant observations (for MLEc only)
-  indForefront <- if (method == "MLEc") {
-    local({
-      # little helper function to get the indices for the first two smallest observed values (non-censorings)
-      #+in a sorted vector of observations
-      forefrontIndF <- function(group) {
-        stopifnot(!missing(group), is.character(group), length(group) == 1L)
-        obs <- if (group == "y") y else x
+  # indices of first two relevant observations
+  indForefront <- local({
+    # little helper function to get the indices for the first two smallest observed values (non-censorings)
+    #+in a sorted vector of observations
+    forefrontIndF <- function(group) {
+      stopifnot(!missing(group), is.character(group), length(group) == 1L)
+      obs <- if (group == "y") y else x
 
-        ind_obs1 <- ind_next <- integer()
+      ind_obs1 <- ind_next <- integer()
 
-        if (isSurv) {
-          # Surv-response
-          cindo_gr <- cens$ind[[group]]$obs
-          stopifnot(length(cindo_gr) >= 2L)
+      if (isSurv) {
+        # Surv-response
+        cindo_gr <- cens$ind[[group]]$obs
+        stopifnot(length(cindo_gr) >= 2L)
 
-          # check for easy case: no tie at first two observed event times
-          if (obs[cindo_gr[2L], 1L] > obs[cindo_gr[1L], 1L] + TOL_NUM) {
-            ind_obs1 <- cindo_gr[1L]
-            ind_next <- cindo_gr[2L]
-          } else {
-            # walk down the observed event times
-            i1 <- 2L
-            while (obs[cindo_gr[i1], 1L] == obs[cindo_gr[1L], 1L]) {
-              i1 <- i1 + 1L
-            }
-            ind_obs1 <- cindo_gr[seq_len(i1-1L)]
-            if (length(cindo_gr) >= i1) ind_next <- cindo_gr[i1]
-          }#esle
-
+        # check for easy case: no tie at first two observed event times
+        if (obs[cindo_gr[2L], 1L] > obs[cindo_gr[1L], 1L] + TOL_NUM) {
+          ind_obs1 <- cindo_gr[1L]
+          ind_next <- cindo_gr[2L]
         } else {
-          # numeric response, non-Surv
-          stopifnot(length(obs) >= 2L)
-          # check for easy case: no tie at beginning
-          if (obs[[2L]] > obs[[1L]] + TOL_NUM) {
-            ind_obs1 <- 1L
-            ind_next <- 2L
-          } else {
-            # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
-            for (l in sort.int(unique(c(5, 10, 50, 100, 500, 1000, length(obs))))) {
-              if (l > length(obs)) {
-                break
-              }#fi
-              obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
-              #which.max(obs_r > 1) # 1st index of 2nd obs
-              firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
-              # check that there are two distinct values
-              if (anyNA(firstTwoRanks)) {
-                if (l < length(obs)) next
-                if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
-                #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
-              }#fi
+          # walk down the observed event times
+          i1 <- 2L
+          while (obs[cindo_gr[i1], 1L] == obs[cindo_gr[1L], 1L]) {
+            i1 <- i1 + 1L
+          }
+          ind_obs1 <- cindo_gr[seq_len(i1-1L)]
+          if (length(cindo_gr) >= i1) ind_next <- cindo_gr[i1]
+        }#esle
 
-              ind_obs1 <- which(obs_r == firstTwoRanks[1L])
-              ind_next <- which(obs_r == firstTwoRanks[2L])
-              if (length(ind_next)) ind_next <- ind_next[1L]
-            }#rof l
-          }#esle
-        } #esle (non-Surv)
+      } else {
+        # numeric response, non-Surv
+        stopifnot(length(obs) >= 2L)
+        # check for easy case: no tie at beginning
+        if (obs[[2L]] > obs[[1L]] + TOL_NUM) {
+          ind_obs1 <- 1L
+          ind_next <- 2L
+        } else {
+          # get indices for 1st and 2nd observation. Try with few first observations first (for better performance)
+          for (l in sort.int(unique(c(5, 10, 50, 100, 500, 1000, length(obs))))) {
+            if (l > length(obs)) {
+              break
+            }#fi
+            obs_r <- rank(obs[seq_len(l)], ties.method = "min", na.last = TRUE)
+            #which.max(obs_r > 1) # 1st index of 2nd obs
+            firstTwoRanks <- unique(obs_r)[c(1L, 2L)]
+            # check that there are two distinct values
+            if (anyNA(firstTwoRanks)) {
+              if (l < length(obs)) next
+              if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
+              #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
+            }#fi
 
-        list(inds_obs1 = ind_obs1, ind_next = ind_next)
-      }
+            ind_obs1 <- which(obs_r == firstTwoRanks[1L])
+            ind_next <- which(obs_r == firstTwoRanks[2L])
+            if (length(ind_next)) ind_next <- ind_next[1L]
+          }#rof l
+        }#esle
+      } #esle (non-Surv)
 
-      purrr::compact(list(x = forefrontIndF(group = "x"), y = if (twoGroup) forefrontIndF(group = "y")))
-    })
-  }#fi method == MLEc
+      list(inds_obs1 = ind_obs1, ind_next = ind_next)
+    }
+
+    purrr::compact(list(x = forefrontIndF(group = "x"), y = if (twoGroup) forefrontIndF(group = "y")))
+  })#indForefront
 
   # set some coefficient names:
   # coefficient names (now that we have settled the profiling flag)
@@ -685,6 +683,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   } #esle weights
 
 
+
+
   stopifnot(!twoPhase) #XXX twoPhase not implemented yet!!
 
   # provide indices for x and for y
@@ -796,10 +796,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     }
   }#esle !profiled
 
+
   # parameter transformation matrices (for single group)
   paramTransf <- list(
     M = switch(distO$dist,
-               exponential = matrix(c( 1, 0, 0, 0,
+               exponential = matrix(c( -1, 0, 0, 0,
                                        0, 1, 0, 0,
                                        -1, 0, 1, 0,
                                        0, 0, 0, 1), nrow = 4L, byrow = TRUE,
@@ -836,11 +837,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                                   dimnames = list(c("mean", "sd"))),
                   stop("Unknown distribution", call. = FALSE)
     ),
-    F = list(exponential = c(identity, log, log, log),
+    F = list(exponential = c(log1p, log, log, log),
              weibull = c(identity, log, #log1p, #identity, #=shape1
                          log, log, log, log),
              normal = c(identity, identity))[[distO$dist]],
-    Finv = list(exponential = c(identity, exp, exp, exp),
+    Finv = list(exponential = c(function(x) -expm1(x), exp, exp, exp),
                 weibull = c(identity, exp, #expm1, #identity, #=shape1
                             exp, exp, exp, exp),
                 normal = c(identity, identity))[[distO$dist]]
@@ -848,28 +849,37 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
   # transform parameter vector for a single group
   #
-  # transformed parameters are used within optimization.
+  # The transformed parameters are used within optimization.
   # It does not use parameter names.
   # The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativity of original parameter)
   # @param parV1 parameter vector for a single group
+  # @param obs1 numeric. Can be used for transformation of first parameter delay1
   # @param inverse logical. `inverse=TRUE` takes optimization parameters back to original parameters
   # @return transformed parameter vector, unnamed!
-  transformPars1 <- function(parV1, inverse = FALSE) {
+  transformPars1 <- function(parV1, obs1 = 1, inverse = FALSE) {
 
+
+    b <- rlang::rep_along(parV1, 1)
+    if (distO$dist == "exponential") {
+      b[[1]] <- max(obs1, 1) #indForefront[[group]][[ind_obs1]][[1]]
+    }
+
+    #QQQ is rlang::exec (with lapply) an alternative to mapply?
+    #QQQ or better even: direct implementation of transformations here?
     if (inverse) {
-      # b = Ainv %*% Finv(b')
+      # param = Ainv %*% (Finv(param') * b)
       as.numeric(paramTransf[["Minv"]][seq_along(parV1), seq_along(parV1)] %*%
-                   as.numeric(.mapply(FUN = function(f, x) f(x),
-                                      dots = list(paramTransf[["Finv"]][seq_along(parV1)], parV1),
-                                      MoreArgs = NULL)))
+                   (as.numeric(.mapply(FUN = function(f, x) f(x),
+                                       dots = list(paramTransf[["Finv"]][seq_along(parV1)], parV1),
+                                       MoreArgs = NULL)) * b))
     } else {
-      # b' = F(A %*% b)
+      # param' = F((A %*% param) / b)
       as.numeric(.mapply(FUN = function(f, x) f(x),
                          dots = list(paramTransf[["F"]][seq_along(parV1)],
-                                     as.numeric(paramTransf[["M"]][seq_along(parV1), seq_along(parV1)] %*% parV1)),
+                                     as.numeric(paramTransf[["M"]][seq_along(parV1), seq_along(parV1)] %*% parV1) / b),
                          MoreArgs = NULL))
     }
-  }# fn transformPars1
+  }#fn transformPars1
 
   # merge two parameter vectors
   # @param isOpt logical. Are the parameters on optimization scale?
@@ -914,6 +924,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
     if (is.null(group)) {
       stopifnot(twoGroup)
+      # give pars for both groups
       return(local({
 
         # recursive calls for the individual groups
@@ -939,7 +950,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     } else {
       # do transform
       local({
-        res0 <- transformPars1(parV[ind], inverse = isOpt)
+        frstInd <- indForefront[[group]][["inds_obs1"]][1]
+        # myObs1: numeric (even when survival)
+        myObs1 <- if (group == "x") x[[frstInd]] else y[[frstInd]]
+        res0 <- transformPars1(parV[ind], obs1 = myObs1, inverse = isOpt)
 
         if (profiled) {
           stopifnot(distO$dist != 'normal')
@@ -992,7 +1006,6 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # @return list with transformed par for single group and upper limits for delay parameters, in canonical order (bind has no effect here!)
   getParSetting.gr <- function(obs) {
     # contract: obs is sorted!
-    DELAY_MIN <- .Machine$double.xmin ##1e-9
 
     if (isSurv && (cens$n$x[["left"]] %||% 0) + (cens$n$y[["left"]] %||% 0) > 0) {
       stop("Left-censoring is not supported here!", call. = FALSE)
@@ -1017,7 +1030,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
                      #parV0 <- rlang::set_names(parV0, nm = oNames)
                      # transform start-parameters for optfun-parametrization
-                     parV0 <- transformPars1(parV0, inverse = FALSE)
+                     parV0 <- transformPars1(parV0, obs1 = firstEvTime, inverse = FALSE)
 
                      # drop scale if profiling
                      if (profiled) {
@@ -1071,7 +1084,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
                      #parV0 <- rlang::set_names(parV0, nm = oNames)
                      # transform start-parameters for optfun-parametrization
-                     parV0 <- transformPars1(parV0, inverse = FALSE)
+                     parV0 <- transformPars1(parV0, obs1 = firstEvTime, inverse = FALSE)
 
                      # drop scale if profiling
                      if (profiled) {
@@ -1092,7 +1105,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
     list(
       par = parV,
-      delay1_upper = max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
+      delay1_upper = 0, #log(firstEvTime), #max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
       delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
     )
   }# fn getParSetting.gr
@@ -1106,7 +1119,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
 
   #XXX #QQQ Should this go up to extractPars-function where the transformations are defined???
-  PAR_BOUNDS <- list(delay1 = c(lower = 0, upper = NA_real_),
+  PAR_BOUNDS <- list(delay1 = c(lower = -Inf, upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),
                      # shape lower bound for MLEnp (actually for shape1)
