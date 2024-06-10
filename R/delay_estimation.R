@@ -1105,7 +1105,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
     list(
       par = parV,
-      delay1_upper = 0, #log(firstEvTime), #max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
+      # exponential: prior transformation used #log(firstEvTime) #iso 0
+      delay1_upper = if (distO$dist == 'exponential') 0 else max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
       delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
     )
   }# fn getParSetting.gr
@@ -1119,7 +1120,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
 
   #XXX #QQQ Should this go up to extractPars-function where the transformations are defined???
-  PAR_BOUNDS <- list(delay1 = c(lower = -Inf, upper = NA_real_),
+  PAR_BOUNDS <- list(delay1 = c(lower = if (distO$dist == "exponential") -Inf else 0,
+                                upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),
                      # shape lower bound for MLEnp (actually for shape1)
