@@ -41,7 +41,7 @@ Suggests:
 URL: https://gitlab.com/imb-dev/incubate/
 BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
 Config/testthat/edition: 3
 Depends: 
     R (>= 3.5.0)

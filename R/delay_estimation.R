@@ -806,7 +806,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                                        0, 0, 0, 1), nrow = 4L, byrow = TRUE,
                                     dimnames = list(c("delay1_tr", "rate1_tr",
                                                       "delay2_tr", "rate2_tr"))),
-               weibull = matrix(c( 1, 0, 0, 0, 0, 0,
+               weibull = matrix(c( -1, 0, 0, 0, 0, 0,
                                    0, 1, 0, 0, 0, 0,
                                    0, 0, 1, 0, 0, 0,
                                    -1, 0, 0, 1, 0, 0,
@@ -838,11 +838,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                   stop("Unknown distribution", call. = FALSE)
     ),
     F = list(exponential = c(log1p, log, log, log),
-             weibull = c(identity, log, #log1p, #identity, #=shape1
+             weibull = c(log1p, log, #log1p, #identity, #=shape1
                          log, log, log, log),
              normal = c(identity, identity))[[distO$dist]],
     Finv = list(exponential = c(function(x) -expm1(x), exp, exp, exp),
-                weibull = c(identity, exp, #expm1, #identity, #=shape1
+                weibull = c(function(x) -expm1(x), exp, #expm1, #identity, #=shape1
                             exp, exp, exp, exp),
                 normal = c(identity, identity))[[distO$dist]]
   )
@@ -858,20 +858,26 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # @return transformed parameter vector, unnamed!
   transformPars1 <- function(parV1, obs1 = 1, inverse = FALSE) {
 
-
     b <- rlang::rep_along(parV1, 1)
-    if (distO$dist == "exponential") {
-      b[[1]] <- max(obs1, 1) #indForefront[[group]][[ind_obs1]][[1]]
+    if (distO$hasDelay && distO$dist %in% c("exponential", "weibull")) {
+      b[[1]] <- max(obs1, DELAY_MIN) #indForefront[[group]][[ind_obs1]][[1]]
     }
 
     #QQQ is rlang::exec (with lapply) an alternative to mapply?
     #QQQ or better even: direct implementation of transformations here?
     if (inverse) {
       # param = Ainv %*% (Finv(param') * b)
-      as.numeric(paramTransf[["Minv"]][seq_along(parV1), seq_along(parV1)] %*%
-                   (as.numeric(.mapply(FUN = function(f, x) f(x),
-                                       dots = list(paramTransf[["Finv"]][seq_along(parV1)], parV1),
-                                       MoreArgs = NULL)) * b))
+      local({
+        p <- as.numeric(paramTransf[["Minv"]][seq_along(parV1), seq_along(parV1)] %*%
+                          (as.numeric(.mapply(FUN = function(f, x) f(x),
+                                              dots = list(paramTransf[["Finv"]][seq_along(parV1)], parV1),
+                                              MoreArgs = NULL)) * b))
+        if (distO$hasDelay) {
+          # make sure that delay1 stays slightly below obs1
+          p[[1]] <- min(obs1 * (1-.Machine$double.neg.eps), p[[1]])
+        }#fi
+        p
+      })
     } else {
       # param' = F((A %*% param) / b)
       as.numeric(.mapply(FUN = function(f, x) f(x),
@@ -951,7 +957,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       # do transform
       local({
         frstInd <- indForefront[[group]][["inds_obs1"]][1]
-        # myObs1: numeric (even when survival)
+        # myObs1 as numeric by [[ (even when survival)
         myObs1 <- if (group == "x") x[[frstInd]] else y[[frstInd]]
         res0 <- transformPars1(parV[ind], obs1 = myObs1, inverse = isOpt)
 
@@ -1106,7 +1112,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     list(
       par = parV,
       # exponential: prior transformation used #log(firstEvTime) #iso 0
-      delay1_upper = if (distO$dist == 'exponential') 0 else max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
+      delay1_upper = 0, #max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
       delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
     )
   }# fn getParSetting.gr
@@ -1120,7 +1126,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
 
   #XXX #QQQ Should this go up to extractPars-function where the transformations are defined???
-  PAR_BOUNDS <- list(delay1 = c(lower = if (distO$dist == "exponential") -Inf else 0,
+  PAR_BOUNDS <- list(delay1 = c(lower = -Inf,
                                 upper = NA_real_),
                      delay2 = c(lower = -Inf, upper = NA_real_),
                      rate  = c(lower = -Inf, upper = +Inf),

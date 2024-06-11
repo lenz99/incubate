@@ -40,7 +40,7 @@ near <- function(x, y) {
 #' @param upper numeric. upper bound for parameters (boxed constraint)
 #' @param verbose numeric. Verbosity level
 #' @param method Specifies which optimizer to use
-#' @return optimization object with some common entries like `convergence`, `methodOpt` and `counts`. Or `NULL` in case of failure.
+#' @return optimization object with some common entries like `parOpt`, `valOpt` `convergence`, `methodOpt` and `counts`. Or `NULL` in case of failure.
 minObjFunAlt <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0,
                           method = c("bobyqa", "nlminb")) {
   optObj <- NULL
@@ -63,6 +63,7 @@ minObjFunAlt <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0,
                                                     rhobeg = rhob,
                                                     rhoend = rhob / 1e6))
              optObj$value <- optObj$fval
+             optObj$message <- optObj$msg
              optObj$counts <- optObj$feval
              optObj$methodOpt <- "minqa::bobyqa"
              optObj$convergence <- optObj$ierr

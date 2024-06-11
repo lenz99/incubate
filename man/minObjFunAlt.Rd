@@ -18,10 +18,16 @@ minObjFunAlt(
 
 \item{start}{vector of start values for parameters}
 
+\item{lower}{numeric. lower bound for parameters (boxed constraint)}
+
+\item{upper}{numeric. upper bound for parameters (boxed constraint)}
+
+\item{verbose}{numeric. Verbosity level}
+
 \item{method}{Specifies which optimizer to use}
 }
 \value{
-optimization object with some common entries like \code{convergence}, \code{methodOpt} and \code{counts}
+optimization object with some common entries like \code{parOpt}, \code{valOpt} \code{convergence}, \code{methodOpt} and \code{counts}. Or \code{NULL} in case of failure.
 }
 \description{
 The primary optimization routine is BFGS from \code{stats::optim}.
