@@ -620,7 +620,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       } #nf w2F
 
 
-      # w3 function. Not vectorized in argument k
+      # factory for w3 function that gives the W3-weight for the given shape parameter.
+      #+The returned W3-function is *not* vectorized in argument k
       w3FF <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineau2009")) {
 
         # catch all for n = 1
@@ -668,7 +669,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         )
       }#nf w3FF
 
-      # QQQ for W1 weights: do we use full length (even when censored obs are present?!) (W1 is used for un-profiling scale!)
+      #QQQ for W1 weights: do we use full length (even when censored obs are present?!) (W1 is used for un-profiling scale!)
       ##or #nObs = length(x) - cens$n$x[["any"]]),
       #+==> maybe best to turn off profiling when data isSurv
       # return list of weights
@@ -691,7 +692,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # where to find the parameters per group in the parameter vector of the objective function
   extractParOptInd <- if (!twoGroup) {
     # single group!
-    list(x = seq_along(trNames)) ## Cave: trNames reacts to twoPhase-setting (which I've not thought through, yet)
+    list(x = seq_along(trNames)) ##XXX Cave: trNames reacts to twoPhase-setting (which I've not thought through, yet)
   } else {
     # two group!
     #XXX exponential && profiled: indices are not correct for two groups, yet!!
@@ -991,7 +992,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
         res0
       })
-    }
+    }#esle
 
 
     # single group names
@@ -1115,7 +1116,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       delay1_upper = 0, #max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
       delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
     )
-  }# fn getParSetting.gr
+  }#fn getParSetting.gr
 
   # profile likelihood: maximize profiled log-lik f directly
   # if FALSE, go indirectly: consider min(f'^2) to hunt for *local* extremum as these local extrema have f'^2 == 0 as necessary condition
@@ -1471,7 +1472,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
            },
            stop(glue("This method {method} is not handled here!"), call. = FALSE)
     )#hctiws
-  }
+  }#fn getLogLik
 
 
   # log spacings to be maximized
@@ -1586,7 +1587,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
     log(cumDiffs)
 
-  }# fn getCumDiffs
+  }#fn getCumDiffs
 
 
   # Objective function to be minimized
@@ -1645,7 +1646,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       cat("Objfun value: ", rVal, "\n")
     }
     rVal
-  } #fn objFun
+  }#fn objFun
 
   # attach analytical solution for MLE
   if (method == 'MLEn' && !twoGroup && !twoPhase && distO$dist == 'exponential' && !isSurv) {
@@ -1663,7 +1664,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   }#fi
 
   objFun
-} #fn objFunFactory
+}#fn objFunFactory
 
 
 
@@ -1841,7 +1842,7 @@ buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
        MLEw_weight = MLEw_weight[1],
        MLEw_optim = MLEw_optim[1],
        ties = ties[1])
-}
+}#fn buildControl
 
 
 #' Fit a delayed Exponential or Weibull model to one or two given sample(s)
@@ -2070,7 +2071,7 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...) {
   } else {
     replicate(n = nsim, expr = eval(simExpr), simplify = FALSE)
   }
-}
+}#fn simulate
 
 
 #' Generate bootstrap distribution of model parameters to fitted incubate model.
