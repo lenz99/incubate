@@ -1,7 +1,7 @@
 ---
 title: "Distributions with Delay"
 author: matthias.kuhn@tu-dresden.de
-date: 2023-09-13
+date: 2024-07-25
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Distributions with Delay}
@@ -14,6 +14,12 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+
+library("dplyr")
+library("ggplot2")
+library("patchwork")
+library("cowplot")
+theme_set(cowplot::theme_cowplot())
 ```
 
 ```{r setup}
@@ -22,6 +28,44 @@ library("incubate")
 
 The delayed exponential distribution and the delayed Weibull distribution
 are the foundational data models in the `incubate`-package.
+
+## Parameter transformation
+The model fitting uses numeric optimization routines.
+We use parameter transformation to improve this process,
+in particular through suitable parameter transformation we can avoid constraints on the bounds of the parameters.
+
+For instance, the initial delay parameter $α_1$ is by definition bounded upwards by the first observation $x_{(1)}$
+and conventionally we assume $α_1 ≥ 0$ as well, in particular when we model a survival time. This 2^nd^ assumption is not strictly necessary, however, as a model with negative delay might also describe well a survival data.
+
+To get rid of the (upper) bounds, an idea is to use the 1^st^ observation as a normalization for $α_1$ and find a transformation to **whole ℝ**:
+
+For instance, assuming only an upper bound ($α_1 ≤ x_{(1)}$, also negative values allowed) we get a transformation involving the logarithm:
+\[
+\tilde{α}_1 := \log(\frac{x_{(1)}-α_1}{x_{(1)}}) = \log(1 - \frac{α_1}{x_{(1)}})
+\]
+
+Alternatively, if we want to enforce also the lower bound for $α_1$
+we can apply a logit-transformation to rescale the delay
+from $[0,x_{(1)}]$ to whole ℝ:
+\[
+\tilde{α}_1 := \operatorname{logit}(\frac{α_1}{x_{(1)}}) = -\log(1 + \frac{x_{(1)} - 2α_1}{α_1})
+\]
+
+The back-transformation is $α_1 = \frac{x_{(1)}}{1+\exp(-\tilde{α}_1)}$.
+We visualize this logit-transformation:
+```{r plot_logit_transf, echo=FALSE, fig.align='center', fig.width=8, fig.height=3}
+x1 <- 7
+
+ggplot() + xlim(0, 7) +
+  geom_function(fun = \(alpha1) -log1p((x1 - 2 * alpha1)/alpha1), n = 1001) +
+  labs(x = expression(alpha), y = expression(tilde(alpha))) |
+  
+  ggplot() + xlim(-9, 9) +
+  geom_function(fun = \(alpha1_tr) x1 / (expm1(-alpha1_tr)+2), n = 1001) + 
+  labs(x = expression(tilde(alpha)), y = expression(alpha),
+       caption = bquote("transformation for data with " * x[(1)] == .(x1)))
+```
+
 
 
 ## Random right censoring

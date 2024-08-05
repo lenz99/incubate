@@ -8,7 +8,7 @@ using namespace cpp11;
 //' log-space difference of two values
 //' @param lx logarithm of first value
 //' @param ly logarithm of second value
-//' @return log-space difference
+//' @return log-space difference: log(exp(lx)-exp(ly))
 //' @export
 [[cpp11::register]]
 double logspace_sub_cpp(double lx, double ly) {
