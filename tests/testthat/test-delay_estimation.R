@@ -103,7 +103,7 @@ test_that("Parameter extraction and transformation", {
                                                          -1, 0, 1, 0,
                                                          0, 0, 0, 1), nrow = 4L, byrow = TRUE,
                                                       dimnames = list(c("delay1_tr", "rate1_tr", "delay2_tr", "rate2_tr"))),
-                                 weibull = matrix(c( -1, 0, 0, 0, 0, 0,
+                                 weibull = matrix(c( 1, 0, 0, 0, 0, 0,
                                                      0, 1, 0, 0, 0, 0,
                                                      0, 0, 1, 0, 0, 0,
                                                      -1, 0, 0, 1, 0, 0,
@@ -130,10 +130,10 @@ test_that("Parameter extraction and transformation", {
 
 
         PARAM_TRANSF_F <- list(exponential = c(stats::qlogis, log, log, log),
-                               weibull = c(log1p, log, #log1p, #identity, #=shape1
+                               weibull = c(stats::qlogis, log, #log1p, #identity, #=shape1
                                            log, log, log, log))[[distO$dist]]
         PARAM_TRANSF_Finv <- list(exponential = c(stats::plogis, exp, exp, exp),
-                                  weibull = c(function(x) -expm1(x), exp, #expm1, #identity, #=shape1
+                                  weibull = c(stats::plogis, exp, #expm1, #identity, #=shape1
                                               exp, exp, exp, exp))[[distO$dist]]
 
         stopifnot(length(parV1) <= NCOL(PARAM_TRANSF_M), NCOL(PARAM_TRANSF_M) == length(PARAM_TRANSF_F))
@@ -322,11 +322,11 @@ test_that("Parameter extraction and transformation", {
 
   # weibull
   local({
-    x <- rweib_delayed(n=3, delay1 = 5, shape1 = 1.2)
+    x <- rweib_delayed(n = 3, delay1 = 5, shape1 = 1.2)
     par_weib1 <- c(delay1 = 5, shape1 = .8, scale1 = 1.5)
     # extractParsTest specific: incomplete parameter vector
-    par_weib1s <- c(delay1 = 5, shape1 = .8)
-    par_tf_weib1 <- c(delay1_tr = log1p(-par_weib1[[1]]/min(x)), shape1_tr = log(par_weib1[["shape1"]]))
+    par_weib1s <- par_weib1[1:2]
+    par_tf_weib1 <- c(delay1_tr = stats::qlogis(par_weib1[[1]]/min(x)), shape1_tr = log(par_weib1[["shape1"]]))
 
     objFun_weib1 <- incubate:::objFunFactory(x = x, distO = distO_w, twoPhase = FALSE)
     extPars_weib1 <- rlang::env_get(rlang::fn_env(objFun_weib1), "extractPars")
@@ -352,7 +352,7 @@ test_that("Parameter extraction and transformation", {
     par_weib2 <- c(delay1.x = 1, shape1.x = 1.8, scale1.x = 7,
                    delay1.y = 4.2, shape1.y = 3.4, scale1.y = 12)
     par_weib2.y <- par_weib2[4:6] |> setNames(nm = c("delay1", "shape1", "scale1"))
-    par_tf_weib2.y <- c(log1p(-par_weib2.y[1]/min(y)), log(par_weib2.y[-1])) |> setNames(nm = paste0(names(par_weib2.y), "_tr"))
+    par_tf_weib2.y <- c(stats::qlogis(par_weib2.y[1]/min(y)), log(par_weib2.y[-1])) |> setNames(nm = paste0(names(par_weib2.y), "_tr"))
 
     expect_identical(extPars_weib2(par_weib2, isOpt = FALSE, named = TRUE), par_weib2)
     expect_identical(extPars_weib2(par_weib2, isOpt = FALSE, named = TRUE, group = "y"), par_weib2.y)

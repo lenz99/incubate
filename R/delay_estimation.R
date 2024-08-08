@@ -817,7 +817,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                                        0, 0, 0, 1), nrow = 4L, byrow = TRUE,
                                     dimnames = list(c("delay1_tr", "rate1_tr",
                                                       "delay2_tr", "rate2_tr"))),
-               weibull = matrix(c( -1, 0, 0, 0, 0, 0,
+               weibull = matrix(c( 1, 0, 0, 0, 0, 0,
                                    0, 1, 0, 0, 0, 0,
                                    0, 0, 1, 0, 0, 0,
                                    -1, 0, 0, 1, 0, 0,
@@ -849,11 +849,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                   stop("Unknown distribution", call. = FALSE)
     ),
     F = list(exponential = c(stats::qlogis, log, log, log),
-             weibull = c(log1p, log, #log1p, #identity, #=shape1
+             weibull = c(stats::qlogis, log, #log1p, #identity, #=shape1
                          log, log, log, log),
              normal = c(identity, identity))[[distO$dist]],
     Finv = list(exponential = c(stats::plogis, exp, exp, exp),
-                weibull = c(function(x) -expm1(x), exp, #expm1, #identity, #=shape1
+                weibull = c(stats::plogis, exp, #expm1, #identity, #=shape1
                             exp, exp, exp, exp),
                 normal = c(identity, identity))[[distO$dist]]
   )
@@ -1124,7 +1124,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     list(
       par = parV,
       # exponential: prior transformation used #log(firstEvTime) #iso 0
-      delay1_upper = if (distO$dist == 'exponential') Inf else 0, #max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
+      delay1_upper = Inf,
       delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
     )
   }#fn getParSetting.gr
