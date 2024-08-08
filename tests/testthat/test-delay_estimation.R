@@ -98,7 +98,7 @@ test_that("Parameter extraction and transformation", {
       transformPars1Test <- function(parV1, obs1) {
         # parameter transformation matrices
         PARAM_TRANSF_M <- switch(distO$dist,
-                                 exponential = matrix(c( -1, 0, 0, 0,
+                                 exponential = matrix(c( 1, 0, 0, 0,
                                                          0, 1, 0, 0,
                                                          -1, 0, 1, 0,
                                                          0, 0, 0, 1), nrow = 4L, byrow = TRUE,
@@ -129,10 +129,10 @@ test_that("Parameter extraction and transformation", {
         )
 
 
-        PARAM_TRANSF_F <- list(exponential = c(log1p, log, log, log),
+        PARAM_TRANSF_F <- list(exponential = c(stats::qlogis, log, log, log),
                                weibull = c(log1p, log, #log1p, #identity, #=shape1
                                            log, log, log, log))[[distO$dist]]
-        PARAM_TRANSF_Finv <- list(exponential = c(function(x) -expm1(x), exp, exp, exp),
+        PARAM_TRANSF_Finv <- list(exponential = c(stats::plogis, exp, exp, exp),
                                   weibull = c(function(x) -expm1(x), exp, #expm1, #identity, #=shape1
                                               exp, exp, exp, exp))[[distO$dist]]
 
@@ -238,7 +238,7 @@ test_that("Parameter extraction and transformation", {
     rlang::fn_env() |> rlang::env_get("extractPars")
 
   par_exp1 <- c(delay1 = 3, rate1 = .8)
-  par_tf_exp1 <- c(delay1_tr = log1p(-par_exp1[[1L]]/min(dummydat)),
+  par_tf_exp1 <- c(delay1_tr = stats::qlogis(par_exp1[[1L]]/min(dummydat)),
                    rate1_tr = log(par_exp1[[2L]]))
 
   expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, named = TRUE), par_exp1)
@@ -293,7 +293,7 @@ test_that("Parameter extraction and transformation", {
 
     par_exp2b <- c(rate1 = .23, delay1.x = 4.8, delay1.y = 2.7)
     par_tf_exp2b <- c(rate1_tr = log(par_exp2b[["rate1"]]),
-                      delay1_tr.x = log1p(-par_exp2b[[2]]/min(x)), delay1_tr.y = log1p(-par_exp2b[[3]]/min(y)))
+                      delay1_tr.x = stats::qlogis(par_exp2b[[2]]/min(x)), delay1_tr.y = stats::qlogis(par_exp2b[[3]]/min(y)))
 
     expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE), par_exp2b)
     expect_identical(extPars_exp2b(parV = par_exp2b, isOpt = FALSE, named = TRUE, group = "x"), setNames(par_exp2b[c(2, 1)], c("delay1", "rate1")))

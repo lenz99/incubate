@@ -39,20 +39,22 @@ and conventionally we assume $α_1 ≥ 0$ as well, in particular when we model a
 
 To get rid of the (upper) bounds, an idea is to use the 1^st^ observation as a normalization for $α_1$ and find a transformation to **whole ℝ**:
 
+### Log-based transformation
 For instance, assuming only an upper bound ($α_1 ≤ x_{(1)}$, also negative values allowed) we get a transformation involving the logarithm:
 \[
 \tilde{α}_1 := \log(\frac{x_{(1)}-α_1}{x_{(1)}}) = \log(1 - \frac{α_1}{x_{(1)}})
 \]
 
+### Logit-based transformation
 Alternatively, if we want to enforce also the lower bound for $α_1$
-we can apply a logit-transformation to rescale the delay
+we can apply a **logit-based transformation** to rescale the delay
 from $[0,x_{(1)}]$ to whole ℝ:
 \[
 \tilde{α}_1 := \operatorname{logit}(\frac{α_1}{x_{(1)}}) = -\log(1 + \frac{x_{(1)} - 2α_1}{α_1})
 \]
 
 The back-transformation is $α_1 = \frac{x_{(1)}}{1+\exp(-\tilde{α}_1)}$.
-We visualize this logit-transformation:
+We visualize this logit-based transformation:
 ```{r plot_logit_transf, echo=FALSE, fig.align='center', fig.width=8, fig.height=3}
 x1 <- 7
 

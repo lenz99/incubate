@@ -1,4 +1,14 @@
-
+#XXX read here
+# transformation of parameters works currently: delay1 is transformed involving log and first observations
+#+so we do not need a strict upper bound. But delay1 can become negative.
+#+currently, we use negative bound to avoid negative delay (but package rootSolve does not allow for bounds during root-finding)
+#+
+#+ **neXt**
+#+ 1/ use logit-based transformation for delay1: it will enforce non-negativity of delay1. then we do not need lower bound to avoid non-negative.
+#+ 2/ make transformations easier (not via matrices and functions stored but to be implemented more directly)
+#+ 3/ work on rootSolve way to implement MLEw. There we would check that we have indeed local maximum of MLEw
+#+ 4/ check that censorings are implmemented correctly
+#+ 5/ write up MS1
 
 #' Factory method for objective function
 #'
@@ -801,7 +811,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # parameter transformation matrices (for single group)
   paramTransf <- list(
     M = switch(distO$dist,
-               exponential = matrix(c( -1, 0, 0, 0,
+               exponential = matrix(c( 1, 0, 0, 0,
                                        0, 1, 0, 0,
                                        -1, 0, 1, 0,
                                        0, 0, 0, 1), nrow = 4L, byrow = TRUE,
@@ -838,11 +848,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                                   dimnames = list(c("mean", "sd"))),
                   stop("Unknown distribution", call. = FALSE)
     ),
-    F = list(exponential = c(log1p, log, log, log),
+    F = list(exponential = c(stats::qlogis, log, log, log),
              weibull = c(log1p, log, #log1p, #identity, #=shape1
                          log, log, log, log),
              normal = c(identity, identity))[[distO$dist]],
-    Finv = list(exponential = c(function(x) -expm1(x), exp, exp, exp),
+    Finv = list(exponential = c(stats::plogis, exp, exp, exp),
                 weibull = c(function(x) -expm1(x), exp, #expm1, #identity, #=shape1
                             exp, exp, exp, exp),
                 normal = c(identity, identity))[[distO$dist]]
@@ -859,6 +869,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # @return transformed parameter vector, unnamed!
   transformPars1 <- function(parV1, obs1 = 1, inverse = FALSE) {
 
+    # b as a normalizing vector for the parameter vector parV1
     b <- rlang::rep_along(parV1, 1)
     if (distO$hasDelay && distO$dist %in% c("exponential", "weibull")) {
       b[[1]] <- max(obs1, DELAY_MIN) #indForefront[[group]][[ind_obs1]][[1]]
@@ -1113,7 +1124,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     list(
       par = parV,
       # exponential: prior transformation used #log(firstEvTime) #iso 0
-      delay1_upper = 0, #max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
+      delay1_upper = if (distO$dist == 'exponential') Inf else 0, #max(DELAY_MIN, firstEvTime - .01/length(obs), firstEvTime * .9999),
       delay2_upper = log(max(DELAY_MIN, obs[[length(obs)]] - .02/length(obs), obs[[length(obs)]]*.999))
     )
   }#fn getParSetting.gr
