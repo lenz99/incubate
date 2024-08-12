@@ -1281,9 +1281,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # Penalty term is subtracted here, see `penF`
   # @param pars complete vector of parameters (can refer to two groups)
   # @param group which group?
-  # @param criterion logical. If `TRUE`, then pars are on original scale *and* the proper log-likelihood is returned. This flag currently serves a double purpose! (Disentangle maybe?)
+  # @param isOrig Is the parameter vector already on original scale?
+  # @param criterion logical. If `TRUE`, then the proper log-likelihood is returned.
   # @return log-likelihood (certain flavour or related like negative L2-norm of gradient of log-likelihood) for specified group
-  getLogLik <- function(pars, group, criterion = FALSE) {
+  getLogLik <- function(pars, group, isOrig = FALSE, criterion = FALSE) {
 
     # Old idea was to
     # change signature to be with pars.gr and obs for both getLogLik and getCumDiffs
@@ -1294,7 +1295,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
 
     # extract parameters for specified group on original scale (for CDF)
-    pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
+    pars.gr <- extractPars(pars, group = group, isOpt = !isOrig, transform = !isOrig)
 
 
     if (criterion) {
@@ -1315,7 +1316,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
           )
         }#esle
       )
-    } #fi criterion
+    }#fi criterion
 
 
     #Calculate the objective function to be maximized which depends on
@@ -1360,8 +1361,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                  # objective function to maximize:
                  # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
                  # 2nd & 3rd summand could also be: - log(sum(obs_c^k)) + log(n*k)
-                 nObs * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) +
-                   -penF(k, nObs = nObs)
+                 nObs * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) - penF(k, nObs = nObs)
 
                  # alternative:
                  #indirect way: !profiled_llik_directly
@@ -1407,12 +1407,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                # numeric response, non-Surv
                obs_c <- obs - pars.gr[[1L]]
 
-               # neg of squared summands are maximized to come close to 0 (could also be abs())
+               # consider length of 1st derivative vector: it vanishes for any local extremum (necessary condition)
+               #+hence, neg of squared summands are maximized to come close to 0 (could also be abs())
                -(weights$W2[[group]]/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c^k)/sum(obs_c^k))^2 +
                  # 1st factor is inverse of harmonic mean
                  -(mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)) - w3F(k))^2 +
                  # penalization term
-                 #XXX is it safe/right scale if we subtract penalty term here on objective function coming from 1st deriv (indirect way)
+                 #XXX is it safe/right scale if we subtract penalty term here on objective function coming from length of 1st deriv vector (indirect way)
                  -penF(k, nObs = nObs)
 
              } else {
@@ -1638,12 +1639,12 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                          stopifnot(!twoPhase) #XXX not implemented yet!
 
                          if (!twoGroup) {
-                           getLogLik(pars, group = "x", criterion = criterion)
+                           getLogLik(pars, group = "x", isOrig = criterion, criterion = criterion)
                          } else {
                            #XXX think here: can we use sum of log-lik from two groups in case of derivative-based solutions (MLEw, min or root)
                            local({
-                             res0 <- c(getLogLik(pars, group = "x", criterion = criterion),
-                                       getLogLik(pars, group = "y", criterion = criterion))
+                             res0 <- c(getLogLik(pars, group = "x", isOrig = criterion, criterion = criterion),
+                                       getLogLik(pars, group = "y", isOrig = criterion, criterion = criterion))
 
                              if (aggregated) sum(res0) else res0
                            })
