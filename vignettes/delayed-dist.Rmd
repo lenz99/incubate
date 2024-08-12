@@ -52,8 +52,8 @@ from $[0,x_{(1)}]$ to whole ℝ:
 \[
 \tilde{α}_1 := \operatorname{logit}(\frac{α_1}{x_{(1)}}) = -\log(1 + \frac{x_{(1)} - 2α_1}{α_1})
 \]
-
-The back-transformation is $α_1 = \frac{x_{(1)}}{1+\exp(-\tilde{α}_1)}$.
+In R, the logit function is implemented efficiently in `stats::qlogis`.
+The back-transformation is $α_1 = \frac{x_{(1)}}{1+\exp(-\tilde{α}_1)}$ (cf `stats::plogis` in R).
 We visualize this logit-based transformation:
 ```{r plot_logit_transf, echo=FALSE, fig.align='center', fig.width=8, fig.height=3}
 x1 <- 7
