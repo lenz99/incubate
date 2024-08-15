@@ -522,13 +522,14 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80%.
 #' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which might be enough for power analysis.
 #' @param nRange integer. Admissible range for sample size when power is pre-specified and sample size is requested.
+#' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FALSE, param = "delay1",
                        test = c('bootstrap', 'pearson', 'moran', 'logrank', 'logrank_pp', "LR"),
                        eff = stop("Provide parameters for both groups that reflect the effect!"),
                        n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
-                       nRange = c(5, 50)){
+                       nRange = c(5, 50), verbose=0){
 
   tol_pow <- .001
   distribution <- match.arg(distribution)

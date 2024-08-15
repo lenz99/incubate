@@ -173,6 +173,9 @@ test_that('quantile function (percentage point function) of delayed distribution
 
 
 test_that('(restricted) mean survival time of delayed distributions', {
+  withr::local_package("tidyr")
+  withr::local_package("dplyr")
+
   # restriction within delay period:
   earlyTP <- seq.int(from = 0, to = 5, length.out = 11L)
 

@@ -1140,7 +1140,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
     grNames <- names(x[["data"]])
 
     p <- ggplot2::ggplot(data = tibble::enframe(unlist(x[["data"]]), name = "group"),
-                         mapping = ggplot2::aes(x = value, col = substr(x = group, 1L, 1L))) +
+                         mapping = ggplot2::aes(x = .data$value, col = substr(x = .data$group, 1L, 1L))) +
       # add estimated delay models
       ggplot2::geom_function(mapping = ggplot2::aes(col = "x"), inherit.aes = FALSE,
                              fun = cumFun, args = coef(x, group = "x"), linetype = "dashed") +
@@ -1150,7 +1150,7 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...){
   } else {
     grNames <- "x"
     p <- ggplot2::ggplot(data = tibble::tibble(value=x[["data"]]),
-                         mapping = ggplot2::aes(x = value)) +
+                         mapping = ggplot2::aes(x = .data$value)) +
       # add estimated delay model
       ggplot2::geom_function(inherit.aes = FALSE,
                              fun = cumFun,

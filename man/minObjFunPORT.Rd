@@ -6,6 +6,17 @@
 \usage{
 minObjFunPORT(objFun, start, lower = -Inf, upper = +Inf, verbose = 0)
 }
+\arguments{
+\item{objFun}{objective function}
+
+\item{start}{numeric vector of parameter values to start optimization}
+
+\item{lower}{numeric. lower bound for parameters (boxed constraint)}
+
+\item{upper}{numeric. upper bound for parameters (boxed constraint)}
+
+\item{verbose}{numeric. Verbosity level.}
+}
 \description{
 Minimize an objective function with PORT routine (nlminb)
 }

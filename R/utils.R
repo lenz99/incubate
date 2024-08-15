@@ -14,6 +14,11 @@ as_percent <- function(x, digits = 1) {
 }
 
 #' Minimize an objective function with PORT routine (nlminb)
+#' @param objFun objective function
+#' @param start numeric vector of parameter values to start optimization
+#' @param lower numeric. lower bound for parameters (boxed constraint)
+#' @param upper numeric. upper bound for parameters (boxed constraint)
+#' @param verbose numeric. Verbosity level.
 minObjFunPORT <- function(objFun, start, lower = -Inf, upper = +Inf, verbose = 0) {
   optObj <- NULL
   try({

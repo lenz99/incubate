@@ -88,21 +88,31 @@ mweib_delayed(
 
 \item{scale1}{numeric. First scale parameter (inverse of rate), must be positive.}
 
+\item{delay2}{numeric. The second delay, must be non-negative.}
+
+\item{shape2}{numeric. The second shape parameter, must be non-negative.}
+
+\item{scale2}{numeric. The second scale parameter (inverse of rate), must be positive.}
+
 \item{delay}{numeric. Alias for first delay.}
 
 \item{shape}{numeric. Alias for first shape.}
 
 \item{scale}{numeric. Alias for first scale.}
 
+\item{log}{logical. Return value on log-scale?}
+
 \item{q}{A numeric vector of quantile values.}
+
+\item{lower.tail}{logical. Give cumulative probability of lower tail?}
+
+\item{log.p}{logical. P-value on log-sclae?}
 
 \item{p}{A numeric vector of probabilities.}
 
 \item{n}{integer. Number of random observations requested.}
 
 \item{t}{A numeric vector of times that restrict the mean survival. Default is \code{+Inf}, i.e., the unrestricted mean survival time.}
-
-\item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \code{\link[stats:Weibull]{stats::dweibull()}}}
 }
 \value{
 Functions pertaining to the delayed Weibull distribution:

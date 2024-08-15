@@ -16,7 +16,8 @@ power_diff(
   power = NULL,
   nPowerSim = 1600,
   R = 201,
-  nRange = c(5, 50)
+  nRange = c(5, 50),
+  verbose = 0
 )
 }
 \arguments{
@@ -43,6 +44,8 @@ power_diff(
 \item{R}{integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around \code{R=200} gives a resolution of 0.5\% which might be enough for power analysis.}
 
 \item{nRange}{integer. Admissible range for sample size when power is pre-specified and sample size is requested.}
+
+\item{verbose}{numeric. How many details are requested? Higher value means more details. 0=off, no details.}
 }
 \value{
 List of results of power simulation. Or \code{NULL} in case of errors.

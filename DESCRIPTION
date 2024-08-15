@@ -30,10 +30,13 @@ Imports:
     tibble
 Suggests:
     boot,
+    dplyr,
     future.callr,
     ggplot2 (>= 3.3),
     knitr,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    tidyr,
+    withr
 URL: https://gitlab.com/imb-dev/incubate/
 BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
 RoxygenNote: 7.3.2

@@ -26,6 +26,9 @@
 #' @param rate numeric. Alias for first rate.
 #' @param delay2 numeric. The second delay, must be non-negative.
 #' @param rate2 numeric. The second event rate, must be non-negative.
+#' @param log logical. Return value on log-scale?
+#' @param lower.tail logical. Give cumulative probability of lower tail?
+#' @param log.p logical. P-value on log-sclae?
 #' @param ... further arguments are passed on to the underlying non-delayed function, e.g., `lower.tail=` to [stats::pexp()]
 #' @return Functions pertaining to the delayed exponential distribution:
 #' * `dexp_delayed` gives the density
@@ -269,7 +272,12 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = N
 #' @param delay numeric. Alias for first delay.
 #' @param shape numeric. Alias for first shape.
 #' @param scale numeric. Alias for first scale.
-#' @param ... further arguments are passed on to the underlying non-delayed function, e.g., [stats::dweibull()]
+#' @param delay2 numeric. The second delay, must be non-negative.
+#' @param shape2 numeric. The second shape parameter, must be non-negative.
+#' @param scale2 numeric. The second scale parameter (inverse of rate), must be positive.
+#' @param log logical. Return value on log-scale?
+#' @param lower.tail logical. Give cumulative probability of lower tail?
+#' @param log.p logical. P-value on log-sclae?
 #' @return Functions pertaining to the delayed Weibull distribution:
 #' * `dweib_delayed` gives the density
 #' * `pweib_delayed` gives the distribution function

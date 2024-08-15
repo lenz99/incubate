@@ -78,11 +78,17 @@ mexp_delayed(
 
 \item{rate}{numeric. Alias for first rate.}
 
+\item{log}{logical. Return value on log-scale?}
+
 \item{q}{A numeric vector of quantile values.}
 
 \item{...}{further arguments are passed on to the underlying non-delayed function, e.g., \verb{lower.tail=} to \code{\link[stats:Exponential]{stats::pexp()}}}
 
 \item{p}{A numeric vector of probabilities.}
+
+\item{lower.tail}{logical. Give cumulative probability of lower tail?}
+
+\item{log.p}{logical. P-value on log-sclae?}
 
 \item{n}{integer. Number of random observations requested.}
 

@@ -4,8 +4,6 @@
 
 test_that('Parameter extraction and transformation', {
 
-  suppressPackageStartupMessages(library("magrittr"))
-
   # test getDist for parameter names:
   # on transformed scale (for optimization)
   expect_identical(incubate:::getDist(distribution = "weibull", type = "param", twoPhase = FALSE, twoGroup = TRUE,
