@@ -2,8 +2,8 @@
 % Please edit documentation in R/incubate-package.R
 \docType{package}
 \name{incubate}
-\alias{incubate}
 \alias{incubate-package}
+\alias{incubate}
 \title{Incubate package for parametric time-to-event analysis with delay}
 \description{
 Estimation and statistical tests on parameters in parametric time-to-event analyses with delay.
