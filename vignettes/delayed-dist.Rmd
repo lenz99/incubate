@@ -9,11 +9,13 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r, include = FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+
+library("incubate")
 
 library("dplyr")
 library("ggplot2")
@@ -22,9 +24,8 @@ library("cowplot")
 theme_set(cowplot::theme_cowplot())
 ```
 
-```{r setup}
-library("incubate")
-```
+
+
 
 The delayed exponential distribution and the delayed Weibull distribution
 are the foundational data models in the `incubate`-package.
@@ -37,7 +38,7 @@ As additional third parameter we use delay $α>0$ the density reads for any $x>0
 f(x) = \frac{k· (x-α)^{k-1}}{β^k} · \exp(-\big(\frac{x-α}{β}\big)^k)
 \]
 
-If we have a data sample $\mathbf{x}$ of size $n$ and want to apply maximum likelihood estimation for parameters we get as log-likelihood function
+If we have a data sample $\mathbf{x}$ of size $n$ and want to apply **maximum likelihood (ML)** estimation for parameters we get as log-likelihood function
 \[
 l_\mathbf{x}(α, k, β) = n \log(k) - nk \log(β) + (k-1) · ∑_{i=1}^n \log(x_i-α) - β^{-k} · ∑_{i=1}^n (x_i - α)^k
 \]
@@ -52,10 +53,58 @@ $\hat β = \sqrt[k]{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k}$.
 If we substitute this in the log-likelihood equation we get
 \[
 \begin{aligned}
-l_{\mathbf{x},P}(α, k) &= n \log(k) - n \log(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k) + (k-1) · ∑_{i=1}^n \log(x_i-α) - n\\
-   &= n · \big[ \log(k) - \log(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k) + (k-1) · \frac{1}{n} ∑_{i=1}^n \log(x_i-α) - 1\big]
+l^P_{\mathbf{x}}(α, k) &= n \log(k) - n \log(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k) + (k-1) · ∑_{i=1}^n \log(x_i-α) - n\\
+   &= n · \Big[ \log(k) - \log\big(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · \frac{1}{n} ∑_{i=1}^n \log(x_i-α) - 1\Big]
 \end{aligned}
 \]
+
+Forming the partial derivatives of $l^P(α, k)$ we get:
+\[
+\begin{aligned}
+\frac{\partial l^P}{\partial α}(α, k) &= n · \Big[ \frac{\frac{1}{n} ∑_{i=1}^n k (x_i - α)^{k-1}}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
+  &= n · \Big[ k · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
+\frac{\partial l^P}{\partial k}(α, k) &= n · \Big[ \frac{1}{k} - \frac{\frac{1}{n} ∑_i \log(x_i-α) · (x_i-α)^k}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]\\
+  &= n · \Big[ \frac{1}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]
+\end{aligned}
+\]
+
+Setting these two partial derivatives to zer0 we get:
+
+* from delay α
+\[
+\begin{aligned}
+\frac{k}{k-1} · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α} &= 0\\
+\frac{k}{k-1} - \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α} · \frac{∑_{i=1}^n (x_i - α)^k}{∑_{i=1}^n (x_i - α)^{k-1}} &= 0
+\end{aligned}
+\]
+
+* from shape $k$
+\[
+\frac{1}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) = 0
+\]
+
+### Weighted MLE (MLEw)
+Cousineau (2009) proposes a slightly varied equation to solve for the parameter estimates.
+The scale parameter β gets estimated using a weighting factor $W_1$,
+\[
+\hat β = \sqrt[k]{\frac{1}{n} ∑_{i=1}^n \frac{(x_i - α)^k}{W_1}}
+\]
+
+For the remaining parameters, we modify the partial derivatives equations of the profiled log-likelihood function.
+It can be seen to come from the following partial derivatives of a modified log-likelihood function,
+where $W_1$, $W_2$ and $W_3(k)$ are weights that depend on sample size $n$.
+Actually, these weights are random variables that ultimately depend on the true parameter α and k
+but we treat $W_1$ and $W_2$ as fixed for given $n$ and we model $W_3$ as function of shape $k$ for given $n$.
+
+\[
+\begin{aligned}
+\frac{\partial l^W}{\partial α}(α, k) &= n · \Big[ W_3(k) · (k-1) · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
+\frac{\partial l^W}{\partial k}(α, k) &= n · \Big[ \frac{W_2}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]
+\end{aligned}
+\]
+
+
+
 
 ## Parameter transformation
 The model fitting uses numeric optimization routines.
