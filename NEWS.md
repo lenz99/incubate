@@ -1,5 +1,5 @@
 
-# incubate 1.2.1.9033
+# incubate 1.3.0
 * implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter
 * use some log-transformed parameters internally for more stable and less constrained optimization
 * `test_diff`: allow for likelihood-ratio test

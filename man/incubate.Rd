@@ -17,7 +17,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Matthias Kuhn \email{matthias.kuhn@tu-dresden.de} (\href{https://orcid.org/0000-0003-2868-5155}{ORCID})
+\strong{Maintainer}: Matthias Kuhn \email{matthias.kuhn@tu-dresden.de} (\href{https://orcid.org/0000-0003-2868-5155}{ORCID}) [copyright holder]
 
 }
 \keyword{internal}

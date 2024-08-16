@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# incubate
+# incubate package
 
 <!-- badges: start -->
 <!-- badges: end -->
@@ -55,9 +55,9 @@ comparisons in a two group setting.
 ``` r
 # confidence interval for delay-parameters
 confint(fm, parm = c('delay1.x', 'delay1.y'))
-#>             2.5%  97.5%
-#> delay1.x 0.80603 1.0943
-#> delay1.y 1.35055 1.7531
+#>               2.5%    97.5%
+#> delay1.x 0.8060324 1.094331
+#> delay1.y 1.3505534 1.753090
 
 # test on difference in delay
 # for real applications use R>=1000 bootstrap draws

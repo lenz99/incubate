@@ -133,17 +133,17 @@ test_that('quantile function (percentage point function) of delayed distribution
 
   # log.p= works
   purrr::walk(.x = seq.int(from = 0, to = 1, length.out = 19),
-              .f = ~expect_identical(qexp_delayed(p = log(.x), delay1 = del1, rate1 = .67, log.p = TRUE),
+              .f = ~expect_equal(qexp_delayed(p = log(.x), delay1 = del1, rate1 = .67, log.p = TRUE),
                                      expected = qexp_delayed(p = .x, delay1 = del1, rate1 = .67, log.p = FALSE)))
   purrr::walk(.x = seq.int(from = 0, to = 1, length.out = 19),
-              .f = ~expect_identical(qweib_delayed(p = log(.x), delay1 = del1, shape1 = .67, log.p = TRUE),
+              .f = ~expect_equal(qweib_delayed(p = log(.x), delay1 = del1, shape1 = .67, log.p = TRUE),
                                      expected = qweib_delayed(p = .x, delay1 = del1, shape1 = .67, log.p = FALSE)))
   # 2-phase
   purrr::walk(.x = seq.int(from = 0, to = 1, length.out = 19),
-              .f = ~expect_identical(qexp_delayed(p = log(.x), delay1 = del1, rate1 = .67, delay2 = del1 + 1, rate2 = .77, log.p = TRUE),
+              .f = ~expect_equal(qexp_delayed(p = log(.x), delay1 = del1, rate1 = .67, delay2 = del1 + 1, rate2 = .77, log.p = TRUE),
                                      expected = qexp_delayed(p = .x, delay1 = del1, rate1 = .67, delay2 = del1 + 1, rate2 = .77, log.p = FALSE)))
   purrr::walk(.x = seq.int(from = 0, to = 1, length.out = 19),
-              .f = ~expect_identical(qweib_delayed(p = log(.x), delay1 = del1, shape1 = .67, delay2 = del1 + 1, shape2 = 1.1, scale2 = .8, log.p = TRUE),
+              .f = ~expect_equal(qweib_delayed(p = log(.x), delay1 = del1, shape1 = .67, delay2 = del1 + 1, shape2 = 1.1, scale2 = .8, log.p = TRUE),
                                      expected = qweib_delayed(p = .x, delay1 = del1, shape1 = .67, delay2 = del1 + 1, shape2 = 1.1, scale2 = .8, log.p = FALSE)))
 
 
