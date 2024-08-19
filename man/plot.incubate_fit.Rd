@@ -4,7 +4,7 @@
 \alias{plot.incubate_fit}
 \title{Plot a fitted delay-model object of class \code{incubate_fit}}
 \usage{
-\method{plot}{incubate_fit}(x, y, title, subtitle, ...)
+\method{plot}{incubate_fit}(x, y, title, subtitle, xlim, ...)
 }
 \arguments{
 \item{x}{a fitted delay-model}
@@ -14,6 +14,8 @@
 \item{title}{character. Optionally, provide a title to the plot.}
 
 \item{subtitle}{character. Optionally, provide a subtitle to the plot. By default the coefficients are shown.}
+
+\item{xlim}{numeric. Optionally, limits for the x-axis (time). If unspecified starts from 0 to last observation.}
 }
 \description{
 The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown together with the parametric model fit.

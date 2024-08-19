@@ -56,8 +56,9 @@ summary.incubate_fit <- function(object, ...) {
 #' @param y not used
 #' @param title character. Optionally, provide a title to the plot.
 #' @param subtitle character. Optionally, provide a subtitle to the plot. By default the coefficients are shown.
+#' @param xlim numeric. Optionally, limits for the x-axis (time). If unspecified starts from 0 to last observation.
 #' @export
-plot.incubate_fit <- function(x, y, title, subtitle, ...) {
+plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
   # parameter y comes from the plot-generic but y is not used here.
   stopifnot(inherits(x, "incubate_fit"))
 
@@ -107,10 +108,12 @@ plot.incubate_fit <- function(x, y, title, subtitle, ...) {
   }
   if (missing(subtitle)) subtitle <- if (x[["twoGroup"]]) paste(coefPrint("x"), coefPrint("y"), sep = " - ") else coefPrint("x")
 
+  if (missing(xlim) || is.null(xlim)) xlim <- c(0L, NA)
 
   p +
-    ggplot2::xlim(0L, NA) +
-    ggplot2::coord_trans(y = "reverse") + # transforms "after_stat" which matters for stat_ecdf
+    #ggplot2::xlim(0L, NA) +
+    # transforms "after_stat" which matters for stat_ecdf
+    ggplot2::coord_trans(y = "reverse", xlim = xlim) +
     ggplot2::labs(x = 'Time', y = 'Cumulative prop. of events',
                   col = if (x[["twoGroup"]]) 'Group' else NULL,
                   title = title, subtitle = subtitle)
