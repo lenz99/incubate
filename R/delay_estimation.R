@@ -937,7 +937,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     # result is on optimization scale?
     resIsOpt <- xor(isOpt, transform) #TRUE if different
 
-    # basically, ignore group= when single group: use always canonical "x" then
+    # basically, ignore group= when single group: in this case use always canonical "x"
     if (!twoGroup) group <- "x"
 
     if (is.null(group)) {
@@ -986,12 +986,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
             } else {
               # Surv: only right-censored observations currently implemented!
               stopifnot(attr(obs, which = "type", exact = TRUE) == 'right')
-              # we used to consider all times (including censorings) but would divide (for mean) only by the number of events
-              # this seems wrong and could fail when first obs is right-censored prior to delay candidate
-              #(mean((obs[,1L]-res0[[1L]])^k) * length(obs)/(length(obs) - cens$n[[group]][["right"]]) / weights$W1[[group]])^(1/k)
+              # we consider all times (including censorings) but divide (for mean) only by the number of events
+              # right-censored obs prior to delay candidate are set to zer0
+              (sum(pmax.int(0, obs[,1L]-res0[[1L]])^k) / (length(obs) - cens$n[[group]][["right"]]) / weights$W1[[group]])^(1/k)
 
-              # consider only event times: we take them from the KM-fit
-              (mean((summary(kmFit)$time - res0[[1L]])^k) / weights$W1[[group]])^(1/k)
+              # # consider only event times: we take them from the KM-fit
+              # # was used as a (wrong) work-around for the problem of right-censorings earlier than the delay estimate
+              # (mean((summary(kmFit)$time - res0[[1L]])^k) / weights$W1[[group]])^(1/k)
             }
             # add scale/rate parameter at the end of parameter vector
             res0 <- append(res0, values = if (distO$dist == 'exponential') 1/scale0 else scale0)
@@ -1286,8 +1287,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # @return log-likelihood (certain flavour or related like negative L2-norm of gradient of log-likelihood) for specified group
   getLogLik <- function(pars, group, isOrig = FALSE, criterion = FALSE) {
 
-    # Old idea was to
-    # change signature to be with pars.gr and obs for both getLogLik and getCumDiffs
+    # Old idea was to change signature to be with pars.gr and obs for both getLogLik and getCumDiffs
     #+But what are the benefits?
 
     # access observations of group
@@ -1379,11 +1379,12 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                         right = {
                           obs_c <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
 
-                          # we use 1st derivative to profile out scale parameter,
+                          # we used "partial derivative = 0" equation to profile out scale parameter,
                           #+but otherwise, use log-likelihood function directly
                           (nObs - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) +
-                            # contribution of right censorings
-                            sum(rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
+                            # # contribution of right censorings is in the scale estimate, here no extra contriubtion!
+                            # sum(rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
+
                             # penalty term for large values of shape
                             -penF(k, nObs = nObs)
 
@@ -1423,12 +1424,15 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                         obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
 
                         # objective function to maximize
+                        # from equation for shape k
                         -(weights$W2[[group]]/k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc^k)/sum(obs_evc^k))^2 +
-                          # 1st factor is inverse of harmonic mean
-                          -(mean(1/obs_evc) * sum(obs_evc^k)/sum(obs_evc^(k-1)) - w3F(k))^2 +
-                          #XXX is it safe to mix in f' contributions (indirect way) & CDF for right-censored (direct way)?
-                          # contribution of right-censored obs
-                          sum(rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
+                          # from equation for delay
+                          # its the negative of what is in Cousineau, but it is more in line with the likelihood derivation)
+                          # (for what it's worth, 1st factor is inverse of harmonic mean)
+                          -(mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)) - w3F(k))^2 +
+                          # # contribution of right censorings is in the scale estimate, here no extra contriubtion!
+                          # sum(rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
+
                           # optional penalization term for big shape
                           -penF(k, nObs = nObs)
                       },
@@ -1442,7 +1446,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                         "Candidate values: delay {round(pars.gr[[1L]],3)} shape {round(k,3)} ",
                         "=> LLval: {round(rVal, 3)}"),
                    "\n")
-             }
+             }#fi
 
              rVal
            }, #MLEw
@@ -1453,6 +1457,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
              stopifnot(nObs >= 2L)
              # contribution of first observation is corrected for: we take first two different values
              ind12 <- indForefront[[group]]
+
+             #ZZZZZ MLEc profiling not implemented! (should we?) and add more test routines for MLEc
 
              if (!isSurv) {
                # numeric response, non-Surv
@@ -1467,8 +1473,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                         # we need at least two observed event times
                         stopifnot(nObs - cens$n[[group]]["any"] >= 2L)
 
-                        # first event-time needs correction
-                        length(ind12[["inds_obs1"]]) * logspace_sub2_cpp(rlang::exec(distO$cdf, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L]),
+                        # first event-time needs correction (even if right censorings are earlier as they do not mandate that delay comes before it)
+                        length(ind12[["inds_obs1"]]) * logspace_sub2_cpp(rlang::exec(distO$cdf, !!! c(list(q=obs[c(ind12[["inds_obs1"]][1L], ind12[["ind_next"]]),1L], log.p = TRUE),
                                                                                              pars.gr))) +
                           # remaining observed event times
                           sum(rlang::exec(distO$pdf, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
@@ -1577,7 +1583,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         #e.g., for Moran's test
         equispaced = {
           # per tie group, assume tied observations are maximally spread (within rounding radius).
-          # Two reasons why this is leads to bigger cumDiffs (=smaller criterion/Moran's test statistic = conservative)
+          # Two reasons why this leads to bigger cumDiffs (=smaller criterion/Moran's test statistic = conservative)
           # 1/ for adjacent spacings (involving obs directly before and after tie) we have assumed the original tied observation
           # 2/ we use equal spacings in transformed space for all tied observation (within tie group)
           rep.int(diff(rlang::exec(distO$cdf,

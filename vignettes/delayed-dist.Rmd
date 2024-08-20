@@ -33,9 +33,12 @@ are the foundational data models in the `incubate`-package.
 
 ## Three-parameter Weibull
 The classical 2-parameter Weibull distribution has shape parameter $k>0$ and scale parameter $β>0$.
-As additional third parameter we use delay $α>0$ the density reads for any $x>0$
+As additional third parameter we use delay $α>0$ and then, density (PDF) and cumulative distribution function (CDF) read, for any $x>0$:
 \[
-f(x) = \frac{k· (x-α)^{k-1}}{β^k} · \exp(-\big(\frac{x-α}{β}\big)^k)
+\begin{align*}
+f(x) &= \frac{k· (x-α)^{k-1}}{β^k} · \exp(-\big(\frac{x-α}{β}\big)^k)\\
+F(x) &= 1 - \exp(-\big(\frac{x-α}{β}\big)^k) \qquad \text{for } x > α \text{ and 0 otherwise}
+\end{align*}
 \]
 
 If we have a data sample $\mathbf{x}$ of size $n$ and want to apply **maximum likelihood (ML)** estimation for parameters we get as log-likelihood function
@@ -43,20 +46,25 @@ If we have a data sample $\mathbf{x}$ of size $n$ and want to apply **maximum li
 l_\mathbf{x}(α, k, β) = n \log(k) - nk \log(β) + (k-1) · ∑_{i=1}^n \log(x_i-α) - β^{-k} · ∑_{i=1}^n (x_i - α)^k
 \]
 
-We are able to profile out the scale parameter estimate $\hat β$: the candidate value for a local extremum with respect to scale β is found be taking the 1^st^ derivative and equating to zer0:
+We are able to profile out the scale parameter estimate $\hat β$:
+the candidate value for a local extremum with respect to scale β is found be taking the 1^st^ derivative and equating to zer0:
 \[
 \frac{\partial l}{\partial β}(α, k, β) = -\frac{nk}{β} + k β^{-k-1} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0
 \]
 Hence (as $k>0$), $-n + β^{-k} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0$ and further simplifying,
 $\hat β = \sqrt[k]{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k}$.
 
-If we substitute this in the log-likelihood equation we get
+When right-censored observations are present as well, the equation is similar: 
+$\hat β = \sqrt[k]{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k}$, we divide by the number of events $n_e$ only but we sum over all $x_i$ (observed and right-censored). The only problem is when we have right-censorings early than the estimated delay, then we get negative basis. It seems appropriate to set these terms to zero.
+
+If we substitute the β-estimate into the log-likelihood equation we get
 \[
-\begin{aligned}
+\begin{align}
 l^P_{\mathbf{x}}(α, k) &= n \log(k) - n \log(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k) + (k-1) · ∑_{i=1}^n \log(x_i-α) - n\\
    &= n · \Big[ \log(k) - \log\big(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · \frac{1}{n} ∑_{i=1}^n \log(x_i-α) - 1\Big]
-\end{aligned}
+\end{align}
 \]
+In the presence of right-censored observations, the equation for $l^P_{\mathbf{x}}(α, k)$ is the same, except that we use the number of observed event $n_e$ (instead of $n$) everywhere. In particular, we have no explicit contribution from the right-censored observations. They influence the scale parameter $\hat β$, though.
 
 Forming the partial derivatives of $l^P(α, k)$ we get:
 \[
