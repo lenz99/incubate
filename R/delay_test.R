@@ -727,8 +727,6 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
   # test statistic ----
 
-  TOL_CRIT <- 1e-7
-
   # Test statistic calculated from the given data, method and the model specification.
   #
   # The test statistic takes non-negative values.
@@ -752,7 +750,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     # if the more restricted model (fit0) yields better fit (=lower criterion in optimization) than the more general model (fit1)
     #+we are in trouble, possibly due to non-convergence, e.g., optim's convergence code 52
     #+we re-fit the general fit1 again using parameter-values from fit0
-    if (fit0[["optimizer"]][["valOpt"]] + TOL_CRIT < fit1[["optimizer"]][["valOpt"]] &&
+    if (fit0[["optimizer"]][["valOpt"]] + TOL_NUM < fit1[["optimizer"]][["valOpt"]] &&
         !is.null(fit1oa <- purrr::pluck(fit1, "optimizer", "optim_args"))) {
       if (verbose > 0) warning("Restricted model with better fit (=smaller criterion) than unrestricted model.",
                                call. = FALSE)
@@ -769,7 +767,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
       if (is.null(fit1) || is.null(fit1$optimizer) || is.null(fit1$optimizer$valOpt) ||
-          fit0[["optimizer"]][["valOpt"]] + TOL_CRIT < fit1[["optimizer"]][["valOpt"]]) {
+          fit0[["optimizer"]][["valOpt"]] + TOL_NUM < fit1[["optimizer"]][["valOpt"]]) {
         warning("Restricted model with better fit (=smaller criterion in optimization) than unrestricted model even after refit of the unrestricted model!",
                 call. = FALSE)
         return(invisible(NULL))
@@ -794,7 +792,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
   # observed test statistic
   ts_obs <- testStat(x, y, strict = TRUE)
-  if (is.null(ts_obs) || !is.list(ts_obs) || !is.numeric(ts_obs[["val"]]) || ts_obs[["val"]] < -TOL_CRIT) {
+  if (is.null(ts_obs) || !is.list(ts_obs) || !is.numeric(ts_obs[["val"]]) || ts_obs[["val"]] < -TOL_NUM) {
     stop("Delay model failed for restricted null-model or free full model", call. = FALSE)
   }
 
