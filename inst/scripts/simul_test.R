@@ -143,10 +143,10 @@ if (!myCens) {
     dplyr::slice_min(cens)
 }
 
-# default is to use only the largest sample size
+# default is to use only the smallest sample size (is used in presentations)
 if (!myAllN) {
   simSetting <- simSetting %>%
-    dplyr::slice_max(n_x)
+    dplyr::slice_min(n_x)
 }
 
 if (myScaleSimple) {
@@ -319,7 +319,7 @@ doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
                                                            te_diff$P$bootstrap2 <- test_diff(x = x, y = y, distribution = "expon",
                                                                                              param = c("delay1", "rate1"),
                                                                                              method = method, profiled = profiled,
-                                                                                             R = R, type = "bootstrap") |>
+                                                                                             R = R, type = "bootstrap") %>%
                                                              purrr::pluck("P", "bootstrap", .default = NA_real_)
                                                          }#fi
                                                        }, silent = TRUE)
