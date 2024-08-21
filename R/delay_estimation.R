@@ -262,7 +262,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   #+profiling is only possible if rate1/scale1 is not bound and single phase and no surv data
   profiled0 <- profiled
   profiled <- profiled && (!any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) &&
-    !twoPhase && !isSurv
+    !twoPhase && method != "MLEc"
   #&& method %in% c("MLEn", "MLEc", "MLEw") #&& distribution == 'weibull' &&
 
   if (xor(profiled0, profiled)) {
@@ -1458,7 +1458,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
              # contribution of first observation is corrected for: we take first two different values
              ind12 <- indForefront[[group]]
 
-             #ZZZZZ MLEc profiling not implemented! (should we?) and add more test routines for MLEc
+             # MLEc profiling leads to difficult equation for scale (looks like Lambert W could be necessary but it is even more complicated)
+             # add more test routines for MLEc
 
              if (!isSurv) {
                # numeric response, non-Surv

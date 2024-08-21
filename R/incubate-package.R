@@ -2,6 +2,7 @@
 #'
 #' Estimation and statistical tests on parameters in parametric time-to-event analyses with delay.
 #'
+#' @useDynLib incubate, .registration = TRUE
 #' @importFrom future plan
 #' @importFrom future.apply future_apply
 #' @importFrom glue glue
@@ -14,5 +15,4 @@
 #' @name incubate
 #' @docType package
 #' @keywords internal
-#' @useDynLib incubate, .registration = TRUE
 "_PACKAGE"

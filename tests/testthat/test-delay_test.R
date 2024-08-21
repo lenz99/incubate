@@ -142,13 +142,14 @@ test_that("Bootstrap test: chosen method matters", code = {
   x <- rexp_delayed(n=37, delay1 = 5, rate1 = .63)
   y <- rexp_delayed(n=39, delay1 = 5.1, rate1 = .51)
 
-  est_meths <- c("MPSE", "MLEn", "MLEc") #, "MLEw"),
-  teDiffs <- purrr::map(.x = purrr::set_names(est_meths),
+  est_meths <- c("MPSE", "MLEn", "MLEc") |> #, "MLEw"),
+    purrr::set_names()
+  teDiffs <- purrr::map(.x = est_meths,
                        .f = ~ test_diff(x = x, y = y, param="delay1", type = "bootstrap",
-                                        method = .x, R = 571, profiled = TRUE))
+                                        method = .x, R = 571, profiled = .x == "MLEn"))
 
   # bootstrap P-values vary depending on chosen method
-  expect_gt(stats::sd(purrr::map_dbl(teDiffs, c("P", "bootstrap"))), expected = 1e-7)
+  expect_gt(stats::sd(purrr::map_dbl(teDiffs, c("P", "bootstrap"))), expected = 1e-3)
 
 })
 
