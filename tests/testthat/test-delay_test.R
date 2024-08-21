@@ -145,8 +145,8 @@ test_that("Bootstrap test: chosen method matters", code = {
   est_meths <- c("MPSE", "MLEn", "MLEc") |> #, "MLEw"),
     purrr::set_names()
   teDiffs <- purrr::map(.x = est_meths,
-                       .f = ~ test_diff(x = x, y = y, param="delay1", type = "bootstrap",
-                                        method = .x, R = 571, profiled = .x == "MLEn"))
+                        .f = ~ test_diff(x = x, y = y, param="delay1", type = "bootstrap",
+                                         method = .x, R = 571, profiled = .x == "MLEn"))
 
   # bootstrap P-values vary depending on chosen method
   expect_gt(stats::sd(purrr::map_dbl(teDiffs, c("P", "bootstrap"))), expected = 1e-3)
@@ -172,7 +172,7 @@ test_that("Bootstrap test for difference in delay under H0 (no difference in del
                                                 # return P-value of bootstrap test
                                                 Pval <- NA_real_
                                                 try(Pval <- purrr::chuck(test_diff(x = x, y = y, param = "delay1",
-                                                                                   distribution = "expon", R = 301),
+                                                                                   distribution = "expon", R = 301, type = "bootstrap"),
                                                                          "P", "bootstrap"),
                                                     silent = TRUE)
 

@@ -315,10 +315,12 @@ doMCSim <- function(DGPsetting, include_MLEw = TRUE) {
                                                          # bootstrap P-value for combined test for difference in parameters delay+rate
                                                          #+only if the scale (=1/rate for exponential) is indeed different betw groups
                                                          if (testParamCombined) {
-                                                           te_diff2 <- test_diff(x = x, y = y, distribution = "expon", param = c("delay1", "rate1"),
-                                                                                 method = method, profiled = profiled, R = R, type = "bootstrap")
                                                            # store P-value of delay+rate in original test_diff-object
-                                                           te_diff$P$bootstrap2 <- purrr::pluck(te_diff2, "P", "bootstrap", .default = NA_real_)
+                                                           te_diff$P$bootstrap2 <- test_diff(x = x, y = y, distribution = "expon",
+                                                                                             param = c("delay1", "rate1"),
+                                                                                             method = method, profiled = profiled,
+                                                                                             R = R, type = "bootstrap") |>
+                                                             purrr::pluck("P", "bootstrap", .default = NA_real_)
                                                          }#fi
                                                        }, silent = TRUE)
 

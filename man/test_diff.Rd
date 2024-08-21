@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_test.R
 \name{test_diff}
 \alias{test_diff}
-\title{Test the difference for delay model parameter(s) between two uncorrelated groups, based on maximum product of spacings estimation (MPSE).}
+\title{Test the difference for model parameter(s) between two uncorrelated groups}
 \usage{
 test_diff(
   x,
@@ -13,7 +13,7 @@ test_diff(
   profiled = method == "MLEw",
   ties = c("density", "equispaced", "error"),
   param = "delay1",
-  type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LR"),
+  type = c("all", "bootstrap", "GOF", "moran", "pearson", "LR"),
   doLogrank = TRUE,
   R = 400,
   chiSqApprox = FALSE,
@@ -39,7 +39,7 @@ test_diff(
 
 \item{type}{character. Which type of tests to perform?}
 
-\item{doLogrank}{logical. Do log-rank tests?}
+\item{doLogrank}{logical. Do also non-parametric logrank tests?}
 
 \item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 
@@ -51,10 +51,12 @@ test_diff(
 list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 }
 \description{
-It is in fact a model comparison between a null model where the parameters are enforced to be equal and an unconstrained full model.
-As test statistic we use twice the difference in best (=lowest) objective function value, i.e. 2 * (\code{val_0} - \code{val_1}).
-This is reminiscent of a likelihood ratio test statistic albeit the objective function is not a negative log-likelihood
-but the negative of the maximum product spacing metric.
+The test is in fact a model comparison between a null model where the parameters are enforced to be equal and an unconstrained full model.
+The model parameters can be fit with various methods: MPSE, MLEn, MLEc or MLEw.
+Parametric bootstrap tests and likelihood ratio tests are supported.
+As test statistic for the bootstrap test we use twice the difference in best (=lowest) objective function value, i.e. 2 * (\code{val_0} - \code{val_1}).
+The factor 2 is irrelevant but it becomes reminiscent of a likelihood ratio test statistic albeit the objective function is not a negative log-likelihood
+in all cases (e.g. it is the negative of the maximum product spacing metric for the MPSE-method).
 }
 \details{
 High values of this difference speak against the null-model (i.e. high \code{val_0} indicates bad fit under 0-model and low values of \code{val_1} indicate a good fit under the more general model1.
