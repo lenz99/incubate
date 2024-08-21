@@ -254,14 +254,14 @@ if (USE_FUTURE) {
 #' Uses parallel computation (future_replicate) to go through the (=nrep) MC-simulations.
 #' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
 #' @param DGPsetting numeric. a row from `simSetting`. It encodes parameters that specify the data generating process for both groups
-#' @param include_MLEw logical. Should we also include MLEw?
+#' @param includeMLEw logical. Should we also include MLEw?
 #' @return dataframe. P-values in the different Monte-Carlo runs.
-doMCSim <- function(DGPsetting, include_MLEw = TRUE) {
+doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
   # settings from the environment:
   stopifnot(exists("isExpon"), exists("myMCNrep"), exists("myR"))
   stopifnot(is.numeric(DGPsetting), length(DGPsetting) == 8L)
-  stopifnot(is.logical(include_MLEw), length(include_MLEw) == 1L)
-  include_MLEw <- isTRUE(include_MLEw)
+  stopifnot(is.logical(includeMLEw), length(includeMLEw) == 1L)
+  includeMLEw <- isTRUE(includeMLEw)
 
   n_x <- DGPsetting[[1]]
   n_y <- DGPsetting[[2]]
@@ -278,7 +278,7 @@ doMCSim <- function(DGPsetting, include_MLEw = TRUE) {
   scale_y <- scale_x * scale_ratio
 
   # different estimation methods
-  estimMethods <- tidyr::expand_grid(method = c(c("MPSE", "MLEn", "MLEc"), if (include_MLEw) "MLEw"),
+  estimMethods <- tidyr::expand_grid(method = c(c("MPSE", "MLEn", "MLEc"), if (includeMLEw) "MLEw"),
                                      profiled = c(FALSE, TRUE),
                                      R = as.integer(myR)) %>%
     # all MLE-methods use only profiled variant, MPSE uses both, profiled & unprofiled
