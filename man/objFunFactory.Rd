@@ -41,4 +41,10 @@ In any case, the objective function is to be \strong{minimized}.
 \details{
 The objective function takes a vector of model parameters as argument.
 From the observations, negative or infinite values are discarded during pre-processing.
+
+Profiling is implemented for single-phase models for Weibull and Exponential distributions:
+profiling allows to estimate scale1 parameter (resp. rate1= for exponential) based on delay1 (and shape1 for Weibull).
+Except for MLEw, the formula is derived from the conventional log-likelihood through equating its partial derivative with respect to scale1 to zer0.
+This leads to the candidate value for scale1. This approach can be used also for the methods MPSE and MLEc.
+For MLEw (weighted MLE) we have a weighting factor also in the formula for scale1.
 }

@@ -21,6 +21,12 @@
 #' The objective function takes a vector of model parameters as argument.
 #' From the observations, negative or infinite values are discarded during pre-processing.
 #'
+#' Profiling is implemented for single-phase models for Weibull and Exponential distributions:
+#' profiling allows to estimate scale1 parameter (resp. rate1= for exponential) based on delay1 (and shape1 for Weibull).
+#' Except for MLEw, the formula is derived from the conventional log-likelihood through equating its partial derivative with respect to scale1 to zer0.
+#' This leads to the candidate value for scale1. This approach can be used also for the methods MPSE and MLEc.
+#' For MLEw (weighted MLE) we have a weighting factor also in the formula for scale1.
+#'
 #' @param x numeric. observations
 #' @param y numeric. observations in second group.
 #' @param distO distribution object
@@ -258,12 +264,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
 
   # adjust profiled:
-  #+profiling is not implemented for some cases! Then, we reverse it to FALSE and just issue a warning
-  #+profiling is only possible if rate1/scale1 is not bound and single phase and no surv data
+  #+profiling is not implemented for some cases (like normal distribution model)!
+  #+profiling is only possible if rate1/scale1 is not bound and single phase. Surv data is supported, however!
+  #+We have genuine profiling formulas for scale1 only for MLEn and MLEw. For the other methods we re-use the formula from MLEn.
+  #+When not supported, we set profiling=FALSE and issue a warning if it was requested!
   profiled0 <- profiled
   profiled <- profiled && (!any(c("rate1", "scale1") %in% bind) || length(bind) == length(oNames)) &&
-    !twoPhase && method != "MLEc"
-  #&& method %in% c("MLEn", "MLEc", "MLEw") #&& distribution == 'weibull' &&
+    !twoPhase
 
   if (xor(profiled0, profiled)) {
     warning(glue("Option `profiled={profiled0}` was reversed to profiled={profiled}!"), call. = FALSE)
