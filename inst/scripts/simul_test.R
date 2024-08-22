@@ -117,7 +117,7 @@ myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
 
 if (mySeed > 0L) set.seed(mySeed)
 
-simSetting <- tidyr::expand_grid(n_x = c(8, 10, 12, 15, 20, 30, 50, 75), #100
+simSetting <- tidyr::expand_grid(n_x = c(11, 15, 20, 30, 50, 75), #100 #8, 10, 12,
                                  delay_x = 5,
                                  delay_y = c(5, 7, 9, 11, 13, 15), #, 20),
                                  scale_x = c(5, 10), #c(1, 2, 5),
@@ -302,7 +302,7 @@ doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
                                                    }
 
 
-                                                   estimMethods %>%
+                                                   res_h <- estimMethods %>%
                                                      dplyr::mutate(testDiffObj = list({
                                                        te_diff <- NULL
                                                        # test_diff might also use parallel computations depending on future-settings
@@ -311,28 +311,40 @@ doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
                                                          te_diff <- test_diff(x = x, y = y, distribution = "expon", param = "delay1",
                                                                               method = method, profiled = profiled, R = R, type = "all",
                                                                               # log-rank test only once
-                                                                              doLogrank = method == "MPSE" && !profiled)
+                                                                              doLogrank = method == "MPSE" && !profiled) %>%
+                                                           suppressWarnings()
                                                          # bootstrap P-value for combined test for difference in parameters delay+rate
                                                          #+only if the scale (=1/rate for exponential) is indeed different betw groups
-                                                         if (testParamCombined) {
+                                                         if (!is.null(te_diff) && testParamCombined) {
                                                            # store P-value of delay+rate in original test_diff-object
-                                                           te_diff$P$bootstrap2 <- test_diff(x = x, y = y, distribution = "expon",
-                                                                                             param = c("delay1", "rate1"),
-                                                                                             method = method, profiled = profiled,
-                                                                                             R = R, type = "bootstrap") %>%
-                                                             purrr::pluck("P", "bootstrap", .default = NA_real_)
+                                                           te_diff$P$bootstrap2 <- NA_real_
+
+                                                           try(expr = {
+                                                             te_diff$P$bootstrap2 <- test_diff(x = x, y = y, distribution = "expon",
+                                                                                               param = c("delay1", "rate1"),
+                                                                                               method = method, profiled = profiled,
+                                                                                               R = R, type = "bootstrap") %>%
+                                                               suppressWarnings() %>%
+                                                               purrr::pluck("P", "bootstrap", .default = NA_real_)
+                                                           }, silent = TRUE)
                                                          }#fi
                                                        }, silent = TRUE)
 
                                                        te_diff })) %>%
                                                      # compact testDiff-list column: drop entries that did not work out!
-                                                     dplyr::filter(!is.null(testDiffObj)) %>%
-                                                     # extract all P-values/R_eff in long format from each row in estimMethods-df!
-                                                     #+dplyr::reframe (beta in v1.1.0) allows to summarize with more than one row
-                                                     dplyr::reframe(method, profiled, R,
-                                                                    R_eff = length(testDiffObj$testDist),
-                                                                    tibble::enframe(unlist(testDiffObj$P),
-                                                                                    name = "test", value = "pvalue"))
+                                                     dplyr::filter(!is.null(testDiffObj), is.list(testDiffObj))
+
+                                                   # extract all P-values/R_eff in long format from each row in estimMethods-df!
+                                                   #+dplyr::reframe (beta in v1.1.0) allows to summarize with more than one row
+                                                   if (NROW(res_h) > 0) {
+                                                     res_h %>%
+                                                       dplyr::reframe(method, profiled, R,
+                                                                      R_eff = length(testDiffObj$testDist),
+                                                                      tibble::enframe(unlist(testDiffObj$P),
+                                                                                      name = "test", value = "pvalue"))
+                                                   } else {
+                                                     NULL
+                                                   }
                                                  }, simplify = FALSE)
 
   # drop NULLs (just in case)
