@@ -39,7 +39,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 defaults = list(
                                   # simulation settings
                                   dist='exponential', scenario='MS',
-                                  R=150, mcnrep=100,
+                                  R=150, mcnrep=100, n=0,
                                   # technical settings
                                   resultsDir = getwd(),
                                   slice=0, seed=as.integer(TODAY),
@@ -57,6 +57,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --dist=\t specify distribution that governs the data generation. Default is the exponential distribution.\n')
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
   cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
+  cat('  --n=\t\t sample size number to use in the simulation\n')
   cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
   cat('  --includeMLEw\t include also weighted MLE approach\n')
   cat('  --cens\t apply also random right-censoring during the simulation study\n')
@@ -94,7 +95,7 @@ myMCNrep <- cmdArgs[["mcnrep"]]
 stopifnot(is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L)
 
 mySlice <- cmdArgs[["slice"]]
-stopifnot(! is.null(mySlice), is.numeric(mySlice), length(mySlice) == 1L)
+stopifnot(!is.null(mySlice), is.numeric(mySlice), length(mySlice) == 1L)
 mySlice <- ceiling(mySlice)
 
 mySeed <- cmdArgs[["seed"]]
@@ -104,8 +105,15 @@ myScenario <- cmdArgs[["scenario"]]
 stopifnot(! is.null(myScenario), is.character(myScenario), length(myScenario) == 1L, nzchar(myScenario))
 myScenario <- match.arg(arg = toupper(myScenario), choices = c("DELAYEQ", "DELAYGT", "MS", "ALL"))
 
+myN <- cmdArgs[["n"]]
+stopifnot(!is.null(myN), is.numeric(myN), length(myN) == 1L)
+myN <- ceiling(myN)
+
 myPrint <- isTRUE(any(c("print", "p") %in% tolower(names(cmdArgs))))
 myAllN <- isTRUE(any(c("alln", "a") %in% tolower(names(cmdArgs))))
+if (myAllN && myN > 0) {
+  stop("Requested n=",myN, " but also --allN at the same time.")
+}
 myIncludeMLEw <- isTRUE(any("includemlew" %in% tolower(names(cmdArgs))))
 myScaleSimple <- isTRUE(any(c("scalesimple", "scale", "scales") %in% tolower(names(cmdArgs))))
 myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
@@ -117,7 +125,9 @@ myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
 
 if (mySeed > 0L) set.seed(mySeed)
 
-simSetting <- tidyr::expand_grid(n_x = c(11, 15, 20, 30, 50, 75), #100 #8, 10, 12,
+nVctr <- if (myN > 0) myN else c(8, 10, 12, 15, 20, 30, 50, 75) #100
+
+simSetting <- tidyr::expand_grid(n_x = nVctr,
                                  delay_x = 5,
                                  delay_y = c(5, 7, 9, 11, 13, 15), #, 20),
                                  scale_x = c(5, 10), #c(1, 2, 5),
@@ -143,7 +153,8 @@ if (!myCens) {
     dplyr::slice_min(cens)
 }
 
-# default is to use only the smallest sample size (is used in presentations)
+# default is to use only the smallest sample size
+# (this n is typically used in presentations as it gives nice power curves for chosen difference difference in delay)
 if (!myAllN) {
   simSetting <- simSetting %>%
     dplyr::slice_min(n_x)
@@ -208,7 +219,7 @@ simSetting <- switch (myScenario,
 )
 
 
-
+# slicing in simulation settings (from head or from tail depending on sign)
 if (!dplyr::near(mySlice, 0)) {
   simSetting <- local({
 
@@ -224,8 +235,13 @@ if (myPrint) {
   cat('\n')
   cat(NROW(simSetting), 'simulation scenarios in total.\n')
   cat('Each scenario is covered by ', myMCNrep, 'MC-data replications.\n')
+  if (myIncludeMLEw) { cat("We also cover MLEw.\n") }
   cat('Bootstrap tests with R=', myR, 'parametric bootstrap samples (P-value resolution).\n')
-  cat('Seed set initially is: ', if (mySeed>0) mySeed else '-not set-', '\n')
+  if (mySeed>0) {
+    cat('Seed was set initially to', mySeed,'\n')
+  } else {
+    cat('See was **not** set!\n')
+  }
   cat('Results directory is set to ', myResultsDir, '\n')
 
   quit(save = 'no')
@@ -284,6 +300,7 @@ doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
     # all MLE-methods use only profiled variant, MPSE uses both, profiled & unprofiled
     dplyr::filter(method == 'MPSE' | profiled) %>%
     dplyr::rowwise()
+  #cat("estimMethods contains ", paste(unique(estimMethods$method), collapse = ", "), "\n")
 
   testDiffList <- future.apply::future_replicate(n = myMCNrep,
                                                  future.packages = c("dplyr", "incubate", if (cens > 0) "survival"),

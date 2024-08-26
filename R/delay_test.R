@@ -66,8 +66,8 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
                              nObs = nObs, k = k/2))
            } else {
              # single group
-               testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, ties. = "equispaced"),
-                           nObs = nObs, k = k)
+             testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, ties. = "equispaced"),
+                         nObs = nObs, k = k)
            }
 
            # statist sometimes negative, in particular with ties because of conservative tie-fix
@@ -846,7 +846,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                      coef.incubate_fit(fit0, group = "y", transformed = FALSE))
 
     retL <- 1L+(verbose>0L)
-    t0_dist <- future.apply::future_vapply(X = seq_len(R), FUN.VALUE = double(retL),
+    t0_dist <- future.apply::future_vapply(X = seq_len(R),
                                            FUN = function(dummy) {
 
                                              # generate new data according to given fitted null-model
@@ -862,7 +862,12 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                                                  purrr::chuck(ts_boot, "fit0", "optimizer", "convergence"))[seq_len(retL)]
                                              }
 
-                                           }, future.seed = TRUE)
+                                           },
+                                           FUN.VALUE = double(retL),
+                                           future.packages = "incubate",
+                                           future.seed = TRUE,
+                                           future.globals = TRUE #c("retL", "distO", "ranFunArgsX", "ranFunArgsY", "testStat", "delay_model", ".MLEw_approx"),
+    )
 
     if (verbose > 0L) {
       stopifnot(NROW(t0_dist) == 2L)
