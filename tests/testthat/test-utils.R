@@ -1,16 +1,12 @@
 # mkuhn, 2021-10-11
 # test utility functions of this package
 
-test_that("Internal package data (related to weights functions for MLEw)", {
-  # load internal package data
-  FNAME_SYSD <- xfun::magic_path("sysdata.rda")
-  stopifnot(file.exists(FNAME_SYSD))
-  load(FNAME_SYSD)
-  expect_true(exists(".MLEw_approx"))
-  expect_named(.MLEw_approx, expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
-  expect_type(.MLEw_approx[["MCsim"]], type = "list")
-  expect_named(.MLEw_approx[["MCsim"]], expected = c("nObs", "W1", "W2"))
-  MCsim_cous09 <- .MLEw_approx[["MCsim_cousineau2009"]]
+test_that("MLEw weight objects", {
+  expect_true(exists("MLEw_approx"))
+  expect_named(MLEw_approx, expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
+  expect_type(MLEw_approx[["MCsim"]], type = "list")
+  expect_named(MLEw_approx[["MCsim"]], expected = c("nObs", "W1", "W2"))
+  MCsim_cous09 <- MLEw_approx[["MCsim_cousineau2009"]]
   expect_type(MCsim_cous09, type = "list")
   expect_named(MCsim_cous09, expected = c("type", "location", "n", "shape", "value"))
   # we have a location J
@@ -35,15 +31,15 @@ test_that("Internal package data (related to weights functions for MLEw)", {
   with(MCsim_cous09, expect_equal(value[type == "W3" & location == "J" & shape == 0.5 & n %in% c(3, 5, 15)], expected = c(3.081, 4.806, 12.069)))
   with(MCsim_cous09, expect_equal(value[type == "W3" & location == "G" & shape == 1.5 & n %in% c(2, 7, 13)], expected = c(1.524, 2.184, 2.403)))
 
-  expect_named(.MLEw_approx[["coef"]], expected = c("W2", "W3_richards"))
-  expect_named(.MLEw_approx[["fun"]], expected = c("genLogisticF", "genLogisticJ", "w1F", "w2F", "w3FF"))
-  # .MLEw_approx[["fun"]] contains only functions
-  purrr::walk(.x = names(.MLEw_approx[["fun"]]),
-              .f = function(nam) expect_type(.MLEw_approx[["fun"]][[nam]], "closure"))
+  expect_named(MLEw_approx[["coef"]], expected = c("W2", "W3_richards"))
+  expect_named(MLEw_approx[["fun"]], expected = c("genLogisticF", "genLogisticJ", "w1F", "w2F", "w3FF"))
+  # MLEw_approx[["fun"]] contains only functions
+  purrr::walk(.x = names(MLEw_approx[["fun"]]),
+              .f = function(nam) expect_type(MLEw_approx[["fun"]][[nam]], "closure"))
 
-  w1F <- .MLEw_approx[["fun"]][["w1F"]]
-  w2F <- .MLEw_approx[["fun"]][["w2F"]]
-  w3FF <- .MLEw_approx[["fun"]][["w3FF"]]
+  w1F <- MLEw_approx[["fun"]][["w1F"]]
+  w2F <- MLEw_approx[["fun"]][["w2F"]]
+  w3FF <- MLEw_approx[["fun"]][["w3FF"]]
 
   expect_length(w1F(seq_len(3)), n = 3)
   expect_type(w1F(5), type = "double")
@@ -100,6 +96,7 @@ test_that("Internal package data (related to weights functions for MLEw)", {
     min(), expected = 0)
 
 })
+
 
 test_that("Estimate rounding error from sample", {
   set.seed(1234)

@@ -2,8 +2,6 @@
 # testing the delay estimation,
 # in particular parameter estimates, convergence etc. from the model fit object
 
-library("purrr", quietly = TRUE)
-
 test_that("Parameter extraction and transformation", {
 
   #testthat::skip(message = "skip parameter extraction for now")

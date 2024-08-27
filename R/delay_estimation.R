@@ -573,13 +573,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         switch(EXPR = method,
                sdist_median = {
                  # Use results of own MC-simulation
-                 .MLEw_approx$fun$w1F(nObs)
+                 MLEw_approx$fun$w1F(nObs)
                },
                cousineau2009 = {
                  #+cf. Cousineau's simulation results for median of W1's sampling distribution
                  #+"Nearly unbiased estimators.." (2009), Table 2, column J_1
-                 W1_cous09 <- .MLEw_approx$MCsim_cousineau2009[.MLEw_approx$MCsim_cousineau2009$type == "W1" &
-                                                                 .MLEw_approx$MCsim_cousineau2009$location == "J",]
+                 W1_cous09 <- MLEw_approx$MCsim_cousineau2009[MLEw_approx$MCsim_cousineau2009$type == "W1" &
+                                                                 MLEw_approx$MCsim_cousineau2009$location == "J",]
                  if (!all(nObs %in% W1_cous09$n)) {
                    stop("W1-weights from Cousineau are not available for all requested sample group size n.", call. = FALSE)
                  }
@@ -592,7 +592,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                  mean(z)
                },
                hybrid = {
-                 (.MLEw_approx$fun$w1F(nObs) + mean(z)) / 2L
+                 (MLEw_approx$fun$w1F(nObs) + mean(z)) / 2L
                },
                stop("This method for estimating W1 is not handled here!", call. = FALSE)
         )
@@ -612,14 +612,14 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                sdist_median = {
                  # W2-approximation via asymptotic regression model SSasymp on log(n):
                  # We hence model: W2 = 1 + (R0 - 1) * n^(-r)
-                 .MLEw_approx$fun$w2F(nObs)
+                 MLEw_approx$fun$w2F(nObs)
                },
                cousineau2009 = {
                  # MC-simulation on W2 for n=1..16
                  # cf. Cousineau's simulation results for median of W2's sampling distribution
                  #+"Nearly unbiased estimators.." (2009), Table 3, column J_2
-                 W2_cous09 <- .MLEw_approx$MCsim_cousineau2009[.MLEw_approx$MCsim_cousineau2009$type == "W2" &
-                                                                 .MLEw_approx$MCsim_cousineau2009$location == "J",]
+                 W2_cous09 <- MLEw_approx$MCsim_cousineau2009[MLEw_approx$MCsim_cousineau2009$type == "W2" &
+                                                                 MLEw_approx$MCsim_cousineau2009$location == "J",]
                  if (!all(nObs %in% W2_cous09$n)) {
                    stop("W2-weights from Cousineau are not available for all requested sample group size n.", call. = FALSE)
                  }
@@ -630,7 +630,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                },
                hybrid = {
                  # mean betw med-approx and sample estimate
-                 (.MLEw_approx$fun$w2F(nObs) + sum(z * log(z)) / sum(z) - mean(log(z))) / 2L
+                 (MLEw_approx$fun$w2F(nObs) + sum(z * log(z)) / sum(z) - mean(log(z))) / 2L
                },
                stop("This method for W2-estimation is not handled here!", call. = FALSE)
         )
@@ -654,11 +654,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         # fn of shape k
         switch(EXPR = method,
                sdist_median = {
-                 .MLEw_approx$fun$w3FF(nObs)
+                 MLEw_approx$fun$w3FF(nObs)
                },
                cousineau2009 = {
-                 W3_cous09 <- .MLEw_approx$MCsim_cousineau2009[.MLEw_approx$MCsim_cousineau2009$type == "W3" &
-                                                                 .MLEw_approx$MCsim_cousineau2009$location == "J",]
+                 W3_cous09 <- MLEw_approx$MCsim_cousineau2009[MLEw_approx$MCsim_cousineau2009$type == "W3" &
+                                                                 MLEw_approx$MCsim_cousineau2009$location == "J",]
                  if (!nObs %in% W3_cous09$n) {
                    stop("W3-weights from Cousineau are not available for requested sample group size n.", call. = FALSE)
                  }
@@ -666,7 +666,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                  # use approximation function with linear interpolation: we add points for extreme shape:
                  #+ for huge shape W3 approaches 1
                  #+ for minimal shape there is a linear dependence on nObs:
-                 ##df <- tibble(nObs = seq_len(501)) |> rowwise() |> mutate(W3_minShape = .MLEw_approx$fun$w3FF(nObs = {nObs})(1e-7))
+                 ##df <- tibble(nObs = seq_len(501)) |> rowwise() |> mutate(W3_minShape = MLEw_approx$fun$w3FF(nObs = {nObs})(1e-7))
                  ##summary(lm(W3_minShape ~ nObs, data = df)) #==> regression line is: 0.229066 + 1.427202 * nObs
                  #XXX approxfun is potentially unsafe (as it relies on current R version, but it is more safe since R v3.0.0)
                  stats::approxfun(x = c(1e-7, W3_cous09$shape[W3_cous09$n == nObs], 1e3),
@@ -680,7 +680,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                hybrid = function(k) {
                  stopifnot(is.numeric(k), length(k) == 1)
                  # calculate mean from sdist_median and sample
-                 (.MLEw_approx$fun$w3FF(nObs)(k) + w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)))/2
+                 (MLEw_approx$fun$w3FF(nObs)(k) + w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)))/2
                },
                stop("This method for W3 approximation is not handled here!", call. = FALSE)
         )

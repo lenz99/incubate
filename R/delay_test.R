@@ -866,7 +866,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                                            FUN.VALUE = double(retL),
                                            future.packages = "incubate",
                                            future.seed = TRUE,
-                                           future.globals = TRUE #c("retL", "distO", "ranFunArgsX", "ranFunArgsY", "testStat", "delay_model", ".MLEw_approx"),
+                                           future.globals = TRUE #c("retL", "distO", "ranFunArgsX", "ranFunArgsY", "testStat", "delay_model", "MLEw_approx"),
     )
 
     if (verbose > 0L) {
