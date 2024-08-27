@@ -21,65 +21,62 @@ test_that("MLEw weight objects", {
                 # shapes are increasing
                 expect_identical(shapes, c(0.5, 1, 1.5, 2, 2.5))
               })
-  # cf Cousineau (2009) publication: W1 (table 2)
+  # W1: cf Cousineau (2009), table 2
   with(MCsim_cous09, expect_equal(value[type == "W1" & location == "J" & n %in% c(3, 5, 15)], expected = c(0.891, 0.934, 0.978)))
   with(MCsim_cous09, expect_equal(value[type == "W1" & location == "G" & n %in% c(2, 7, 13)], expected = c(0.763, 0.929, 0.962)))
-  # cf Cousineau (2009) publication: W2 (table 3)
+  # W2: cf Cousineau (2009), table 3
   with(MCsim_cous09, expect_equal(value[type == "W2" & location == "J" & n %in% c(3, 5, 15)], expected = c(0.517, 0.711, 0.902)))
   with(MCsim_cous09, expect_equal(value[type == "W2" & location == "G" & n %in% c(2, 7, 13)], expected = c(0.163, 0.742, 0.860)))
-  # cf Cousineau (2009) publication: W3 (table 4)
+  # W3: cf Cousineau (2009), table 4
   with(MCsim_cous09, expect_equal(value[type == "W3" & location == "J" & shape == 0.5 & n %in% c(3, 5, 15)], expected = c(3.081, 4.806, 12.069)))
   with(MCsim_cous09, expect_equal(value[type == "W3" & location == "G" & shape == 1.5 & n %in% c(2, 7, 13)], expected = c(1.524, 2.184, 2.403)))
 
   expect_named(MLEw_approx[["coef"]], expected = c("W2", "W3_richards"))
-  expect_named(MLEw_approx[["fun"]], expected = c("genLogisticF", "genLogisticJ", "w1F", "w2F", "w3FF"))
+  expect_named(MLEw_approx[["fun"]], expected = c("genLogisticF", "genLogisticJ"))
   # MLEw_approx[["fun"]] contains only functions
   purrr::walk(.x = names(MLEw_approx[["fun"]]),
               .f = function(nam) expect_type(MLEw_approx[["fun"]][[nam]], "closure"))
 
-  w1F <- MLEw_approx[["fun"]][["w1F"]]
-  w2F <- MLEw_approx[["fun"]][["w2F"]]
-  w3FF <- MLEw_approx[["fun"]][["w3FF"]]
 
-  expect_length(w1F(seq_len(3)), n = 3)
-  expect_type(w1F(5), type = "double")
-  expect_equal(w1F(1), expected = log(2))
-  expect_equal(w1F(-1), expected = log(2))
-  expect_equal(w1F(1.5), expected = log(2))
+  expect_length(w1Fint(seq_len(3)), n = 3)
+  expect_type(w1Fint(5), type = "double")
+  expect_equal(w1Fint(1), expected = log(2))
+  expect_equal(w1Fint(-1), expected = log(2))
+  expect_equal(w1Fint(1.5), expected = log(2))
   # W1 is (mostly) monotonically increasing
-  expect_gte(min(diff(w1F(seq_len(40)))), expected = 0)
+  expect_gte(min(diff(w1Fint(seq_len(40)))), expected = 0)
 
   # Cousineau: Nearly unbiased.. (Table 2)
-  expect_equal(w1F(6), expected = 0.945, tolerance = 1e-3)
-  expect_equal(w1F(14), expected = 0.976, tolerance = 1e-3)
+  expect_equal(w1Fint(6), expected = 0.945, tolerance = 1e-3)
+  expect_equal(w1Fint(14), expected = 0.976, tolerance = 1e-3)
 
-  expect_length(w2F(seq_len(3)), n = 3)
-  expect_type(w2F(5), type = "double")
-  expect_equal(w2F(1), expected = 0)
-  expect_equal(w2F(-1), expected = 0)
-  expect_equal(w2F(1.5), expected = 0)
+  expect_length(w2Fint(seq_len(3)), n = 3)
+  expect_type(w2Fint(5), type = "double")
+  expect_equal(w2Fint(1), expected = 0)
+  expect_equal(w2Fint(-1), expected = 0)
+  expect_equal(w2Fint(1.5), expected = 0)
   # W2 is monotonically increasing
-  expect_gte(min(diff(w2F(seq_len(100)))), expected = 0)
+  expect_gte(min(diff(w2Fint(seq_len(100)))), expected = 0)
 
   # Cousineau: Nearly unbiased.. (Table 3)
-  expect_equal(w2F(8), expected = 0.817, tolerance = 1e-3)
-  expect_equal(w2F(15), expected = 0.902, tolerance = 1e-3)
+  expect_equal(w2Fint(8), expected = 0.817, tolerance = 1e-3)
+  expect_equal(w2Fint(15), expected = 0.902, tolerance = 1e-3)
 
   # Cousineau: Nearly unbaised.. (Table 4)
   # agreement here is not as high: W3 is more challenging, in particular for small shape
   #+our median is based on higher sample size in our MC-sim
   shapes <- seq.int(0.5, 2.5, by=.5)
-  expect_equal(w3FF(6)(shapes),  expected = c( 5.631, 2.808, 2.004, 1.669, 1.492), tolerance = 5e-2)
-  expect_equal(w3FF(11)(shapes), expected = c( 9.319, 3.462, 2.207, 1.774, 1.555), tolerance = 4e-2)
-  expect_equal(w3FF(12)(shapes), expected = c(10.051, 3.560, 2.239, 1.782, 1.565), tolerance = 3e-2)
-  expect_equal(w3FF(16)(shapes), expected = c(12.743, 3.854, 2.324, 1.820, 1.586), tolerance = 2e-2)
+  expect_equal(w3FFint(6)(shapes),  expected = c( 5.631, 2.808, 2.004, 1.669, 1.492), tolerance = 5e-2)
+  expect_equal(w3FFint(11)(shapes), expected = c( 9.319, 3.462, 2.207, 1.774, 1.555), tolerance = 4e-2)
+  expect_equal(w3FFint(12)(shapes), expected = c(10.051, 3.560, 2.239, 1.782, 1.565), tolerance = 3e-2)
+  expect_equal(w3FFint(16)(shapes), expected = c(12.743, 3.854, 2.324, 1.820, 1.586), tolerance = 2e-2)
 
   # W3 for neighbouring nObs and some shapes
   # we use also fractional nObs to test if the spline interpolation of coefficients works properly
   w3Ex_mat <- c(15.999, 16, 16.1, 16.11, 16.25, 16.3, 16.5, 16.6, 16.7, 16.9, 17, 17.1, 17.2, 17.3, 17.5, 18, 19.1,
                 50, 50.01, 50.1, 50.2, 51, 52, 53, 54, 55, 55.1, 55.11, 55.13, 59, 60, 61, 61.01, 61.02, 61.5, 61.6, 61.9, 61.99, 62) |>
     sort.int() |>
-    purrr::map(.f = \(n_) w3FF(n_)(shapes)) |>
+    purrr::map(.f = function(n_) w3FFint(n_)(shapes)) |>
     unlist() |> matrix(ncol = length(shapes), byrow = TRUE,
                        dimnames = list(list(), shape = paste0("k=", shapes)))
   # W3 decreases as function of shape (for given n)
@@ -87,13 +84,15 @@ test_that("MLEw weight objects", {
                apply(MARGIN = 1, FUN = diff) |>
                # diffs between shapes are put in columns: hence, next apply with MARGIN=2
                apply(MARGIN = 2, FUN = max, simplify = TRUE) |>
-               max(), expected = 0)
+               max(),
+             expected = 0)
 
   # W3 increases as function of n (for given shape)
   expect_gte(w3Ex_mat |>
-    apply(MARGIN = 2, FUN = diff) |>
-    apply(MARGIN = 2, FUN = min, simplify = TRUE) |>
-    min(), expected = 0)
+               apply(MARGIN = 2, FUN = diff) |>
+               apply(MARGIN = 2, FUN = min, simplify = TRUE) |>
+               min(),
+             expected = 0)
 
 })
 

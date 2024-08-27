@@ -1,3 +1,9 @@
+#' Make that internalStuff.R is loaded first
+#' @keywords internal
+#' @noRd
+#' @include internalStuff.R
+NULL
+
 #XXX read here
 # transformation of parameters works currently: delay1 is transformed involving log and first observations
 #+so we do not need a strict upper bound. But delay1 can become negative.
@@ -573,7 +579,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         switch(EXPR = method,
                sdist_median = {
                  # Use results of own MC-simulation
-                 MLEw_approx$fun$w1F(nObs)
+                 w1Fint(nObs)
                },
                cousineau2009 = {
                  #+cf. Cousineau's simulation results for median of W1's sampling distribution
@@ -592,7 +598,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                  mean(z)
                },
                hybrid = {
-                 (MLEw_approx$fun$w1F(nObs) + mean(z)) / 2L
+                 (w1Fint(nObs) + mean(z)) / 2L
                },
                stop("This method for estimating W1 is not handled here!", call. = FALSE)
         )
@@ -612,7 +618,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                sdist_median = {
                  # W2-approximation via asymptotic regression model SSasymp on log(n):
                  # We hence model: W2 = 1 + (R0 - 1) * n^(-r)
-                 MLEw_approx$fun$w2F(nObs)
+                 w2Fint(nObs)
                },
                cousineau2009 = {
                  # MC-simulation on W2 for n=1..16
@@ -630,7 +636,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                },
                hybrid = {
                  # mean betw med-approx and sample estimate
-                 (MLEw_approx$fun$w2F(nObs) + sum(z * log(z)) / sum(z) - mean(log(z))) / 2L
+                 (w2Fint(nObs) + sum(z * log(z)) / sum(z) - mean(log(z))) / 2L
                },
                stop("This method for W2-estimation is not handled here!", call. = FALSE)
         )
@@ -654,7 +660,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
         # fn of shape k
         switch(EXPR = method,
                sdist_median = {
-                 MLEw_approx$fun$w3FF(nObs)
+                 w3FFint(nObs)
                },
                cousineau2009 = {
                  W3_cous09 <- MLEw_approx$MCsim_cousineau2009[MLEw_approx$MCsim_cousineau2009$type == "W3" &
@@ -680,7 +686,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                hybrid = function(k) {
                  stopifnot(is.numeric(k), length(k) == 1)
                  # calculate mean from sdist_median and sample
-                 (MLEw_approx$fun$w3FF(nObs)(k) + w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)))/2
+                 (w3FFint(nObs)(k) + w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)))/2
                },
                stop("This method for W3 approximation is not handled here!", call. = FALSE)
         )

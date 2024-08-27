@@ -1355,7 +1355,7 @@ test_that("Fit delayed Weibull", {
                expected = param_wb_minDelay1, tolerance = .03)
   # group with shorter delay has a good model fit parameter wise
   expect_equal(coef(fd_wb2b_MLEw_P, group = datw_grpEarlier)[-1L],
-               expected = chuck(datw, attr_getter("param"), datw_grpEarlier)[-1L],
+               expected = purrr::chuck(datw, purrr::attr_getter("param"), datw_grpEarlier)[-1L],
                tolerance = .25)
   # MLEw: check we do not have crazy high shape for group x!
   #+ optimization easily goes wrong on shape, because shape occurs in the exponent

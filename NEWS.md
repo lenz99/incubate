@@ -1,6 +1,7 @@
-# incubate 1.3.0.9060
+# incubate 1.3.0.9076
 * allow for random right-censoring
 * MLEw: bugfix in weight approximation (relevant for W3)
+* MLEw: weight functions as non-exported functions (and not internal data)
 * implement delayed normal distribution
 
 # incubate 1.3.0
