@@ -743,17 +743,21 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                         method = method,
                         control = list(profiled = profiled, ties = ties))
 
-    if (is.null(fit0) || is.null(fit1) ||
-        is.null(fit0$optimizer) || is.null(fit1$optimizer) ||
-        is.null(fit0$optimizer$valOpt) || is.null(fit1$optimizer$valOpt)) return(invisible(NULL))
+    if (is.null(fit0) || is.null(fit0$optimizer) || is.null(fit0$optimizer$valOpt) ||
+        is.null(fit1) || is.null(fit1$optimizer) || is.null(fit1$optimizer$valOpt)) {
+      return(invisible(NULL))
+    }#fi
 
-    # if the more restricted model (fit0) yields better fit (=lower criterion in optimization) than the more general model (fit1)
+    # if the more restricted model (fit0) yields better fit (=lower value in optimization) than the more general model (fit1)
     #+we are in trouble, possibly due to non-convergence, e.g., optim's convergence code 52
     #+we re-fit the general fit1 again using parameter-values from fit0
     if (fit0[["optimizer"]][["valOpt"]] + TOL_NUM < fit1[["optimizer"]][["valOpt"]] &&
         !is.null(fit1oa <- purrr::pluck(fit1, "optimizer", "optim_args"))) {
-      if (verbose > 0) warning("Restricted model with better fit (=smaller criterion) than unrestricted model.",
-                               call. = FALSE)
+      if (verbose > 0) {
+        warning("Restricted model with better fit (=smaller criterion) than unrestricted model.",
+                call. = FALSE)
+      }#fi
+
       # re-run fit1 with start values based on fitted parameters of reduced model fit0
       stopifnot(is.list(fit1oa), "par" %in% names(fit1oa))
 
@@ -761,7 +765,9 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       pn1 <- names(fit1[["optimizer"]][["parOpt"]])
       # take over optimization coefficients for start values of fit1
       # QQQ Would match() or pmatch() help avoid the for-loop?
-      for (na0 in names(fit0[["optimizer"]][["parOpt"]])) fit1oa[["par"]][startsWith(pn1, prefix = na0)] <- coef0[[na0]]
+      for (na0 in names(fit0[["optimizer"]][["parOpt"]])) {
+        fit1oa[["par"]][startsWith(pn1, prefix = na0)] <- coef0[[na0]]
+      }#rof
 
       fit1oa[['control']][['parscale']] <- scalePars(parV = fit1oa[["par"]])
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
@@ -771,13 +777,28 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
         warning("Restricted model with better fit (=smaller criterion in optimization) than unrestricted model even after refit of the unrestricted model!",
                 call. = FALSE)
         return(invisible(NULL))
-      }
+      }#fi
     }# fi bad fit1
 
     # check convergence of re-fits when in strict mode only:
     if (strict && (purrr::chuck(fit0, "optimizer", "convergence") != 0 || purrr::chuck(fit1, "optimizer", "convergence") != 0)) {
       return(invisible(NULL))
-    }
+    }#fi
+
+    # mkuhn, 2024-08-28
+    SHAPE_TEST <- TRUE
+    # for the time being: add crude check for Weibull (tailored for MLEw) whether fit is completely unreasonable
+    #XXX replace with better local maximum check in MLEw routine
+    if (SHAPE_TEST && fit0$distO$dist == "weibull") {
+      coefs <- c(coef.incubate_fit(fit0), coef.incubate_fit(fit1))
+
+      if (any(coefs[startsWith(names(coefs), "shape")] > 7.1)) {
+        if (verbose > 0) {
+          warning("Weibull fit with very high shape parameter > 7.1 rejected", call. = FALSE)
+        }
+        return(invisible(NULL))
+      }#fi
+    }#fi
 
     # higher values of T speak in favour of H1:
     #   1. fit0 has high value (=bad fit)
@@ -864,7 +885,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
                                            },
                                            FUN.VALUE = double(retL),
-                                           future.packages = "incubate",
+                                           future.packages = c("incubate", "purrr", "rlang"),
                                            future.seed = TRUE,
                                            future.globals = TRUE #c("retL", "distO", "ranFunArgsX", "ranFunArgsY", "testStat", "delay_model", "MLEw_approx"),
     )
