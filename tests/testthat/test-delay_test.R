@@ -142,11 +142,11 @@ test_that("Bootstrap test: chosen method matters", code = {
   x <- rexp_delayed(n=37, delay1 = 5, rate1 = .63)
   y <- rexp_delayed(n=39, delay1 = 5.1, rate1 = .51)
 
-  est_meths <- c("MPSE", "MLEn", "MLEc") |> #, "MLEw"),
+  est_meths <- c("MPSE", "MLEn", "MLEc", "MLEw") |>
     purrr::set_names()
   teDiffs <- purrr::map(.x = est_meths,
                         .f = ~ test_diff(x = x, y = y, param="delay1", type = "bootstrap",
-                                         method = .x, R = 571, profiled = .x == "MLEn"))
+                                         method = .x, R = 571, profiled = .x != "MPSE"))
 
   # bootstrap P-values vary depending on chosen method
   expect_gt(stats::sd(purrr::map_dbl(teDiffs, c("P", "bootstrap"))), expected = 1e-3)
@@ -162,10 +162,10 @@ test_that("Bootstrap test for difference in delay under H0 (no difference in del
 
   future::plan(future.callr::callr, workers = 3L)
 
-  set.seed(20210506)
+  set.seed(2021-05-06)
 
   testres_P_H0 <- future.apply::future_vapply(X = seq_len(21L),
-                                              function(dummy) {
+                                              FUN = function(dummy) {
                                                 x <- rexp_delayed(13, delay1 = 4, rate1 = .07)
                                                 y <- rexp_delayed(11, delay1 = 4, rate1 = .1)
 
@@ -177,7 +177,8 @@ test_that("Bootstrap test for difference in delay under H0 (no difference in del
                                                     silent = TRUE)
 
                                                 Pval
-                                              }, FUN.VALUE = double(1L),
+                                              },
+                                              FUN.VALUE = double(1L),
                                               future.seed = TRUE)
 
   testres_P_H0 <- testres_P_H0[is.finite(testres_P_H0)]
@@ -217,7 +218,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
   # testres2: right-censored events
   testres2 <- future.apply::future_vapply(X = seq_len(nTests),
-                                          function(dummy) {
+                                          FUN = function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 3, rate1 = .7)
                                             evStatus <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
                                             fm <- delay_model(x = survival::Surv(x, event = evStatus),
@@ -227,7 +228,8 @@ test_that("Moran/Pearson GOF-test", code = {
                                               unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
                                               unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
                                             )
-                                          }, FUN.VALUE = double(4L),
+                                          },
+                                          FUN.VALUE = double(4L),
                                           future.seed = TRUE)
 
   # all test statistics are positive
@@ -248,7 +250,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
   # testres3: GOF-tests, nonSurv, two group scenario
   testres3 <- future.apply::future_vapply(X = seq_len(nTests),
-                                          function(dummy) {
+                                          FUN = function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 3, rate1 = 1.1)
                                             y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
                                             #evStatus <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
@@ -259,7 +261,8 @@ test_that("Moran/Pearson GOF-test", code = {
                                               unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
                                               unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
                                             )
-                                          }, FUN.VALUE = double(4L),
+                                          },
+                                          FUN.VALUE = double(4L),
                                           future.seed = TRUE)
 
 
@@ -284,7 +287,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
   # GOF-moran tests on tied data from poisson (HA), noSurv, two group, many ties
   testres3a <- future.apply::future_vapply(X = seq_len(nTests),
-                                           function(dymmy) {
+                                           FUN = function(dymmy) {
 
                                              yObs <- 8 + rpois(23, lambda = 3)
                                              #yEv <- sample(x = c(0, 1, 1, 1), size = length(yObs), replace = T)
@@ -308,7 +311,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
   # testres4: GOF-tests H0, Surv, two group
   testres4 <- future.apply::future_vapply(X = seq_len(nTests),
-                                          function(dummy) {
+                                          FUN = function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 3, rate1 = 1.1)
                                             y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
                                             evStatus_x <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
@@ -346,7 +349,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
   # GOF-moran tests on tied data from Poisson (HA situation). Surv, two group, many ties
   testres4a <- future.apply::future_vapply(X = seq_len(nTests),
-                                           function(dymmy) {
+                                           FUN = function(dymmy) {
 
                                              yObs <- 8 + stats::rpois(23, lambda = 3)
                                              yEv <- sample(x = c(0, 1, 1, 1), size = length(yObs), replace = TRUE)
@@ -371,7 +374,7 @@ test_that("Moran/Pearson GOF-test", code = {
   # GOF-tests for 2-groups with bind= parameter
   # testres5: GOF-tests for H0 (delays are equal), bind delay1, Surv, two group scenario
   testres5 <- future.apply::future_vapply(X = seq_len(nTests),
-                                          function(dummy) {
+                                          FUN = function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 5, rate1 = 1.1)
                                             y <- rexp_delayed(n = 23, delay1 = 5, rate1 = .2)
                                             evStatus_x <- sample(x = c(0, 1, 1),
@@ -386,7 +389,8 @@ test_that("Moran/Pearson GOF-test", code = {
                                               unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
                                               unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
                                             )
-                                          }, FUN.VALUE = double(4L),
+                                          },
+                                          FUN.VALUE = double(4L),
                                           future.seed = TRUE)
 
   # all test statistics are positive
@@ -402,7 +406,7 @@ test_that("Moran/Pearson GOF-test", code = {
 
   # testres6: GOF-tests for two group scenario with censored observations, bind delay1 (HA, as delay diff is 3)
   testres6 <- future.apply::future_vapply(X = seq_len(nTests),
-                                          function(dummy) {
+                                          FUN = function(dummy) {
                                             x <- rexp_delayed(n = 29, delay1 = 5, rate1 = 1.1)
                                             y <- rexp_delayed(n = 23, delay1 = 8, rate1 = .4)
                                             evStatus_x <- sample(x = c(0, 1, 1), size = length(x), replace = TRUE)
@@ -415,7 +419,8 @@ test_that("Moran/Pearson GOF-test", code = {
                                               unlist(test_GOF(delayFit = fm, method = "moran")[c("statistic", "p.value")]),
                                               unlist(test_GOF(delayFit = fm, method = "pearson")[c("statistic", "p.value")])
                                             )
-                                          }, FUN.VALUE = double(4L),
+                                          },
+                                          FUN.VALUE = double(4L),
                                           future.seed = TRUE)
 
 

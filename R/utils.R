@@ -13,7 +13,7 @@ DELAY_MIN <- .Machine$double.eps #.Machine$double.xmin even smaller ##1e-9
 #' @return number formatted as percentage character
 as_percent <- function(x, digits = 1) {
   stopifnot( is.numeric(digits) )
-  sprintf(fmt = paste0('%.', as.integer(digits),'f%%', x*100))
+  sprintf(fmt = paste0('%.', as.integer(digits),'f%%'), x*100)
 }
 
 #' Checks if arguments are numerically close.

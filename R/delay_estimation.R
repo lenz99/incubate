@@ -5,12 +5,8 @@
 NULL
 
 #XXX read here
-# transformation of parameters works currently: delay1 is transformed involving log and first observations
-#+so we do not need a strict upper bound. But delay1 can become negative.
-#+currently, we use negative bound to avoid negative delay (but package rootSolve does not allow for bounds during root-finding)
-#+
 #+ **neXt**
-#+ 1/ use logit-based transformation for delay1: it will enforce non-negativity of delay1. then we do not need lower bound to avoid non-negative.
+#+ ~1/~ use logit-based transformation for delay1: it will enforce non-negativity of delay1. then we do not need lower bound to avoid non-negative.
 #+ 2/ make transformations easier (not via matrices and functions stored but to be implemented more directly)
 #+ 3/ work on rootSolve way to implement MLEw. There we would check that we have indeed local maximum of MLEw
 #+ 4/ check that censorings are implmemented correctly
@@ -1290,6 +1286,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # Calculate value to be maximized based on the log-likelihood
   #
   # Log-likelihood based value to be maximized, either naive, weighted or in corrected form
+  # It is calculated for a single group. A two-group setting will call this function twice, once for each group.
   # What precisely is calculated depends on its surrounding closure (see variable `method` but also the profiled-flag).
   # For MLEw, we use a value that comes from 1st deriv of log-likelihood.
   # Penalty term is subtracted here, see `penF`
@@ -1425,7 +1422,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                #+hence, neg of squared summands are maximized to come close to 0 (could also be abs())
                -(weights$W2[[group]]/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c^k)/sum(obs_c^k))^2 +
                  # 1st factor is inverse of harmonic mean
-                 -(mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)) - w3F(k))^2 +
+                 -(w3F(k) - mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)))^2 +
                  # penalization term
                  #XXX is it safe/right scale if we subtract penalty term here on objective function coming from length of 1st deriv vector (indirect way)
                  -penF(k, nObs = nObs)
@@ -1442,8 +1439,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                           # from equation for delay
                           # its the negative of what is in Cousineau, but it is more in line with the likelihood derivation)
                           # (for what it's worth, 1st factor is inverse of harmonic mean)
-                          -(mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)) - w3F(k))^2 +
-                          # # contribution of right censorings is in the scale estimate, here no extra contriubtion!
+                          -(w3F(k) - mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)))^2 +
+                          # # contribution of right censorings is in the scale estimate, here no extra contribution!
                           # sum(rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
 
                           # optional penalization term for big shape
@@ -1754,6 +1751,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
       optObj$methodOpt <- optim_args$method
     }, silent = TRUE)
 
+    #XXX continue here: MLEw: where to do check of 2nd deriv
 
     if (is.null(optObj)) {
       if (verbose > 0L) {
@@ -1845,7 +1843,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
                      values = list(par_orig = objFunObjs$extractPars(parV = optObj$par, group = NULL,
                                                                      isOpt = TRUE, transform = TRUE, named = TRUE))
     )
-  } #esle numeric optimization
+  }#esle numeric optimization
 
   optObj
 }
@@ -1859,7 +1857,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #' @return list. Control settings for fitting routine `delay_model`
 buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
                          MLEw_weight = "sdist_median",
-                         MLEw_optim = c("min", "root"),
+                         MLEw_optim = "min", #c("min", "root"),
                          ties = "density") {
   #MLEw_weight used to depend on surv-type of data, but this is not known here nor in delay_model (only within objFunFactory)
   #+was before: MLEw_weight = if (isSurv) "sample" else "sdist_median"
@@ -2013,7 +2011,9 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
   # optimise objective function
   optObj <- delay_fit(objFun, optim_args = NULL, verbose = cntrl$verbose)
 
-  if (is.null(optObj) || is.null(optObj$par_orig)) return(invisible(NULL))
+  if (is.null(optObj) || is.null(optObj$par_orig)) {
+    return(invisible(NULL))
+  }
 
   # return -----
   twoGroup <- rlang::env_get(env = objFunEnv, nm = "twoGroup")

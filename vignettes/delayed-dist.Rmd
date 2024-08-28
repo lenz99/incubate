@@ -91,6 +91,7 @@ Setting these two partial derivatives to zer0 we get:
 \frac{1}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) = 0
 \]
 
+
 ### Weighted MLE (MLEw)
 Cousineau (2009) proposes a slightly varied equation to solve for the parameter estimates.
 The scale parameter β gets estimated using a weighting factor $W_1$,
@@ -100,16 +101,18 @@ The scale parameter β gets estimated using a weighting factor $W_1$,
 
 For the remaining parameters, we modify the partial derivatives equations of the profiled log-likelihood function.
 It can be seen to come from the following partial derivatives of a modified log-likelihood function,
-where $W_1$, $W_2$ and $W_3(k)$ are weights that depend on sample size $n$.
-Actually, these weights are random variables that ultimately depend on the true parameter α and k
+where $W_1$, $W_2$ and $W_3(k)$ are seen as weights that depend on sample size $n$.
+Actually, these weights are random variables that ultimately depend on the true parameter α and $k$
 but we treat $W_1$ and $W_2$ as fixed for given $n$ and we model $W_3$ as function of shape $k$ for given $n$.
 
 \[
 \begin{aligned}
-\frac{\partial l^W}{\partial α}(α, k) &= n · \Big[ W_3(k) · (k-1) · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
-\frac{\partial l^W}{\partial k}(α, k) &= n · \Big[ \frac{W_2}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]
+\frac{\partial l_w^{P}}{\partial α}(α, k) &= n · \Big[ W_3(k) · (k-1) · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
+\frac{\partial l_w^{P}}{\partial k}(α, k) &= n · \Big[ \frac{W_2}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]
 \end{aligned}
 \]
+
+Compared to the MLE-equations (partial derivative equation for delay), we see that $W_3(k)$ takes the role of $\frac{k}{k-1}$.
 
 
 

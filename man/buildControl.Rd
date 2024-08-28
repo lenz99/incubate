@@ -9,7 +9,7 @@ buildControl(
   profiled = FALSE,
   pen_shape = FALSE,
   MLEw_weight = "sdist_median",
-  MLEw_optim = c("min", "root"),
+  MLEw_optim = "min",
   ties = "density"
 )
 }
