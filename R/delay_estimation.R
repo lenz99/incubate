@@ -1335,7 +1335,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     nObs <- length(obs)
     stopifnot(!criterion, nObs > 1L)
 
-    # shape parameter (candidate)
+    # shape parameter (candidate), set to 1 if not applicable
     k <- if (distO$dist == 'weibull') pars.gr[[2L]] else 1L
 
     # return value (to be maximized)
@@ -1358,7 +1358,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                             -penF(k, nObs = nObs)
                         },
                         stop("This Surv-type is not supported!", call. = FALSE))
-               } #esle !isSurv
+               }#esle !isSurv
              } else {
                stopifnot(profiled, distO$dist == 'weibull')
                if (!isSurv) {
@@ -1509,10 +1509,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # These log-spacings are the heart of the MPSE-criterion which is the negative mean of these log-spacings.
   # Moran's test statistic is the negative sum of these log-spacings.
   # @param pars vector of parameters (by default, on transformed scale, i.e. when criterion = FALSE)
-  # @param criterion logical. When `criterion = TRUE`, then pars are on original scale. No other meaning here.
+  # @param isOrig logical. Are the pars on original scale? Or transformed as used during optimization?
   # @param ties. how to handle ties. By default, use the tie-setting from objective function call.
   # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
-  getCumDiffs <- function(pars, group, criterion = FALSE, ties. = ties) {
+  getCumDiffs <- function(pars, group, isOrig = FALSE, ties. = ties) {
 
     # access observations of group
     #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
@@ -1520,7 +1520,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     obs <- if (group == "y") y else x # direct access by name
 
     # extract parameters for specified group on original scale (for CDF)
-    pars.gr <- extractPars(pars, group = group, isOpt = !criterion, transform = !criterion)
+    pars.gr <- extractPars(pars, group = group, isOpt = !isOrig, transform = !isOrig)
 
     if (verbose > 1L) {
       cat(glue("Parameter vector for group {group} on non-transformed scale: ",
@@ -1625,7 +1625,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # One can estimate parameters by minimizing this objective function.
   #
   # @param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
-  # @param `criterion` logical. If `TRUE`, give the original criterion to minimize (e.g., neg. log-likelihood). In this case, the parameters must be on original scale.
+  # @param `criterion` logical. If `TRUE`, give the original criterion to minimize (e.g., neg. log-likelihood). In this case, the parameters are conventionally on original scale.
   # @param `aggregated` logical. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
   # @param `ties.` How to handle ties for the MPSE-function? Default value is 'density'.
   # @return value of objective function (to be minimized)
@@ -1636,15 +1636,15 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     valToMax <- switch(method,
                        MPSE = {
                          if (!twoGroup) {
-                           mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.))
+                           mean(getCumDiffs(pars, group = "x", isOrig = criterion, ties. = ties.))
                          } else {
                            local({
                              #twoGroup:
                              #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
                              #because the parameters should be optimized within group.
                              #merged data lead to frequent non-convergence or visually bad fits
-                             res0 <- c(mean(getCumDiffs(pars, group = "x", criterion = criterion, ties. = ties.)),
-                                       mean(getCumDiffs(pars, group = "y", criterion = criterion, ties. = ties.)))
+                             res0 <- c(mean(getCumDiffs(pars, group = "x", isOrig = criterion, ties. = ties.)),
+                                       mean(getCumDiffs(pars, group = "y", isOrig = criterion, ties. = ties.)))
 
                              if (aggregated) stats::weighted.mean(res0, w = c(length(x), length(y))) else res0
                            })
@@ -1658,7 +1658,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                          if (!twoGroup) {
                            getLogLik(pars, group = "x", isOrig = criterion, criterion = criterion)
                          } else {
-                           #XXX think here: can we use sum of log-lik from two groups in case of derivative-based solutions (MLEw, min or root)
+                           #XXX think here: can we use sum of log-lik from two groups in case of derivative-based solutions (MLEw, min)
                            local({
                              res0 <- c(getLogLik(pars, group = "x", isOrig = criterion, criterion = criterion),
                                        getLogLik(pars, group = "y", isOrig = criterion, criterion = criterion))

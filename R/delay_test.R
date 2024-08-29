@@ -778,7 +778,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                 call. = FALSE)
         return(invisible(NULL))
       }#fi
-    }# fi bad fit1
+    }#fi bad fit1
 
     # check convergence of re-fits when in strict mode only:
     if (strict && (purrr::chuck(fit0, "optimizer", "convergence") != 0 || purrr::chuck(fit1, "optimizer", "convergence") != 0)) {
@@ -789,7 +789,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     SHAPE_TEST <- TRUE
     # for the time being: add crude check for Weibull (tailored for MLEw) whether fit is completely unreasonable
     #XXX replace with better local maximum check in MLEw routine
-    if (SHAPE_TEST && fit0$distO$dist == "weibull") {
+    if (strict && SHAPE_TEST && fit0$distO$dist == "weibull") {
       coefs <- c(coef.incubate_fit(fit0), coef.incubate_fit(fit1))
 
       if (any(coefs[startsWith(names(coefs), "shape")] > 7.1)) {
