@@ -19,7 +19,8 @@ library("incubate")
 #+ 1.3.0.9025: rename logrank P-values to logrank and logrank_pp (to avoid confusion with likelihood ratio (=LR) tests)
 #+ 1.3.0.9037: allow profiling for MPSE and all MLE-methods, at least with single group..
 #+ 1.3.0.9055: support random right-censoring in rexp_delayed() and rweib_delayed()
-stopifnot(packageVersion("incubate") >= "1.3.0.9055")
+#+ 1.3.0.9077: criterion updated
+stopifnot(packageVersion("incubate") >= "1.3.0.9077")
 cat('incubate package version: ', toString(packageVersion("incubate")), '\n')
 
 library("dplyr", warn.conflicts = FALSE)
@@ -59,7 +60,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
   cat('  --n=\t\t sample size number to use in the simulation\n')
   cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
-  cat('  --includeMLEw\t include also weighted MLE approach\n')
+  cat('  --dropMLEw\t drop MLEw method\n')
   cat('  --cens\t apply also random right-censoring during the simulation study\n')
   cat('  --slice=\t if given, pick only this number of first scenarios for simulations. If negative, scenarios taken from the tail.\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent.\n')
@@ -114,7 +115,7 @@ myAllN <- isTRUE(any(c("alln", "a") %in% tolower(names(cmdArgs))))
 if (myAllN && myN > 0) {
   stop("Requested n=",myN, " but also --allN at the same time.")
 }
-myIncludeMLEw <- isTRUE(any("includemlew" %in% tolower(names(cmdArgs))))
+myDropMLEw <- isTRUE(any("dropmlew" %in% tolower(names(cmdArgs))))
 myScaleSimple <- isTRUE(any(c("scalesimple", "scale", "scales") %in% tolower(names(cmdArgs))))
 myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
 
@@ -235,7 +236,9 @@ if (myPrint) {
   cat('\n')
   cat(NROW(simSetting), 'simulation scenarios in total.\n')
   cat('Each scenario is covered by ', myMCNrep, 'MC-data replications.\n')
-  if (myIncludeMLEw) { cat("We also cover MLEw.\n") }
+  if (myDropMLEw) {
+    cat("We don't do MLEw.\n")
+  }
   cat('Bootstrap tests with R=', myR, 'parametric bootstrap samples (P-value resolution).\n')
   if (mySeed>0) {
     cat('Seed was set initially to', mySeed,'\n')
@@ -270,14 +273,14 @@ if (USE_FUTURE) {
 #' Uses parallel computation (future_replicate) to go through the (=nrep) MC-simulations.
 #' Each bootstrap test is also future-aware (and would pick up a nested future-plan setting)
 #' @param DGPsetting numeric. a row from `simSetting`. It encodes parameters that specify the data generating process for both groups
-#' @param includeMLEw logical. Should we also include MLEw?
+#' @param dropMLEw logical. Should we drop MLEw?
 #' @return dataframe. P-values in the different Monte-Carlo runs.
-doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
+doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
   # settings from the environment:
   stopifnot(exists("isExpon"), exists("myMCNrep"), exists("myR"))
   stopifnot(is.numeric(DGPsetting), length(DGPsetting) == 8L)
-  stopifnot(is.logical(includeMLEw), length(includeMLEw) == 1L)
-  includeMLEw <- isTRUE(includeMLEw)
+  stopifnot(is.logical(dropMLEw), length(dropMLEw) == 1L)
+  dropMLEw <- isTRUE(dropMLEw)
 
   n_x <- DGPsetting[[1]]
   n_y <- DGPsetting[[2]]
@@ -294,7 +297,7 @@ doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
   scale_y <- scale_x * scale_ratio
 
   # different estimation methods
-  estimMethods <- tidyr::expand_grid(method = c(c("MPSE", "MLEn", "MLEc"), if (includeMLEw) "MLEw"),
+  estimMethods <- tidyr::expand_grid(method = c(c("MPSE", "MLEn", "MLEc"), if (!dropMLEw) "MLEw"),
                                      profiled = c(FALSE, TRUE),
                                      R = as.integer(myR)) %>%
     # all MLE-methods use only profiled variant, MPSE uses both, profiled & unprofiled
@@ -327,8 +330,8 @@ doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
                                                          # test difference in delay1 in exponential model
                                                          te_diff <- test_diff(x = x, y = y, distribution = "expon", param = "delay1",
                                                                               method = method, profiled = profiled, R = R, type = "all",
-                                                                              # log-rank test only once
-                                                                              doLogrank = method == "MPSE" && !profiled) %>%
+                                                                              # log-rank test only once (e.g. MPSE, profiled)
+                                                                              doLogrank = method == "MPSE" && profiled) %>%
                                                            suppressWarnings()
                                                          # bootstrap P-value for combined test for difference in parameters delay+rate
                                                          #+only if the scale (=1/rate for exponential) is indeed different betw groups
@@ -378,7 +381,7 @@ doMCSim <- function(DGPsetting, includeMLEw = TRUE) {
 #' @returns tibble of simulations settings with results added
 applyMCSims <- function(simSetDF, ...) {
   simSetDF %>%
-    dplyr::mutate(., results = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim, includeMLEw = myIncludeMLEw, ...))
+    dplyr::mutate(., results = apply(as.matrix(.), MARGIN = 1L, FUN = doMCSim, dropMLEw = myDropMLEw, ...))
 }
 
 
