@@ -125,6 +125,15 @@ plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
 }
 
 
+#' Extract Log-Likelihood
+#'
+#' The user has the possibility to request different flavours of log-likelihood.
+#' By default the flavour matching the fitting method is used.
+#' @param method Log-likelihood for which criterion?
+#' @export
+logLik.incubate_fit <- function(object, method = NULL, ...) {
+  object[["objFun"]](pars = object[["par"]], isOrig = TRUE, criterion = if (is.null(method)) object[["method"]] else method, maximum = TRUE)
+}
 
 
 #' Transform observed data to unit interval

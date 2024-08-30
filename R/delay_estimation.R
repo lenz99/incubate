@@ -1293,12 +1293,21 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # @param pars complete vector of parameters (can refer to two groups)
   # @param group which group?
   # @param isOrig Is the parameter vector already on original scale?
-  # @param criterion logical. If `TRUE`, then the proper log-likelihood is returned.
+  # @param criterion character Which criterion or `NULL` (default) for calculation with optional penalization for given method
   # @return log-likelihood (certain flavour or related like negative L2-norm of gradient of log-likelihood) for specified group
-  getLogLik <- function(pars, group, isOrig = FALSE, criterion = FALSE) {
+  getLogLik <- function(pars, group, isOrig = FALSE, criterion = NULL) {
 
     # Old idea was to change signature to be with pars.gr and obs for both getLogLik and getCumDiffs
     #+But what are the benefits?
+
+    # request a specific criterion?
+    isCrit <- !is.null(criterion) && is.character(criterion) && nzchar(criterion[[1]])
+    critSwitch <- if (isCrit) {
+      # MLEw has no own likelihood function: use MLEc #XXX only when method != "MLEw"??!
+      if (criterion[[1]] == "MLEw") "MLEc" else criterion[[1]]
+    } else {
+      method
+    }
 
     # access observations of group
     obs <- if (group == "y") y else x #direct access by name
@@ -1308,54 +1317,30 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     pars.gr <- extractPars(pars, group = group, isOpt = !isOrig, transform = !isOrig)
 
 
-    if (criterion) {
-      # return proper log-likelihood
-      return(
-        if (!isSurv) {
-          # numeric response, non-Surv
-          sum(rlang::exec(distO$pdf, !!! c(list(x=obs, log=TRUE), pars.gr)))
-        } else {
-          # Surv-response
-          #if (verbose > 2) cat(glue("Parameter {paste(pars.gr, collapse = '; ')}"))
-          switch(attr(obs, which = "type", exact = TRUE),
-                 right = {
-                   sum(rlang::exec(distO$pdf, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
-                       rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)))
-                 },
-                 stop("This type of censoring is not supported!", call. = FALSE)
-          )
-        }#esle
-      )
-    }#fi criterion
-
-
     #Calculate the objective function to be maximized which depends on
     #+method
     #+profiled
     nObs <- length(obs)
-    stopifnot(!criterion, nObs > 1L)
-
+    stopifnot(nObs > 1L)
     # shape parameter (candidate), set to 1 if not applicable
     k <- if (distO$dist == 'weibull') pars.gr[[2L]] else 1L
 
+
     # return value (to be maximized)
-    switch(EXPR = method,
+    rVal <- switch(EXPR = critSwitch,
            MLEn = {
              if (!profiled || distO$dist != 'weibull') {
                # not Weibull or
                # Weibull log-likelihood with all parameters (scale is not profiled out)
                if (!isSurv) {
                  # numeric, non-Surv
-                 sum(rlang::exec(distO$pdf, !!! c(list(x=obs, log=TRUE), pars.gr))) +
-                   -penF(k, nObs = nObs)
+                 sum(rlang::exec(distO$pdf, !!! c(list(x=obs, log=TRUE), pars.gr)))
                } else {
                  # Surv-response
                  switch(attr(obs, which = "type", exact = TRUE),
                         right = {
                           sum(rlang::exec(distO$pdf, !!! c(list(x=obs[cens$ind[[group]]$obs,  1L], log=TRUE), pars.gr)),
-                              rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
-                            # optional penalty term for high shape parameter
-                            -penF(k, nObs = nObs)
+                              rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)))
                         },
                         stop("This Surv-type is not supported!", call. = FALSE))
                }#esle !isSurv
@@ -1371,7 +1356,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                  # objective function to maximize:
                  # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
                  # 2nd & 3rd summand could also be: - log(sum(obs_c^k)) + log(n*k)
-                 nObs * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) - penF(k, nObs = nObs)
+                 nObs * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1)
 
                  # alternative:
                  #indirect way: !profiled_llik_directly
@@ -1391,12 +1376,9 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
                           # we used "partial derivative = 0" equation to profile out scale parameter,
                           #+but otherwise, use log-likelihood function directly
-                          (nObs - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1) +
+                          (nObs - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1)
                             # # contribution of right censorings is in the scale estimate, here no extra contriubtion!
                             # sum(rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
-
-                            # penalty term for large values of shape
-                            -penF(k, nObs = nObs)
 
                         },
                         stop("This Surv-type is not supported!", call. = FALSE)
@@ -1422,10 +1404,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                #+hence, neg of squared summands are maximized to come close to 0 (could also be abs())
                -(weights$W2[[group]]/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c^k)/sum(obs_c^k))^2 +
                  # 1st factor is inverse of harmonic mean
-                 -(w3F(k) - mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)))^2 +
+                 -(w3F(k) - mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)))^2
                  # penalization term
                  #XXX is it safe/right scale if we subtract penalty term here on objective function coming from length of 1st deriv vector (indirect way)
-                 -penF(k, nObs = nObs)
+                 #-penF(k, nObs = nObs)
 
              } else {
                # Surv-response
@@ -1439,12 +1421,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                           # from equation for delay
                           # its the negative of what is in Cousineau, but it is more in line with the likelihood derivation)
                           # (for what it's worth, 1st factor is inverse of harmonic mean)
-                          -(w3F(k) - mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)))^2 +
+                          -(w3F(k) - mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)))^2
                           # # contribution of right censorings is in the scale estimate, here no extra contribution!
                           # sum(rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
 
-                          # optional penalization term for big shape
-                          -penF(k, nObs = nObs)
                       },
                       stop("This Surv-type is not supported here!", call. = FALSE))
              } #esle !isSurv
@@ -1474,9 +1454,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
              if (!isSurv) {
                # numeric response, non-Surv
                length(ind12[["inds_obs1"]]) * logspace_sub2_cpp(rlang::exec(distO$cdf, !!! c(list(q=obs[c(1, ind12[["ind_next"]])], log.p = TRUE), pars.gr))) +
-                 sum(rlang::exec(distO$pdf, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr))) +
-                 # optional penalization term
-                 -penF(k, nObs = nObs)
+                 sum(rlang::exec(distO$pdf, !!! c(list(x=obs[-ind12[["inds_obs1"]]], log=TRUE), pars.gr)))
 
              } else {
                switch(attr(obs, which = "type", exact = TRUE),
@@ -1491,31 +1469,49 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                           sum(rlang::exec(distO$pdf, !!! c(list(x=obs[setdiff(cens$ind[[group]]$obs, ind12[["inds_obs1"]]),1L], log=TRUE), pars.gr)),
                               # right-censored observations do not need correction
                               #+(as they are tail probabilities that do not peak so drastically as densities do)
-                              rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
-                          # subtract penalization term
-                          -penF(k, nObs = nObs)
+                              rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr)))
                       },
                       stop("This type of censoring is not supported!", call. = FALSE))
 
              } #esle !isSurv
            },
-           stop(glue("This method {method} is not handled here!"), call. = FALSE)
+           stop(glue("This calculation method {critSwitch} is not handled here!"), call. = FALSE)
     )#hctiws
+
+
+    # return:
+    if (!isCrit) {
+      # apply potential penalty term for high shape parameter if not specifc criterion requested
+      #XXX What is the right penalty for MLEw (which has a objective function as square length of normal equation [=solution of 1st deriv set to 0])?
+      #+ is it first deriv squared of penF wrt shape k?
+      rVal - penF(k, nObs = nObs)
+    } else {
+      rVal
+    }
+
   }#fn getLogLik
 
 
-  # log spacings to be maximized
-  # calculate the differences in EDF (for given parameters in group) of adjacent observations on log scale
-  # These log-spacings are the heart of the MPSE-criterion which is the negative mean of these log-spacings.
-  # Moran's test statistic is the negative sum of these log-spacings.
-  # @param pars vector of parameters (by default, on transformed scale, i.e. when criterion = FALSE)
-  # @param isOrig logical. Are the pars on original scale? Or transformed as used during optimization?
-  # @param ties. how to handle ties. By default, use the tie-setting from objective function call.
-  # @return n+1 cumulative diffs on log-scale (or single negative number in twoPhase when delay2 <= delay in quick fix)
+  # Log-spacings to be maximized
+  #
+  # Calculate the differences in EDF (for given parameters in group) of adjacent
+  # observations on log scale The higher the sum of these log-spacings the more
+  # evenly spread are the observations. These log-spacings are at the heart of
+  # the MPSE-criterion which is the negative mean of these log-spacings. Moran's
+  # test statistic is the negative sum of these log-spacings.
+  # @param pars vector of parameters (by default, on transformed scale, i.e.
+  #   when criterion = FALSE)
+  # @param isOrig logical. Are the pars on original scale? Or transformed as
+  #   used during optimization?
+  # @param ties. how to handle ties. By default, use the tie-setting from
+  #   objective function call.
+  # @return n+1 cumulative diffs on log-scale (or single negative number in
+  #   twoPhase when delay2 <= delay in quick fix)
   getCumDiffs <- function(pars, group, isOrig = FALSE, ties. = ties) {
 
-    # access observations of group
-    #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L), nm = group, inherit = FALSE)
+    #access observations of group
+    #obs <- rlang::env_get(env = rlang::env_parent(rlang::current_env(), n=1L),
+    # nm = group, inherit = FALSE)
     #+or use env = rlang::fn_env(getCumDiffs) # (but requires function obj)
     obs <- if (group == "y") y else x # direct access by name
 
@@ -1611,6 +1607,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       )
     } #fi
 
+    #XXX numerical stability: is diff() accurate? does log1p on 1-xx help?
+    #think of log1p: log1p(cumDiffs-1) = log1p(-(1-cumDiffs))
+    #and consider .Machine$double.neg.eps first:
+    #cumDiffs[which(cumDiffs < .Machine$double.neg.eps)] <- .Machine$double.neg.eps
+    #but log1p(-(1-.Machine$double.neg.eps)) = -36.7 while log(.Machine$double.xmin) = -708
     # respect the machine's numerical lower limit
     cumDiffs[which(cumDiffs < .Machine$double.xmin)] <- .Machine$double.xmin
 
@@ -1625,26 +1626,39 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # One can estimate parameters by minimizing this objective function.
   #
   # @param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
-  # @param `criterion` logical. If `TRUE`, give the original criterion to minimize (e.g., neg. log-likelihood). In this case, the parameters are conventionally on original scale.
+  # @param `isOrig` Are parameters on original scale? Or transformed for optimization?
+  # @param criterion character Which log-lik criterion or `NULL` (default) for calculation with optional penalization for given method. Not used for MPSE.
   # @param `aggregated` logical. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
+  # @param `maximum` logical. Should the objective function be maximized? Default value is `FALSE`.
   # @param `ties.` How to handle ties for the MPSE-function? Default value is 'density'.
-  # @return value of objective function (to be minimized)
-  objFun <- function(pars, criterion = FALSE, aggregated = TRUE, ties. = ties) {
+  # @return value of objective function (by default, to be minimized, like neg. log-likelihood)
+  objFun <- function(pars, isOrig = FALSE, criterion = NULL, aggregated = TRUE, maximum = FALSE, ties. = ties) {
+
+    maximum <- isTRUE(maximum[1])
+
+    # request a specific criterion?
+    isCrit <- !is.null(criterion) && is.character(criterion) && nzchar(criterion[[1]])
+    critSwitch <- if (isCrit) {
+      # MLEw has no own likelihood function: use MLEc #XXX only when method != "MLEw"??!
+      if (criterion[[1]] == "MLEw") "MLEc" else criterion[[1]]
+    } else {
+      method
+    }
 
     if (verbose > 1) cat("pars:", pars, "\n")
 
-    valToMax <- switch(method,
+    valToMax <- switch(critSwitch,
                        MPSE = {
                          if (!twoGroup) {
-                           mean(getCumDiffs(pars, group = "x", isOrig = criterion, ties. = ties.))
+                           mean(getCumDiffs(pars, group = "x", isOrig = isOrig, ties. = ties.))
                          } else {
                            local({
                              #twoGroup:
                              #the approach to first merge x and y and then do the cumDiffs, log and mean does *not* work out
                              #because the parameters should be optimized within group.
                              #merged data lead to frequent non-convergence or visually bad fits
-                             res0 <- c(mean(getCumDiffs(pars, group = "x", isOrig = criterion, ties. = ties.)),
-                                       mean(getCumDiffs(pars, group = "y", isOrig = criterion, ties. = ties.)))
+                             res0 <- c(mean(getCumDiffs(pars, group = "x", isOrig = isOrig, ties. = ties.)),
+                                       mean(getCumDiffs(pars, group = "y", isOrig = isOrig, ties. = ties.)))
 
                              if (aggregated) stats::weighted.mean(res0, w = c(length(x), length(y))) else res0
                            })
@@ -1656,29 +1670,37 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                          stopifnot(!twoPhase) #XXX not implemented yet!
 
                          if (!twoGroup) {
-                           getLogLik(pars, group = "x", isOrig = criterion, criterion = criterion)
+                           getLogLik(pars, group = "x", isOrig = isOrig, criterion = criterion)
                          } else {
                            #XXX think here: can we use sum of log-lik from two groups in case of derivative-based solutions (MLEw, min)
                            local({
-                             res0 <- c(getLogLik(pars, group = "x", isOrig = criterion, criterion = criterion),
-                                       getLogLik(pars, group = "y", isOrig = criterion, criterion = criterion))
+                             res0 <- c(getLogLik(pars, group = "x", isOrig = isOrig, criterion = criterion),
+                                       getLogLik(pars, group = "y", isOrig = isOrig, criterion = criterion))
 
                              if (aggregated) sum(res0) else res0
                            })
                          }
                        },
-                       stop(glue('Objective function for method {method} is not implemented!'), call. = FALSE)
+                       stop(glue("Objective function for method {method} is not implemented!"), call. = FALSE)
     )#hctiws
 
-    rVal <- -valToMax
+    # switch sign !maximum => -valToMax
+    rVal <-  (-1 + 2 * maximum) * valToMax
     if (verbose > 2) {
-      cat("Objfun value: ", rVal, "\n")
+      cat("Objfun value ", if (maximum) "(to be maximized):" else ":", rVal, "\n")
     }
-    rVal
+
+    # return
+    if (isCrit) {
+      # criterion gets named ##&& aggregated only if single number??
+      rlang::set_names(rVal, nm = paste0(if (!maximum) "neg. ", critSwitch))
+    } else {
+      rVal
+    }
   }#fn objFun
 
-  # attach analytical solution for MLE
-  if (method == 'MLEn' && !twoGroup && !twoPhase && distO$dist == 'exponential' && !isSurv) {
+  if (method == 'MLEn' && !twoGroup && !twoPhase && distO$dist == "exponential" && !isSurv) {
+    # attach analytical solution for MLE as attribute "opt"
     attr(objFun, which = "opt") <- local({
       par_analytic <- c(delay1 = x[[1L]], rate1 = 1L/(mean(x) - x[[1L]]))
       list(par_orig = par_analytic,
@@ -1849,7 +1871,7 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 }
 
 
-#' Build control list for `delay_model` and `objFunFactory`
+#' Build control list for [delay_model()] and [objFunFactory()]
 #'
 #' Default values are set as default argument values in this constructor.
 #'
@@ -1901,7 +1923,7 @@ buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
 #' @param bind character. parameter names that are bind together in 2-group situation.
 #' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEw' = weighted MLE' *or* MLEc' = corrected MLE
 #' @param control list. Details that control the optimization. E.g., profiling, penalization.
-#' @return `incubate_fit` the delay-model fit object. Or `NULL` if optimization failed (e.g. too few observations).
+#' @return `incubate_fit` the delay-model fit object with criterion to minimize. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
 delay_model <- function(x = stop('Specify observations for first group x=!', call. = FALSE), y = NULL,
                         distribution = c('exponential', 'weibull', 'normal'),
@@ -2037,7 +2059,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
       kmFit = rlang::env_get(env = objFunEnv, nm = "kmFit", default = NULL),
       objFun = objFun,
       par = optObj$par_orig,
-      criterion = objFun(pars = optObj$par_orig, criterion = TRUE, aggregated = TRUE),
+      criterion = objFun(pars = optObj$par_orig, isOrig = TRUE, criterion = method, aggregated = TRUE, maximum = FALSE),
       optimizer = purrr::compact(c(list(parOpt = optObj$par,
                                         valOpt = optObj$value, profiled = cntrl$profiled),
                                    optObj[c("methodOpt", 'convergence', 'message', 'counts', 'optim_args')]))),
@@ -2069,7 +2091,7 @@ update.incubate_fit <- function(object, optim_args = NULL, verbose = 0, ...) {
   # update all relevant fields in the list
   # /!\ keep in sync with delay_model() /!\
   object[c("par", "criterion", "optimizer")] <- list(par = optObj$par_orig,
-                                                     criterion = objFun(pars = optObj$par_orig, criterion = TRUE, aggregated = TRUE),
+                                                     criterion = objFun(pars = optObj$par_orig, isOrig = TRUE, criterion = object$method, aggregated = TRUE, maximum = FALSE),
                                                      # drop NULLs from list (e.g. if optim_args is not present)
                                                      optimizer = purrr::compact(c(
                                                        list(parOpt = optObj$par, valOpt = optObj$value, profiled = object$optimizer$profiled),
@@ -2189,9 +2211,9 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
       # fixing all parameter estimates other than delay1
       objVal = purrr::map_dbl(.x = .data[["delay1"]],
                               # objective function with delay1-entries a little bit varied
-                              # use `criterion = TRUE` to operate directly on the original parameters
+                              # use `isOrig = TRUE` to operate directly on the original parameters
                               # del1_ind: delay1-index within group
-                              .f = ~ object$objFun(pars = replace(coefVect, del1_ind, .x), criterion = TRUE, aggregated = FALSE)[[groupIdx]])
+                              .f = ~ object$objFun(pars = replace(coefVect, del1_ind, .x), isOrig = TRUE, aggregated = FALSE)[[groupIdx]])
     )
 
     # we like to drop last entry (delay = 1st observation) as objective function tends to explode

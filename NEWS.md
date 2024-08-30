@@ -1,7 +1,9 @@
-# incubate 1.3.0.9076
+# incubate 1.3.0.9077
 * allow for random right-censoring
 * MLEw: bugfix in weight approximation (relevant for W3)
 * MLEw: weight functions as non-exported functions (and not internal data)
+* criterion= as character option, use MLEc as standard criterion for MLEw method (as it has no own likelihood function)
+* implement S3-function `logLik`
 * implement delayed normal distribution
 
 # incubate 1.3.0

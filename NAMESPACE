@@ -2,6 +2,7 @@
 
 S3method(coef,incubate_fit)
 S3method(confint,incubate_fit)
+S3method(logLik,incubate_fit)
 S3method(plot,incubate_fit)
 S3method(plot,incubate_test)
 S3method(print,incubate_fit)

@@ -169,3 +169,9 @@ test_that("Ties in data", {
   # #+ this means, we allow for same times that are once as observed time and once as a (right-) censoring time
   # expect_false(any(duplicated(xs_pp)))
 })
+
+
+test_that("integration functions", {
+  expect_type(logLik.incubate_fit, type = "closure")
+  expect_named(formals(logLik.incubate_fit), expected = c("object", "method", "..."))
+})

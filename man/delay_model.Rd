@@ -30,7 +30,7 @@ delay_model(
 \item{control}{list. Details that control the optimization. E.g., profiling, penalization.}
 }
 \value{
-\code{incubate_fit} the delay-model fit object. Or \code{NULL} if optimization failed (e.g. too few observations).
+\code{incubate_fit} the delay-model fit object with criterion to minimize. Or \code{NULL} if optimization failed (e.g. too few observations).
 }
 \description{
 Maximum product of spacings estimation is used by default to fit the parameters. Estimation via naive maximum likelihood (\verb{method = 'MLEn}) is available, too,

@@ -61,12 +61,12 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 
            # we resolve ties in the back-transformed 0-1 space via equal spacing (see Cheng & Stephens)
            statist <- if (twoGroup) { ##  && length(delayFit$bind) < length(oNames) # not needed!?
-             sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, aggregated = FALSE,
+             sum(testStat_mo(mpseCrit = delayFit$objFun(pars = params, isOrig = TRUE, aggregated = FALSE,
                                                         ties. = "equispaced"), #criterion per group
                              nObs = nObs, k = k/2))
            } else {
              # single group
-             testStat_mo(mpseCrit = delayFit$objFun(pars = params, criterion = TRUE, ties. = "equispaced"),
+             testStat_mo(mpseCrit = delayFit$objFun(pars = params, isOrig = TRUE, ties. = "equispaced"),
                          nObs = nObs, k = k)
            }
 
@@ -788,7 +788,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     # mkuhn, 2024-08-28
     SHAPE_TEST <- TRUE
     # for the time being: add crude check for Weibull (tailored for MLEw) whether fit is completely unreasonable
-    #XXX replace with better local maximum check in MLEw routine
+    #XXX replace with better local maximum check (motivated by fitting routine for MLEw)
     if (strict && SHAPE_TEST && fit0$distO$dist == "weibull") {
       coefs <- c(coef.incubate_fit(fit0), coef.incubate_fit(fit1))
 
@@ -800,14 +800,14 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       }#fi
     }#fi
 
-    # higher values of T speak in favour of H1:
-    #   1. fit0 has high value (=bad fit)
-    #   2. fit1 has low value (=good fit)
+    # higher values of T-val speak in favour of H1:
+    #   1. fit0 (bind model) has high value (=bad fit)
+    #   2. fit1 (free model) has low value (=good fit)
     #
     # we evaluate the fit with the criterion (e.g., MLE for all MLE-methods)
     # could also think about the optimization criterion
     # max(0L, fit0[["optimizer"]][["valOpt"]] - fit1[["optimizer"]][["valOpt"]]),
-    list(val = 2 * max(0, fit0[["criterion"]] - fit1[["criterion"]]),
+    list(val = 2 * max(0, fit0[["criterion"]][[1]] - fit1[["criterion"]][[1]]),
          fit0 = fit0, fit1 = fit1)
   }#fn testStat
 
