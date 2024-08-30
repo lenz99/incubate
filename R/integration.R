@@ -1,4 +1,4 @@
-# S3-integration functions
+# (S3-)integration functions
 
 #' @export
 print.incubate_fit <- function(x, ...) {
@@ -25,8 +25,10 @@ print.incubate_fit <- function(x, ...) {
 
 #' Coefficients of a delay-model fit.
 #' @param object object that is a `incubate_fit`
-#' @param transformed flag. Do we request the transformed parameters as used within the optimization?
-#' @param group character string to request the canonical parameter for one group
+#' @param transformed flag. Do we request the transformed parameters as used
+#'   within the optimization?
+#' @param group character string to request the canonical parameter for one
+#'   group
 #' @param ... further arguments, currently not used.
 #' @return named coefficient vector
 #' @export
@@ -47,16 +49,18 @@ summary.incubate_fit <- function(object, ...) {
 
 #' Plot a fitted delay-model object of class `incubate_fit`
 #'
-#' The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown together with the parametric model fit.
+#' The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown
+#' together with the parametric model fit.
 #'
-#' @details
-#' This function requires the `ggplot2`-package to be installed.
+#' @details This function requires the `ggplot2`-package to be installed.
 #'
 #' @param x a fitted delay-model
 #' @param y not used
 #' @param title character. Optionally, provide a title to the plot.
-#' @param subtitle character. Optionally, provide a subtitle to the plot. By default the coefficients are shown.
-#' @param xlim numeric. Optionally, limits for the x-axis (time). If unspecified starts from 0 to last observation.
+#' @param subtitle character. Optionally, provide a subtitle to the plot. By
+#'   default the coefficients are shown.
+#' @param xlim numeric. Optionally, limits for the x-axis (time). If unspecified
+#'   starts from 0 to last observation.
 #' @export
 plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
   # parameter y comes from the plot-generic but y is not used here.
@@ -125,17 +129,22 @@ plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
 
 #' Transform observed data to unit interval
 #'
-#' The transformation used is the probability integral transform:
-#' the cumulative distribution function with the estimated parameters of the model fit takes the data into the 0-1 interval.
-#' All available data in the model fit is transformed. Censored observations lead to censored back-transformed observations as well.
+#' The transformation used is the probability integral transform: the cumulative
+#' distribution function with the estimated parameters of the model fit takes
+#' the data into the 0-1 interval. All available data in the model fit is
+#' transformed. Censored observations lead to censored back-transformed
+#' observations as well.
 #'
-#' @note
-#' This S3-method implementation is quite different from its default method that allows for non-standard evaluation on data frames, primarily intended for interactive use.
-#' But the name `transform` fits so nicely to the intended purpose that it is re-used for the probability integral transform, here.
+#' @note This S3-method implementation is quite different from its default
+#' method that allows for non-standard evaluation on data frames, primarily
+#' intended for interactive use. But the name `transform` fits so nicely to the
+#' intended purpose that it is re-used for the probability integral transform,
+#' here.
 #'
 #' @param _data a fitted model object of class `incubate_fit`
 #' @param ... currently ignored
-#' @return The transformed data, either a vector (for single group) or a list with entries x and y (in two group scenario)
+#' @return The transformed data, either a vector (for single group) or a list
+#'   with entries x and y (in two group scenario)
 #' @export
 transform.incubate_fit <- function(`_data`, ...) {
   stopifnot(inherits(`_data`, "incubate_fit"))

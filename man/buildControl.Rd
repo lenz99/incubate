@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{buildControl}
 \alias{buildControl}
-\title{Build control list for \code{delay_model} and \code{objFunFactory}}
+\title{Build control list for \code{\link[=delay_model]{delay_model()}} and \code{\link[=objFunFactory]{objFunFactory()}}}
 \usage{
 buildControl(
   verbose = 0,

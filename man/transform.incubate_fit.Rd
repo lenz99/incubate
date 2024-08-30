@@ -12,14 +12,20 @@
 \item{...}{currently ignored}
 }
 \value{
-The transformed data, either a vector (for single group) or a list with entries x and y (in two group scenario)
+The transformed data, either a vector (for single group) or a list
+with entries x and y (in two group scenario)
 }
 \description{
-The transformation used is the probability integral transform:
-the cumulative distribution function with the estimated parameters of the model fit takes the data into the 0-1 interval.
-All available data in the model fit is transformed. Censored observations lead to censored back-transformed observations as well.
+The transformation used is the probability integral transform: the cumulative
+distribution function with the estimated parameters of the model fit takes
+the data into the 0-1 interval. All available data in the model fit is
+transformed. Censored observations lead to censored back-transformed
+observations as well.
 }
 \note{
-This S3-method implementation is quite different from its default method that allows for non-standard evaluation on data frames, primarily intended for interactive use.
-But the name \code{transform} fits so nicely to the intended purpose that it is re-used for the probability integral transform, here.
+This S3-method implementation is quite different from its default
+method that allows for non-standard evaluation on data frames, primarily
+intended for interactive use. But the name \code{transform} fits so nicely to the
+intended purpose that it is re-used for the probability integral transform,
+here.
 }

@@ -13,12 +13,15 @@
 
 \item{title}{character. Optionally, provide a title to the plot.}
 
-\item{subtitle}{character. Optionally, provide a subtitle to the plot. By default the coefficients are shown.}
+\item{subtitle}{character. Optionally, provide a subtitle to the plot. By
+default the coefficients are shown.}
 
-\item{xlim}{numeric. Optionally, limits for the x-axis (time). If unspecified starts from 0 to last observation.}
+\item{xlim}{numeric. Optionally, limits for the x-axis (time). If unspecified
+starts from 0 to last observation.}
 }
 \description{
-The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown together with the parametric model fit.
+The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown
+together with the parametric model fit.
 }
 \details{
 This function requires the \code{ggplot2}-package to be installed.

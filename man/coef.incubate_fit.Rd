@@ -9,9 +9,11 @@
 \arguments{
 \item{object}{object that is a \code{incubate_fit}}
 
-\item{transformed}{flag. Do we request the transformed parameters as used within the optimization?}
+\item{transformed}{flag. Do we request the transformed parameters as used
+within the optimization?}
 
-\item{group}{character string to request the canonical parameter for one group}
+\item{group}{character string to request the canonical parameter for one
+group}
 
 \item{...}{further arguments, currently not used.}
 }
