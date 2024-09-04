@@ -27,7 +27,7 @@ objFunFactory(
 
 \item{bind}{character. parameter names that are bind together (i.e. equated) between both groups}
 
-\item{control}{list. Fine-tune arguments}
+\item{control}{list. Fine-tune parameters for optimization. Needs to be set!}
 }
 \value{
 the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or \code{NULL} upon errors

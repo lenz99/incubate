@@ -35,9 +35,9 @@ NULL
 #' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
 #' @param twoPhase logical flag. Do we allow for two delay phases where event rate may change? Default is `FALSE`, i.e., a single delay phase.
 #' @param bind character. parameter names that are bind together (i.e. equated) between both groups
-#' @param control list. Fine-tune arguments
+#' @param control list. Fine-tune parameters for optimization. Needs to be set!
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
-objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc', 'MLEw'),
+objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc", "MLEw"),
                           twoPhase = FALSE, bind = NULL, control) {
 
 
@@ -45,7 +45,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
   stopifnot(is.numeric(x), length(x) > 0, is.null(y) || is.numeric(y) && length(y) > 0)
   method <- match.arg(method)
-  stopifnot(!missing(distO), is.list(distO))
+  stopifnot(!missing(distO), is.list(distO), all(c("dist", "param", "twoPhaseAllowed") %in% names(distO)))
   stopifnot(is.null(bind) || is.character(bind) && length(bind) >= 1)
 
   stopifnot(is.logical(twoPhase), length(twoPhase) == 1L)
@@ -55,10 +55,6 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # original names: standard names of distribution (say, for a single group)
   oNames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, bind = NULL, transformed = FALSE, profiled = FALSE)
 
-  # unpack control list
-  if (missing(control)) {
-    control <- buildControl()
-  }
   stopifnot(is.list(control), all(c("verbose", "profiled", "ties", "pen_shape") %in% names(control)))
   verbose <- control$verbose
   profiled <- control$profiled
@@ -118,7 +114,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
       # Surv response
       survType <- attr(obs, which = "type", exact = TRUE)
       # for MPSE: check we only have right-censoring
-      if (method == 'MPSE' && survType != 'right') {
+      if (method == "MPSE" && survType != "right") {
         warning("MPSE-fitting supports only right censored observations currently.", call. = FALSE)
         return(invisible(NULL))
       }
@@ -1293,21 +1289,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
   # @param pars complete vector of parameters (can refer to two groups)
   # @param group which group?
   # @param isOrig Is the parameter vector already on original scale?
-  # @param criterion character Which criterion or `NULL` (default) for calculation with optional penalization for given method
+  # @param methodSelected character Which likelihood method to use?
+  # @param isCrit Was a criterion explicitly requested? (which would mean: no penalization)
   # @return log-likelihood (certain flavour or related like negative L2-norm of gradient of log-likelihood) for specified group
-  getLogLik <- function(pars, group, isOrig = FALSE, criterion = NULL) {
+  getLogLik <- function(pars, group, isOrig = FALSE, methodSelected, isCrit = FALSE) {
 
     # Old idea was to change signature to be with pars.gr and obs for both getLogLik and getCumDiffs
     #+But what are the benefits?
-
-    # request a specific criterion?
-    isCrit <- !is.null(criterion) && is.character(criterion) && nzchar(criterion[[1]])
-    critSwitch <- if (isCrit) {
-      # MLEw has no own likelihood function: use MLEc #XXX only when method != "MLEw"??!
-      if (criterion[[1]] == "MLEw") "MLEc" else criterion[[1]]
-    } else {
-      method
-    }
 
     # access observations of group
     obs <- if (group == "y") y else x #direct access by name
@@ -1318,7 +1306,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
 
     #Calculate the objective function to be maximized which depends on
-    #+method
+    #+methodSelected
     #+profiled
     nObs <- length(obs)
     stopifnot(nObs > 1L)
@@ -1327,7 +1315,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
 
     # return value (to be maximized)
-    rVal <- switch(EXPR = critSwitch,
+    rVal <- switch(EXPR = methodSelected,
            MLEn = {
              if (!profiled || distO$dist != 'weibull') {
                # not Weibull or
@@ -1401,7 +1389,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                obs_c <- obs - pars.gr[[1L]]
 
                # consider length of 1st derivative vector: it vanishes for any local extremum (necessary condition)
-               #+hence, neg of squared summands are maximized to come close to 0 (could also be abs())
+               #+hence, neg of squared summands are maximized to come close to 0 (could also be abs() iso/ square)
                -(weights$W2[[group]]/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c^k)/sum(obs_c^k))^2 +
                  # 1st factor is inverse of harmonic mean
                  -(w3F(k) - mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)))^2
@@ -1427,7 +1415,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
                       },
                       stop("This Surv-type is not supported here!", call. = FALSE))
-             } #esle !isSurv
+             }#esle !isSurv
 
              if (verbose > 1L) {
                cat(glue("W1 = {round(weights$W1[[group]],2)}, ",
@@ -1473,15 +1461,15 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                       },
                       stop("This type of censoring is not supported!", call. = FALSE))
 
-             } #esle !isSurv
+             }#esle !isSurv
            },
-           stop(glue("This calculation method {critSwitch} is not handled here!"), call. = FALSE)
+           stop(glue("This calculation method {methodSelected} is not handled here!"), call. = FALSE)
     )#hctiws
 
 
     # return:
     if (!isCrit) {
-      # apply potential penalty term for high shape parameter if not specifc criterion requested
+      # apply potential penalty term for high shape parameter if no specific criterion was requested
       #XXX What is the right penalty for MLEw (which has a objective function as square length of normal equation [=solution of 1st deriv set to 0])?
       #+ is it first deriv squared of penF wrt shape k?
       rVal - penF(k, nObs = nObs)
@@ -1622,14 +1610,15 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
   # Objective function to be minimized
   #
-  # Depending on method, it is negative mean log-spacings for MPSE or negative log-likelihood for MLEn
+  # Depending on selected method, it is negative mean log-spacings for MPSE or negative log-likelihood for MLEn.
+  # For MLEw, the optimization function is based on the squared length of gradient vector (=partial 1st derivatives). Its minimial value 0 corresponds to candidate values for a local extremum.
   # One can estimate parameters by minimizing this objective function.
   #
   # @param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
   # @param `isOrig` Are parameters on original scale? Or transformed for optimization?
-  # @param criterion character Which log-lik criterion or `NULL` (default) for calculation with optional penalization for given method. Not used for MPSE.
+  # @param criterion character Which log-lik criterion or `NULL` (default) for calculation of optimization function with optional penalization for given method. (This argument is irrelevant for MPSE.)
   # @param `aggregated` logical. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
-  # @param `maximum` logical. Should the objective function be maximized? Default value is `FALSE`.
+  # @param `maximum` logical. Should the objective function be maximized? Default value is `FALSE`: we minimize the objective function.
   # @param `ties.` How to handle ties for the MPSE-function? Default value is 'density'.
   # @return value of objective function (by default, to be minimized, like neg. log-likelihood)
   objFun <- function(pars, isOrig = FALSE, criterion = NULL, aggregated = TRUE, maximum = FALSE, ties. = ties) {
@@ -1638,16 +1627,17 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
 
     # request a specific criterion?
     isCrit <- !is.null(criterion) && is.character(criterion) && nzchar(criterion[[1]])
-    critSwitch <- if (isCrit) {
-      # MLEw has no own likelihood function: use MLEc #XXX only when method != "MLEw"??!
+    methodSelected <- if (isCrit) {
+      # MLEw has no own likelihood function: use MLEc
       if (criterion[[1]] == "MLEw") "MLEc" else criterion[[1]]
     } else {
+      # if no criterion is requested use optimization for inherent method
       method
     }
 
     if (verbose > 1) cat("pars:", pars, "\n")
 
-    valToMax <- switch(critSwitch,
+    valToMax <- switch(methodSelected,
                        MPSE = {
                          if (!twoGroup) {
                            mean(getCumDiffs(pars, group = "x", isOrig = isOrig, ties. = ties.))
@@ -1670,18 +1660,19 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
                          stopifnot(!twoPhase) #XXX not implemented yet!
 
                          if (!twoGroup) {
-                           getLogLik(pars, group = "x", isOrig = isOrig, criterion = criterion)
+                           getLogLik(pars, group = "x", isOrig = isOrig, methodSelected = methodSelected, isCrit = isCrit)
                          } else {
-                           #XXX think here: can we use sum of log-lik from two groups in case of derivative-based solutions (MLEw, min)
                            local({
-                             res0 <- c(getLogLik(pars, group = "x", isOrig = isOrig, criterion = criterion),
-                                       getLogLik(pars, group = "y", isOrig = isOrig, criterion = criterion))
+                             res0 <- c(getLogLik(pars, group = "x", isOrig = isOrig, methodSelected = methodSelected, isCrit = isCrit),
+                                       getLogLik(pars, group = "y", isOrig = isOrig, methodSelected = methodSelected, isCrit = isCrit))
 
+                             #XXX think here: can we use sum of log-lik from two groups in case of derivative-based solutions (MLEw, min)
                              if (aggregated) sum(res0) else res0
                            })
                          }
                        },
-                       stop(glue("Objective function for method {method} is not implemented!"), call. = FALSE)
+                       # default
+                       stop(glue("Objective function for method {methodSelected} is not implemented!"), call. = FALSE)
     )#hctiws
 
     # switch sign !maximum => -valToMax
@@ -1693,7 +1684,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
     # return
     if (isCrit) {
       # criterion gets named ##&& aggregated only if single number??
-      rlang::set_names(rVal, nm = paste0(if (!maximum) "neg. ", critSwitch))
+      rlang::set_names(rVal, nm = paste0(if (!maximum) "neg. ", methodSelected))
     } else {
       rVal
     }
@@ -1709,7 +1700,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c('MPSE', 'MLEn', 'MLEc',
            value = length(x) * (log(mean(x) - x[[1L]]) + 1L),
            methodOpt = "analytic",
            convergence = 0L,
-           message = "analytic solution for naive MLE ('MLEn')",
+           message = "analytic minimizer solution for naive MLE ('MLEn')",
            counts = 0L)
     })
   }#fi
@@ -1877,14 +1868,14 @@ delay_fit <- function(objFun, optim_args = NULL, verbose = 0) {
 #'
 #' This is an internal function. The function might change without precautionary measures taken.
 #' @return list. Control settings for fitting routine `delay_model`
-buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
+buildControl <- function(verbose = 0, profiled, pen_shape = FALSE,
                          MLEw_weight = "sdist_median",
                          MLEw_optim = "min", #c("min", "root"),
                          ties = "density") {
   #MLEw_weight used to depend on surv-type of data, but this is not known here nor in delay_model (only within objFunFactory)
   #+was before: MLEw_weight = if (isSurv) "sample" else "sdist_median"
 
-  MLEw_optim <- match.arg(MLEw_optim)
+  #MLEw_optim <- match.arg(MLEw_optim)
 
   # default control-settings
   list(verbose = verbose[1],
@@ -1925,10 +1916,10 @@ buildControl <- function(verbose = 0, profiled = FALSE, pen_shape = FALSE,
 #' @param control list. Details that control the optimization. E.g., profiling, penalization.
 #' @return `incubate_fit` the delay-model fit object with criterion to minimize. Or `NULL` if optimization failed (e.g. too few observations).
 #' @export
-delay_model <- function(x = stop('Specify observations for first group x=!', call. = FALSE), y = NULL,
-                        distribution = c('exponential', 'weibull', 'normal'),
+delay_model <- function(x = stop("Specify observations for first group x=!", call. = FALSE), y = NULL,
+                        distribution = c("exponential", "weibull", "normal"),
                         twoPhase = FALSE, bind = NULL,
-                        method = c('MPSE', 'MLEn', 'MLEw', 'MLEc'),
+                        method = c("MPSE", "MLEn", "MLEw", "MLEc"),
                         control = list()) {
 
   # setup -------------------------------------------------------------------
@@ -1958,7 +1949,7 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
                   stop("Argument to distribuiton= not supported here!", call. = FALSE)
   )
 
-  method <- if (length(method) == 1L && toupper(method) == 'MSE') {
+  method <- if (length(method) == 1L && toupper(method) == "MSE") {
     message("The method name 'MPSE' is prefered over the previously used name 'MSE'!")
     "MPSE"
   } else {
@@ -1969,9 +1960,9 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 
   # build up default control-settings for current situation
   # we used to set weighting method depending on isSurv or not! (determined in objFunFactory)
-  cntrl <- buildControl(profiled = method == "MLEw",
-                        pen_shape = distO$dist == 'weibull' && method == 'MLEw',
-                        # use root-finding in 2-dim parameter space
+  cntrl <- buildControl(profiled = distO$dist != "normal" && method != "MPSE",
+                        # penalize shape parameter?
+                        pen_shape = distO$dist == "weibull" && method == "MLEw",
                         MLEw_optim = "min")
 
   # overwrite control settings as given by control=
@@ -1980,7 +1971,8 @@ delay_model <- function(x = stop('Specify observations for first group x=!', cal
 
   local({
     if (length(badNms <- controlNms[!controlNms %in% names(cntrl)])) {
-      warning("Unknown names in control list: ", paste0(badNms, "=", collapse = ", "), call. = FALSE)
+      warning("Unknown names in given control list: ", paste0(badNms, "=", collapse = ", "),
+              call. = FALSE)
     }
   })
   cntrl[controlNms] <- control
@@ -2244,7 +2236,8 @@ bsDataStep <- function(object, bs_data = c('parametric', 'ordinary'), R, useBoot
     boot::boot(data = object$data,
                statistic = function(d, i) coef(delay_model(x=d[i], distribution = object$distO, twoPhase = object$twoPhase,
                                                            method = object$method, bind = object$bind,
-                                                           control = buildControl(ties = object$ties)),
+                                                           control = buildControl(profiled = object$optimizer$profiled,
+                                                                                  ties = object$ties)),
                                                transformed = FALSE),
                sim = bs_data, mle = coef(object), R = R,
                ran.gen = function(d, coe){ # ran.gen function is only used for parametric bootstrap

@@ -10,7 +10,7 @@ test_diff(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
   method = c("MPSE", "MLEn", "MLEw", "MLEc"),
-  profiled = method == "MLEw",
+  profiled = method != "MPSE",
   ties = c("density", "equispaced", "error"),
   param = "delay1",
   type = c("all", "bootstrap", "GOF", "moran", "pearson", "LR"),

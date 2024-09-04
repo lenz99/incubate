@@ -641,7 +641,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 #' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
 #' @export
 test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c("exponential", "weibull"), twoPhase = FALSE,
-                      method = c("MPSE", "MLEn", "MLEw", "MLEc"), profiled = method == "MLEw",
+                      method = c("MPSE", "MLEn", "MLEw", "MLEc"), profiled = method != "MPSE",
                       ties = c("density", "equispaced", "error"),
                       param = "delay1",
                       type = c("all", "bootstrap", "GOF", "moran", "pearson", "LR"), doLogrank = TRUE,
@@ -713,11 +713,11 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
            testMask[c("pearson", "moran")] <- method == "MPSE"
          },
          # bootstrap + log-rank-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLR=?!
-         bootstrap = { testMask['bootstrap'] <- TRUE },
-         GOF = {testMask[c('pearson', 'moran')] <- method == "MPSE"},
-         moran = {testMask['moran'] <- method == "MPSE"},
-         pearson = {testMask['pearson'] <- method == "MPSE"},
-         LR = {testMask['LR'] <- TRUE}, #likelihood ratio test
+         bootstrap = { testMask["bootstrap"] <- TRUE },
+         GOF = {testMask[c("pearson", "moran")] <- method == "MPSE"},
+         moran = {testMask["moran"] <- method == "MPSE"},
+         pearson = {testMask["pearson"] <- method == "MPSE"},
+         LR = {testMask["LR"] <- TRUE}, #likelihood ratio test
          stop("This type of test is not supported!", call. = FALSE)
   )
 
@@ -769,7 +769,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
         fit1oa[["par"]][startsWith(pn1, prefix = na0)] <- coef0[[na0]]
       }#rof
 
-      fit1oa[['control']][['parscale']] <- scalePars(parV = fit1oa[["par"]])
+      fit1oa[["control"]][["parscale"]] <- scalePars(parV = fit1oa[["par"]])
       fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
 
       if (is.null(fit1) || is.null(fit1$optimizer) || is.null(fit1$optimizer$valOpt) ||

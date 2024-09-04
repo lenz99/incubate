@@ -227,28 +227,29 @@ test_that("Parameter extraction and transformation", {
   }
 
   dummydat <- c(6, 7, 9, 11)
-  extPars_exp1 <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE,
+  extPars_exp1NP <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE,
                                            control = buildControl(profiled = FALSE)) |>
     rlang::fn_env() |> rlang::env_get("extractPars")
 
-  extPars_exp1P <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE,
-                                            control = buildControl(profiled = TRUE)) |>
-    rlang::fn_env() |> rlang::env_get("extractPars")
 
   par_exp1 <- c(delay1 = 3, rate1 = .8)
   par_tf_exp1 <- c(delay1_tr = stats::qlogis(par_exp1[[1L]]/min(dummydat)),
                    rate1_tr = log(par_exp1[[2L]]))
 
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, named = TRUE), par_exp1)
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, named = FALSE), as.vector(par_exp1))
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "x", named = TRUE), par_exp1)
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "y", named = TRUE), par_exp1) # group= is ignored for single group!
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, group = "z", named = TRUE), par_exp1) # group= is ignored for single group!
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE),
+  expect_identical(extPars_exp1NP(par_exp1, isOpt = FALSE, named = TRUE), par_exp1)
+  expect_identical(extPars_exp1NP(par_exp1, isOpt = FALSE, named = FALSE), as.vector(par_exp1))
+  expect_identical(extPars_exp1NP(par_exp1, isOpt = FALSE, group = "x", named = TRUE), par_exp1)
+  expect_identical(extPars_exp1NP(par_exp1, isOpt = FALSE, group = "y", named = TRUE), par_exp1) # group= is ignored for single group!
+  expect_identical(extPars_exp1NP(par_exp1, isOpt = FALSE, group = "z", named = TRUE), par_exp1) # group= is ignored for single group!
+  expect_identical(extPars_exp1NP(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE),
                    expected = par_tf_exp1)
-  expect_identical(extPars_exp1(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE),
+  expect_identical(extPars_exp1NP(par_exp1, isOpt = FALSE, transform = TRUE, named = FALSE),
                    expected = as.numeric(par_tf_exp1))
 
+
+  extPars_exp1P <- incubate:::objFunFactory(x = dummydat, distO = distO_e, twoPhase = FALSE,
+                                            control = buildControl(profiled = TRUE)) |>
+    rlang::fn_env() |> rlang::env_get("extractPars")
   # objective function with profiled=TRUE is different
   expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, named = TRUE), par_exp1)
   expect_identical(extPars_exp1P(par_exp1, isOpt = FALSE, transform = TRUE, named = TRUE), expected = par_tf_exp1[1])
@@ -264,7 +265,8 @@ test_that("Parameter extraction and transformation", {
   # exponential, two groups, unbound
   objFun_exp2 <- incubate:::objFunFactory(x = rexp_delayed(n=3, delay1 = 5, rate1 = .2),
                                           y = rexp_delayed(n=3, delay1 = 3, rate1 = .1),
-                                          distO = distO_e, twoPhase = FALSE)
+                                          distO = distO_e, twoPhase = FALSE,
+                                          control = buildControl(profiled = TRUE))
   extPars_exp2 <- rlang::env_get(rlang::fn_env(objFun_exp2), "extractPars")
 
   par_exp2 <- c(delay1.x = 3.8, rate1.x = .81, delay1.y = 2.4, rate1.y = 1.1)
@@ -286,7 +288,8 @@ test_that("Parameter extraction and transformation", {
     y <- rexp_delayed(n=4, delay1 = 3, rate1 = .1)
 
     objFun_exp2b <- incubate:::objFunFactory(x = x, y = y,
-                                             distO = distO_e, twoPhase = FALSE, bind = "rate1")
+                                             distO = distO_e, twoPhase = FALSE, bind = "rate1",
+                                             control = buildControl(profiled = FALSE))
     extPars_exp2b <- rlang::env_get(rlang::fn_env(objFun_exp2b), "extractPars")
 
     par_exp2b <- c(rate1 = .23, delay1.x = 4.8, delay1.y = 2.7)
@@ -326,7 +329,8 @@ test_that("Parameter extraction and transformation", {
     par_weib1s <- par_weib1[1:2]
     par_tf_weib1 <- c(delay1_tr = stats::qlogis(par_weib1[[1]]/min(x)), shape1_tr = log(par_weib1[["shape1"]]))
 
-    objFun_weib1 <- incubate:::objFunFactory(x = x, distO = distO_w, twoPhase = FALSE)
+    objFun_weib1 <- incubate:::objFunFactory(x = x, distO = distO_w, twoPhase = FALSE,
+                                             control = buildControl(profiled = TRUE))
     extPars_weib1 <- rlang::env_get(rlang::fn_env(objFun_weib1), "extractPars")
 
     expect_identical(extPars_weib1(par_weib1, isOpt = FALSE, named = TRUE), par_weib1)
@@ -344,7 +348,8 @@ test_that("Parameter extraction and transformation", {
     y <- rweib_delayed(n=4, delay1 = 7, shape1 = 2.8, scale1 = .9)
 
     objFun_weib2 <- incubate:::objFunFactory(x = x, y = y,
-                                             distO = distO_w, twoPhase = FALSE)
+                                             distO = distO_w, twoPhase = FALSE,
+                                             control = buildControl(profiled = FALSE))
     extPars_weib2 <- rlang::env_get(rlang::fn_env(objFun_weib2), "extractPars")
 
     par_weib2 <- c(delay1.x = 1, shape1.x = 1.8, scale1.x = 7,
@@ -485,7 +490,8 @@ test_that("Fit delayed Exponentials", {
   # MLE fits -----------------------------------------------------------
 
   # MLEn = naive MLE
-  fd_exp_MLEn_NP <- delay_model(exp_d9, distribution = 'expon', method = 'MLEn')
+  fd_exp_MLEn_NP <- delay_model(exp_d9, distribution = 'expon', method = 'MLEn',
+                                control = list(profiled = FALSE))
   fd_exp_MLEn_P <- delay_model(exp_d9, distribution = 'expon', method = 'MLEn',
                                control = list(profiled = TRUE))
 
@@ -530,7 +536,8 @@ test_that("Fit delayed Exponentials", {
   expect_equal(coef(fd_exp_MLEn_NP)[['rate1']], expected = (mean(exp_d9) - min(exp_d9))**-1)
 
   # MLEc
-  fd_exp_MLEc <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc')
+  fd_exp_MLEc <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc',
+                             control = list(profiled = FALSE))
 
   expect_type(fd_exp_MLEc$data, type = 'double')
   expect_identical(length(fd_exp_MLEc$data), expected = length(exp_d9))
@@ -544,7 +551,8 @@ test_that("Fit delayed Exponentials", {
   expect_null(attr(fd_exp_MLEc$objFun, which = 'opt', exact = TRUE))
 
   # MLEc profiled
-  fd_exp_MLEc_P <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc', control = list(profiled = TRUE))
+  fd_exp_MLEc_P <- delay_model(exp_d9, distribution = 'expon', method = 'MLEc',
+                               control = list(profiled = TRUE))
   expect_type(fd_exp_MLEc_P$data, type = 'double')
   expect_identical(length(fd_exp_MLEc_P$data), expected = length(exp_d9))
   expect_named(coef(fd_exp_MLEc_P), expected = c("delay1", "rate1"))
@@ -952,7 +960,8 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef_maxFl, expected = c(delay1=0.244, shape1=1.310, scale1=.202), tolerance = .005)
 
   # MLE-based fits to susquehanna --
-  fd_maxFl_MLEn <- delay_model(susquehanna, distribution = "weib", method = "MLEn")
+  fd_maxFl_MLEn <- delay_model(susquehanna, distribution = "weib", method = "MLEn",
+                               control = list(profiled = FALSE))
   coef_maxFl_MLEn <- coef(fd_maxFl_MLEn)
   expect_false(fd_maxFl_MLEn$optimizer$profiled)
   expect_identical(purrr::chuck(fd_maxFl_MLEn, "optimizer", "convergence"), expected = 0L)
@@ -1147,7 +1156,7 @@ test_that("Fit delayed Weibull", {
                               control = list(profiled = TRUE))
   # wrongly specified control option triggers warning
   expect_warning(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
-                             control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")), regexp = "Unknown names in control list")
+                             control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")), regexp = "Unknown names.+control list")
   # wrongly named arguments are ignored!
   expect_identical(suppressWarnings(coef(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
                                                      control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")))),
@@ -1209,10 +1218,10 @@ test_that("Fit delayed Weibull", {
   expect_equal(as.numeric(coef_wb2[4:6]), expected = as.numeric(coef_poll), tolerance = .25)
 
   # MLE based fits
-  fd_wb2_MLEn <- incubate::delay_model(x = susquehanna, y = pollution,
-                                       distribution = "weib", method = "MLEn")
+  fd_wb2_MLEn <- delay_model(x = susquehanna, y = pollution,
+                             distribution = "weib", method = "MLEn")
   expect_named(coef(fd_wb2_MLEn), expected = names(coef(fd_wb2)))
-  expect_false(fd_wb2_MLEn$optimizer$profiled)
+  expect_true(fd_wb2_MLEn$optimizer$profiled)
   # MLEn has later delay estimates
   expect_gt(coef(fd_wb2_MLEn)[["delay1.x"]], coef(fd_wb2)[["delay1.x"]])
   expect_gt(coef(fd_wb2_MLEn)[["delay1.y"]], coef(fd_wb2)[["delay1.y"]])
@@ -1227,20 +1236,22 @@ test_that("Fit delayed Weibull", {
   expect_equal(coef(fd_wb2_MLEn_P, group = "y"), expected = coef(fd_poll_MLEnp), tolerance = .01)
 
   # MLEc
-  fd_wb2_MLEc <- delay_model(x = susquehanna, y = pollution,
-                             distribution = "weibu", method = "MLEc")
-  expect_named(coef(fd_wb2_MLEc), expected = names(coef(fd_wb2)))
-  expect_false(fd_wb2_MLEc$optimizer$profiled)
-  expect_equal(coef(fd_wb2_MLEc), expected = coef(fd_wb2), tolerance = .3)
-  expect_gt(coef(fd_wb2_MLEc)[["delay1.x"]], coef(fd_wb2)[["delay1.x"]])
-  expect_gt(coef(fd_wb2_MLEc)[["delay1.y"]], coef(fd_wb2)[["delay1.y"]])
+  fd_wb2_MLEc_NP <- delay_model(x = susquehanna, y = pollution,
+                             distribution = "weibu", method = "MLEc",
+                             control = list(profiled = FALSE))
+  expect_named(coef(fd_wb2_MLEc_NP), expected = names(coef(fd_wb2)))
+  expect_false(fd_wb2_MLEc_NP$optimizer$profiled)
+  expect_equal(coef(fd_wb2_MLEc_NP), expected = coef(fd_wb2), tolerance = .3)
+  expect_gt(coef(fd_wb2_MLEc_NP)[["delay1.x"]], coef(fd_wb2)[["delay1.x"]])
+  expect_gt(coef(fd_wb2_MLEc_NP)[["delay1.y"]], coef(fd_wb2)[["delay1.y"]])
 
-  fd_wb2_MLEc_P <- delay_model(x = susquehanna, y = pollution, distribution = "weib", method = "MLEc",
+  fd_wb2_MLEc_P <- delay_model(x = susquehanna, y = pollution,
+                               distribution = "weibu", method = "MLEc",
                                control = list(profiled = TRUE))
   expect_true(fd_wb2_MLEc_P$optimizer$profiled)
   expect_identical(fd_wb2_MLEc_P$optimizer$convergence, expected = 0L)
   # MLEc profiling has little impact
-  expect_equal(coef(fd_wb2_MLEc_P), expected = coef(fd_wb2_MLEc), tolerance = .005)
+  expect_equal(coef(fd_wb2_MLEc_P), expected = coef(fd_wb2_MLEc_NP), tolerance = .005)
 
   # MLEw with two groups
   fd_wb2_MLEw <- delay_model(x = susquehanna, y = pollution, distribution = "weibu",
@@ -1527,9 +1538,11 @@ test_that("Fit normal", {
   expect_equal(stats::qchisq(p = 0.05, df = gof_nrm_grph$df, lower.tail = FALSE), expected = 56.9, tolerance = 1e-3)
 
   # MLE fit
-  fm_nrm_grph_MLEn <- delay_model(x = incubate::graphite, distribution = "normal", method = "MLEn",
-                                  control= list(ties = "density"))
+  fm_nrm_grph_MLEn <- delay_model(x = incubate::graphite, distribution = "normal",
+                                  method = "MLEn",
+                                  control= list(ties = "density", profiled = FALSE))
   expect_identical(fm_nrm_grph_MLEn$optimizer$convergence, 0L)
+  expect_false(fm_nrm_grph_MLEn$optimizer$profiled)
   expect_equal(coef(fm_nrm_grph_MLEn),
                expected = c(mean = mean(incubate::graphite),
                             sd = sqrt(stats::var(incubate::graphite) * (length(incubate::graphite)-1)/length(incubate::graphite))),

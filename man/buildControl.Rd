@@ -6,7 +6,7 @@
 \usage{
 buildControl(
   verbose = 0,
-  profiled = FALSE,
+  profiled,
   pen_shape = FALSE,
   MLEw_weight = "sdist_median",
   MLEw_optim = "min",
