@@ -100,12 +100,15 @@ plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
     # kaplan meier step function
     ggplot2::geom_step() +
     # mark (right-)censored observations
-    ggplot2::geom_point(data = function(.x) .x[.x$n.censor > 0,], shape = 3L)
+    ggplot2::geom_point(data = function(.x) .x[.x$n.censor > 0,], shape = 3)
 
 
-  if (missing(title)) title <- glue::glue_data(x,
-                                               "Fitted {distO$dist_name} {c('model ', 'models ')[[1L+twoGroup]]}",
-                                               "{c('', 'with two delay phases')[[1L+twoPhase]]}")
+  if (missing(title)) {
+    title <- glue::glue_data(x,
+                             "Fitted {distO$dist_name} {c('model ', 'models ')[[1L+twoGroup]]}",
+                             "{c('', 'with two delay phases')[[1L+twoPhase]]}")
+  }#fi
+
   coefPrint <- function(gr) {
     co <- coef.incubate_fit(x, group = gr)
     paste(names(co), signif(co, 4), sep = ": ", collapse = ", ")
@@ -118,8 +121,8 @@ plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
     #ggplot2::xlim(0L, NA) +
     # transforms "after_stat" which matters for stat_ecdf
     ggplot2::coord_trans(y = "reverse", xlim = xlim) +
-    ggplot2::labs(x = 'Time', y = 'Cumulative prop. of events',
-                  col = if (x[["twoGroup"]]) 'Group' else NULL,
+    ggplot2::labs(x = "Time", y = "Cumulative prop. of events",
+                  col = if (x[["twoGroup"]]) "Group" else NULL,
                   title = title, subtitle = subtitle)
 
 }
@@ -129,10 +132,13 @@ plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
 #'
 #' The user has the possibility to request different flavours of log-likelihood.
 #' By default the flavour matching the fitting method is used.
-#' @param method Log-likelihood for which criterion?
+#' @param object an `incubate_fit` object
+#' @param method Which flavour of the log-likelihood? By default, it uses the flavour from the model fit
+#' @param ... further arguments passed on to the object function of the model fit object
+#' @return Log-likelihood value for the model fit object
 #' @export
 logLik.incubate_fit <- function(object, method = NULL, ...) {
-  object[["objFun"]](pars = object[["par"]], isOrig = TRUE, criterion = if (is.null(method)) object[["method"]] else method, maximum = TRUE)
+  object[["objFun"]](pars = object[["par"]], isOrig = TRUE, criterion = if (is.null(method)) object[["method"]] else method, maximum = TRUE, ...)
 }
 
 

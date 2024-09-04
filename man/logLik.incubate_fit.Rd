@@ -7,7 +7,14 @@
 \method{logLik}{incubate_fit}(object, method = NULL, ...)
 }
 \arguments{
-\item{method}{Log-likelihood for which criterion?}
+\item{object}{an \code{incubate_fit} object}
+
+\item{method}{Which flavour of the log-likelihood? By default, it uses the flavour from the model fit}
+
+\item{...}{further arguments passed on to the object function of the model fit object}
+}
+\value{
+Log-likelihood value for the model fit object
 }
 \description{
 The user has the possibility to request different flavours of log-likelihood.
