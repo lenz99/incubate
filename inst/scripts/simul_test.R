@@ -315,7 +315,7 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
   # run MC-replicates for each estimation method in turn
   #+for the specified data generating process setting (`DGPsetting`)
   testDiffList <- future.apply::future_replicate(n = myMCNrep,
-                                                 future.packages = c("dplyr", "incubate", if (cens > 0) "survival"),
+                                                 future.packages = c("dplyr", "purrr", "incubate", if (cens > 0) "survival"),
                                                  future.seed = TRUE,
                                                  expr = {
                                                    # generate data
@@ -332,9 +332,9 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
 
 
                                                    # run all estimation methods over the generated data
-                                                   res_h <- estimMethods %>%
-                                                     dplyr::mutate(testDiffObj = list({
-                                                       te_diff <- NULL
+                                                   estimMethods %>%
+                                                     dplyr::mutate(testDiffRes = list({
+                                                       te_diff <- te_diff2 <- NULL
                                                        # test_diff might also use parallel computations depending on future-settings
                                                        try(expr = {
                                                          # test difference in delay1 in exponential model
@@ -346,36 +346,53 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                          # bootstrap P-value for combined test for difference in parameters delay+rate
                                                          #+only if the scale (=1/rate for exponential) is indeed different betw groups
                                                          if (!is.null(te_diff) && testParamCombined) {
-                                                           # store P-value of delay+rate in original test_diff-object
-                                                           te_diff$P$bootstrap2 <- NA_real_
-
                                                            try(expr = {
-                                                             te_diff$P$bootstrap2 <- test_diff(x = x, y = y, distribution = model,
-                                                                                               param = c("delay1", if (model == "exponential") "rate1" else "scale1"),
-                                                                                               method = method, profiled = profiled,
-                                                                                               R = R, type = "bootstrap") %>%
-                                                               suppressWarnings() %>%
-                                                               purrr::pluck("P", "bootstrap", .default = NA_real_)
-                                                           }, silent = TRUE)
+                                                             te_diff2 <- test_diff(x = x, y = y, distribution = model,
+                                                                                   param = c("delay1", if (model == "exponential") "rate1" else "scale1"),
+                                                                                   method = method, profiled = profiled,
+                                                                                   R = R, type = "bootstrap") %>%
+                                                               suppressWarnings()
+                                                           }, #yrt inner
+                                                           silent = TRUE)
                                                          }#fi
-                                                       }, silent = TRUE)
+                                                       },#yrt outer
+                                                       silent = TRUE)
 
-                                                       te_diff })) %>%
+                                                       res_i <- NULL
+                                                       if (!is.null(te_diff)) {
+                                                         res_i <- tibble::enframe(unlist(te_diff$P), name = "test", value = "pvalue") %>%
+                                                           tibble::add_column(param = te_diff$param,
+                                                                              R_eff = length(te_diff$testDist),
+                                                                              .before=1)
+                                                         if (!is.null(te_diff2)) {
+                                                           res_i <- tibble::add_row(res_i,
+                                                                                    param = paste(te_diff2$param, collapse = "+"),
+                                                                                    R_eff = length(te_diff2$testDist),
+                                                                                    test = "bootstrap",
+                                                                                    pvalue = purrr::pluck(te_diff2, "P", "bootstrap", .default = NA_real_))
+                                                         }#fi te_diff2
+                                                       }#fi te_diff
+
+                                                       res_i })) %>%
                                                      # compact testDiff-list column: drop entries that did not work out!
-                                                     dplyr::filter(!is.null(testDiffObj), is.list(testDiffObj))
+                                                     dplyr::filter(!is.null(testDiffRes), is.list(testDiffRes)) |>
+                                                     # drop column R (but keep R_eff)
+                                                     dplyr::select(!all_of("R")) |>
+                                                     tidyr::unnest(testDiffRes)
 
-                                                   # extract all P-values/R_eff in long format from each row in estimMethods-df!
-                                                   #+dplyr::reframe (beta in v1.1.0) allows to summarize with more than one row
-                                                   if (NROW(res_h) > 0) {
-                                                     res_h %>%
-                                                       dplyr::reframe(model, method, profiled, R,
-                                                                      R_eff = length(testDiffObj$testDist),
-                                                                      tibble::enframe(unlist(testDiffObj$P),
-                                                                                      name = "test", value = "pvalue"))
-                                                   } else {
-                                                     NULL
-                                                   }
-                                                 }, simplify = FALSE)
+                                                   # # extract all P-values/R_eff in long format from each row in estimMethods-df!
+                                                   # #+dplyr::reframe (beta in v1.1.0) allows to summarize with more than one row
+                                                   # if (NROW(res_h) > 0) {
+                                                   #   res_h %>%
+                                                   #     dplyr::reframe(model, method, profiled, R,
+                                                   #                    R_eff = length(testDiffObj$testDist),
+                                                   #                    tibble::enframe(unlist(testDiffObj$P),
+                                                   #                                    name = "test", value = "pvalue"))
+                                                   # } else {
+                                                   #   NULL
+                                                   # }
+                                                 },#future expr
+                                                 simplify = FALSE)
 
   # drop NULLs (just in case)
   testDiffList <- purrr::compact(testDiffList)
@@ -474,7 +491,7 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize) {
     warning("Did not find chunked RDS-output.", call. = FALSE)
   }
 
-} #esle chunking
+}#esle chunking
 
 
 

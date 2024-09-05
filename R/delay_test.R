@@ -902,13 +902,17 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     t0_dist <- t0_dist[is.finite(t0_dist)]
 
     if (chiSqApprox && length(t0_dist) > 7L) {
-      try(expr = {chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
-                                                      start = list(df = length(param)),
-                                                      method = "Brent", lower = .001, upper = 1001))},
-          silent = TRUE)
+      try(expr = {
+        chisq_df_hat <- coef(MASS::fitdistr(x = t0_dist, densfun = "chi-squared",
+                                            start = list(df = length(param)),
+                                            method = "Brent", lower = .001, upper = 1001))
+      }, silent = TRUE)
     }#fi
 
-    P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
+    # note P-value from bootstrap only when at least half the nominal simulation runs have succeeded
+    if (length(t0_dist) >= (R+1)/2+1) {
+      P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
+    }
   } # bootstrap
 
 
@@ -936,17 +940,16 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       R = if (testMask[['bootstrap']]) length(t0_dist),
       chisq_df_hat = chisq_df_hat,
       param = param,
-      P = purrr::compact(
-        list(
-          bootstrap = P_boot,
-          LR = P_LR,
-          moran = as.vector(GOF_mo0$p.value),
-          moran1 = as.vector(GOF_mo1$p.value),
-          pearson = as.vector(GOF_pears0$p.value),
-          pearson1 = as.vector(GOF_pears1$p.value),
-          logrank = P_logrank,
-          logrank_pp = P_logrank_pp
-        )
+      # save only non-NULL p-values
+      P = purrr::compact(list(
+        bootstrap = P_boot,
+        LR = P_LR,
+        moran = as.vector(GOF_mo0$p.value),
+        moran1 = as.vector(GOF_mo1$p.value),
+        pearson = as.vector(GOF_pears0$p.value),
+        pearson1 = as.vector(GOF_pears1$p.value),
+        logrank = P_logrank,
+        logrank_pp = P_logrank_pp)
       )
     )), class = "incubate_test")
 }

@@ -8,11 +8,11 @@
 library("incubate")
 cat("incubate package version: ", toString(packageVersion("incubate")), "\n")
 
-library('rlang')
-library('dplyr', warn.conflicts = FALSE)
-library('tidyr', warn.conflicts = FALSE)
+library("rlang")
+library("dplyr", warn.conflicts = FALSE)
+library("tidyr", warn.conflicts = FALSE)
 library("purrr", warn.conflicts = FALSE)
-library('glue')
+library("glue")
 suppressPackageStartupMessages(library('R.utils'))
 stopifnot(packageVersion("purrr") > "1.0.0") #for list_flatten()
 
@@ -78,9 +78,9 @@ RES_FILEN <- file.path(myResultsDir, paste0('simRes_', myType, '_', myResultsTag
 if (file.exists(RES_FILEN)) {
 	resData <- readRDS(RES_FILEN)
 
-	if ( ! is.list(resData) || is.null(names(resData))) {
+	if (!is.list(resData) || !is_named(resData)) {
 	  # no results data!
-		cat('\nResults file is not a list! We start over from scratch!\n')
+		cat('\nResults file is not a (named) list! We start over from scratch!\n')
 		resData <- NULL
 	} else {
 	  # results data found!
@@ -94,7 +94,8 @@ if (file.exists(RES_FILEN)) {
 	    cat(glue("Offset index from saved results is {indOffset}."), "\n")
 	  }#fi
 	}#fi resData
-}
+
+}#fi RES_FILEN
 
 
 # read in temporary results data --------------------------------------------------
@@ -104,6 +105,9 @@ if (file.exists(RES_FILEN)) {
 # @param ind index number of given rds filename
 # @return named list containing the unnested data
 readResultFile <- function(rdsFN, ind) {
+  stopifnot(exists("indOffset"), is.numeric(indOffset), length(indOffset) == 1, indOffset >= 0)
+  stopifnot(!missing(ind), is.numeric(ind), length(ind) == 1)
+
 	rdsF <- readRDS(rdsFN)
 	rdsFC <- comment(rdsF)
 	mdList <- eval(parse(text = rdsFC))
