@@ -39,9 +39,10 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
                                 defaults = list(
                                   # simulation settings
-                                  dist="exponential", scenario="MS",
-                                  #model="exponential",
-                                  R=150, mcnrep=100, n=0,
+                                  dist="exponential",
+                                  model="exponential",
+                                  scenario="MS",
+                                  R=150, mcnrep=100, n=-1,
                                   # technical settings
                                   resultsDir = getwd(),
                                   slice=0, seed=as.integer(TODAY),
@@ -58,9 +59,8 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --dist=\t specify distribution that governs the data generation. Default is the exponential distribution.\n')
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
-  #cat('  --model=\t specify distribution to use for analysis. Default is delay exponential model.\n')
-  cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
-  cat('  --n=\t\t sample size number to use in the simulation\n')
+  cat('  --model=\t specify distribution model assumed for analysis. Default is to run exponential model. Say "all" for all delay models (exponential & Weibull).\n')
+  cat('  --n=\t\t sample size number to use in the simulation. By default (n=-1) only smallest sample size is used. n=0 will use all forseen values of n.\n')
   cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
   cat('  --dropMLEw\t drop MLEw method\n')
   cat('  --cens\t apply also random right-censoring during the simulation study\n')
@@ -83,6 +83,10 @@ stopifnot(is.character(myDist), length(myDist) == 1L, nzchar(myDist))
 myDist <- match.arg(arg = tolower(myDist), choices = c("exponential", "weibull"))
 isExponDat <- isTRUE(myDist == "exponential")
 stopifnot(isExponDat || isTRUE(myDist == "weibull"))
+
+myModel <- cmdArgs[["model"]]
+stopifnot(is.character(myModel), length(myModel) == 1L, nzchar(myModel))
+myModel <- match.arg(arg = tolower(myModel), choices = c("all", "exponential", "weibull"))
 
 myWorkers <- cmdArgs[["workers"]]
 stopifnot(is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L)
@@ -113,10 +117,6 @@ stopifnot(!is.null(myN), is.numeric(myN), length(myN) == 1L)
 myN <- ceiling(myN)
 
 myPrint <- isTRUE(any(c("print", "p") %in% tolower(names(cmdArgs))))
-myAllN <- isTRUE(any(c("alln", "a") %in% tolower(names(cmdArgs))))
-if (myAllN && myN > 0) {
-  stop("Requested n=",myN, " but also --allN at the same time.")
-}
 myDropMLEw <- isTRUE(any("dropmlew" %in% tolower(names(cmdArgs))))
 myScaleSimple <- isTRUE(any(c("scalesimple", "scale", "scales") %in% tolower(names(cmdArgs))))
 myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
@@ -128,6 +128,7 @@ myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
 
 if (mySeed > 0L) set.seed(mySeed)
 
+# choose the sample sizes
 nVctr <- if (myN > 0) myN else c(15, 20, 50) ## 100  8, 12, 20, 75
 
 simSetting <- tidyr::expand_grid(n_x = nVctr,
@@ -158,7 +159,7 @@ if (!myCens) {
 
 # default is to use only the smallest sample size
 # (this n is typically used in presentations as it gives nice power curves for chosen difference difference in delay)
-if (!myAllN) {
+if (myN < 0) {
   simSetting <- simSetting %>%
     dplyr::slice_min(n_x)
 }
@@ -210,7 +211,8 @@ simSetting <- switch (myScenario,
                           }
 
                           simSetting %>%
-                            dplyr::inner_join(simFilterMS, by = colnames(simFilterMS))
+                            dplyr::semi_join(y = simFilterMS,
+                                             by = colnames(simFilterMS))
                         })
                       },
 
@@ -231,7 +233,7 @@ if (!dplyr::near(mySlice, 0)) {
     simSetting %>%
       sliceF(n = abs(mySlice))
   })
-}
+}#fi mySlice
 
 if (myPrint) {
   print(knitr::kable(simSetting, format = 'pipe', digits = 2))
@@ -250,7 +252,7 @@ if (myPrint) {
   cat('Results directory is set to ', myResultsDir, '\n')
 
   quit(save = 'no')
-}
+}#fi myPrint
 
 # set up parallel computing ----
 if (USE_FUTURE) {
@@ -263,7 +265,7 @@ if (USE_FUTURE) {
   #   tweak(future.callr::callr, workers = 2L),
   #   tweak(multicore, workers = 4L)
   # ))
-}
+}#fi USE_FUTURE
 
 
 
@@ -303,12 +305,15 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
   # different estimation methods
   estimMethods <- tidyr::expand_grid(method = c(c("MPSE", "MLEn", "MLEc"), if (!dropMLEw) "MLEw"),
                                      profiled = c(FALSE, TRUE),
-                                     R = as.integer(myR)) %>%
+                                     R = as.integer(myR),
+                                     model = if (myModel == "all") c("exponential", "weibull") else myModel) %>%
     # all MLE-methods use only profiled variant, MPSE uses both, profiled & unprofiled
     dplyr::filter(method == 'MPSE' | profiled) %>%
     dplyr::rowwise()
   #cat("estimMethods contains ", paste(unique(estimMethods$method), collapse = ", "), "\n")
 
+  # run MC-replicates for each estimation method in turn
+  #+for the specified data generating process setting (`DGPsetting`)
   testDiffList <- future.apply::future_replicate(n = myMCNrep,
                                                  future.packages = c("dplyr", "incubate", if (cens > 0) "survival"),
                                                  future.seed = TRUE,
@@ -320,19 +325,20 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                      x <- rexp_delayed(n = n_x, delay1 = delay_x, rate1 = 1/scale_x, cens = cens)
                                                      y <- rexp_delayed(n = n_y, delay1 = delay_y, rate1 = 1/scale_y, cens = cens)
                                                    } else {
-                                                     # weibull
+                                                     # weibull, same shape for both groups x and y
                                                      x <- rweib_delayed(n = n_x, delay1 = delay_x, scale1 = scale_x, shape1 = shape, cens = cens)
                                                      y <- rweib_delayed(n = n_y, delay1 = delay_y, scale1 = scale_y, shape1 = shape, cens = cens)
                                                    }
 
 
+                                                   # run all estimation methods over the generated data
                                                    res_h <- estimMethods %>%
                                                      dplyr::mutate(testDiffObj = list({
                                                        te_diff <- NULL
                                                        # test_diff might also use parallel computations depending on future-settings
                                                        try(expr = {
                                                          # test difference in delay1 in exponential model
-                                                         te_diff <- test_diff(x = x, y = y, distribution = "expon", param = "delay1",
+                                                         te_diff <- test_diff(x = x, y = y, distribution = model, param = "delay1",
                                                                               method = method, profiled = profiled, R = R, type = "all",
                                                                               # log-rank test only once (e.g. MPSE, profiled)
                                                                               doLogrank = method == "MPSE" && profiled) %>%
@@ -344,8 +350,8 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                            te_diff$P$bootstrap2 <- NA_real_
 
                                                            try(expr = {
-                                                             te_diff$P$bootstrap2 <- test_diff(x = x, y = y, distribution = "expon",
-                                                                                               param = c("delay1", "rate1"),
+                                                             te_diff$P$bootstrap2 <- test_diff(x = x, y = y, distribution = model,
+                                                                                               param = c("delay1", if (model == "exponential") "rate1" else "scale1"),
                                                                                                method = method, profiled = profiled,
                                                                                                R = R, type = "bootstrap") %>%
                                                                suppressWarnings() %>%
@@ -362,7 +368,7 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                    #+dplyr::reframe (beta in v1.1.0) allows to summarize with more than one row
                                                    if (NROW(res_h) > 0) {
                                                      res_h %>%
-                                                       dplyr::reframe(method, profiled, R,
+                                                       dplyr::reframe(model, method, profiled, R,
                                                                       R_eff = length(testDiffObj$testDist),
                                                                       tibble::enframe(unlist(testDiffObj$P),
                                                                                       name = "test", value = "pvalue"))
