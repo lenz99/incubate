@@ -39,7 +39,8 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
                                 defaults = list(
                                   # simulation settings
-                                  dist='exponential', scenario='MS',
+                                  dist="exponential", scenario="MS",
+                                  #model="exponential",
                                   R=150, mcnrep=100, n=0,
                                   # technical settings
                                   resultsDir = getwd(),
@@ -57,6 +58,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
   cat('  --dist=\t specify distribution that governs the data generation. Default is the exponential distribution.\n')
   cat('  --scenario=\t with respect to the delay in both groups, choose a scenario for the simulation:\n\t\t\tDELAYEQ = no difference in delay,\n\t\t\tDELAYGT = 2nd group y with bigger delay.\n\t\t\tMS = only relevant scenarios shown in manuscript (default)\n\t\t\tALL = all cases\n')
+  #cat('  --model=\t specify distribution to use for analysis. Default is delay exponential model.\n')
   cat('  --allN\t use different sample sizes in the simulations. Without this option, only a single sample size is used.\n')
   cat('  --n=\t\t sample size number to use in the simulation\n')
   cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
@@ -77,10 +79,10 @@ stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
            (file.mode(myResultsDir) %>% as.character() %>% substr(1,1) %>% as.octmode() & 6) == '6')
 
 myDist <- cmdArgs[["dist"]]
-stopifnot(is.character(myDist), length(myDist) == 1L)
+stopifnot(is.character(myDist), length(myDist) == 1L, nzchar(myDist))
 myDist <- match.arg(arg = tolower(myDist), choices = c("exponential", "weibull"))
-isExpon <- isTRUE(myDist == "exponential")
-stopifnot(isExpon || isTRUE(myDist == "weibull"))
+isExponDat <- isTRUE(myDist == "exponential")
+stopifnot(isExponDat || isTRUE(myDist == "weibull"))
 
 myWorkers <- cmdArgs[["workers"]]
 stopifnot(is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L)
@@ -126,7 +128,7 @@ myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
 
 if (mySeed > 0L) set.seed(mySeed)
 
-nVctr <- if (myN > 0) myN else c(8, 10, 12, 15, 20, 30, 50, 75) #100
+nVctr <- if (myN > 0) myN else c(15, 20, 50) ## 100  8, 12, 20, 75
 
 simSetting <- tidyr::expand_grid(n_x = nVctr,
                                  delay_x = 5,
@@ -135,7 +137,7 @@ simSetting <- tidyr::expand_grid(n_x = nVctr,
                                  scale_ratio = c(2, 1, .5),
                                  # shape values according to distribution
                                  #+effectively filter for distribution
-                                 shape = if (isExpon) 1 else c(.5, 2),
+                                 shape = if (isExponDat) 1 else c(.5, 2),
                                  cens = c(0, 0.1, 0.2, 0.3))
 
 # avoid duplicates:
@@ -198,7 +200,7 @@ simSetting <- switch (myScenario,
                         # filter based on scale parameters
                         # this contains the cases which are needed in the manuscript
                         local({
-                          simFilterMS <- if (isExpon) {
+                          simFilterMS <- if (isExponDat) {
                             simSetting %>%
                               dplyr::filter(dplyr::near(scale_ratio, 1) |
                                               (dplyr::near(scale_x, 5) & dplyr::near(scale_ratio, 2)) |
@@ -277,7 +279,9 @@ if (USE_FUTURE) {
 #' @return dataframe. P-values in the different Monte-Carlo runs.
 doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
   # settings from the environment:
-  stopifnot(exists("isExpon"), exists("myMCNrep"), exists("myR"))
+  stopifnot(exists("myMCNrep"), exists("myR"))
+  stopifnot(exists("isExponDat"), is.logical(isExponDat))
+
   stopifnot(is.numeric(DGPsetting), length(DGPsetting) == 8L)
   stopifnot(is.logical(dropMLEw), length(dropMLEw) == 1L)
   dropMLEw <- isTRUE(dropMLEw)
@@ -311,7 +315,7 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                  expr = {
                                                    # generate data
                                                    x <- y <- 1 #dummy init
-                                                   if (isExpon) {
+                                                   if (isExponDat) {
                                                      stopifnot(dplyr::near(shape, 1L))
                                                      x <- rexp_delayed(n = n_x, delay1 = delay_x, rate1 = 1/scale_x, cens = cens)
                                                      y <- rexp_delayed(n = n_y, delay1 = delay_y, rate1 = 1/scale_y, cens = cens)
