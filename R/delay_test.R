@@ -635,6 +635,7 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param type character. Which type of tests to perform?
 #' @param doLogrank logical. Do also non-parametric logrank tests?
+#' @param doGOF logical. Do we also do the GOF-tests here?
 #' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param chiSqApprox logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
@@ -644,7 +645,8 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                       method = c("MPSE", "MLEn", "MLEw", "MLEc"), profiled = method != "MPSE",
                       ties = c("density", "equispaced", "error"),
                       param = "delay1",
-                      type = c("all", "bootstrap", "GOF", "moran", "pearson", "LRT"), doLogrank = TRUE,
+                      type = c("all", "bootstrap", "GOF", "moran", "pearson", "LRT"),
+                      doLogrank = TRUE, doGOF = TRUE,
                       R = 400,
                       chiSqApprox = FALSE, verbose = 0) {
 
@@ -655,19 +657,23 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   stopifnot(is.numeric(x), length(x) > length(onames), is.numeric(y), length(y) > length(onames))
   stopifnot(is.numeric(R), length(R) == 1L, R >= 1L)
   stopifnot(is.character(param))
+
+  doLogrank <- isTRUE(doLogrank[[1]])
+  doGOF <- isTRUE(doGOF[[1]])
+
   # verbose arg
   if (is.logical(verbose)) verbose <- as.numeric(verbose)
   if (is.null(verbose) || !is.numeric(verbose) || !is.finite(verbose)) verbose <- 0
-  verbose <- verbose[[1L]]
+  verbose <- verbose[[1]]
 
-  method <- if (length(method) == 1L && toupper(method) == "MSE") {
+  method <- if (length(method) == 1 && toupper(method) == "MSE") {
     message("The method name 'MPSE' is preferred over the previously used name 'MSE'!")
     "MPSE"
   } else method[1L]
   method <- match.arg(method)
   ties <- match.arg(arg = ties)
 
-  if (method != "MPSE" && type %in% c("moran", "pearson", "GOF")) {
+  if (method != "MPSE" && doGOF && type %in% c("moran", "pearson", "GOF")) {
     warning("Goodness-of-fit (GOF) tests are only supported with MPSE currently!", call. = FALSE)
     return(invisible(NULL))
   }
@@ -704,25 +710,30 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
          call. = FALSE)
   }
 
-  # bitmask for test types
+  # bitmask for test types: start all negative
   testMask <- rlang::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'logrank', 'LRT'))
 
   switch(EXPR = type,
          all = {
            testMask <- testMask | TRUE
-           testMask[c("pearson", "moran")] <- method == "MPSE"
+           testMask[c("pearson", "moran")] <- method == "MPSE" && doGOF
          },
          # bootstrap + log-rank-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLRT=?!
          bootstrap = { testMask["bootstrap"] <- TRUE },
-         GOF = {testMask[c("pearson", "moran")] <- method == "MPSE"},
-         moran = {testMask["moran"] <- method == "MPSE"},
-         pearson = {testMask["pearson"] <- method == "MPSE"},
+         GOF = {testMask[c("pearson", "moran")] <- method == "MPSE" && doGOF},
+         moran = {testMask["moran"] <- method == "MPSE" && doGOF},
+         pearson = {testMask["pearson"] <- method == "MPSE" && doGOF},
          LRT = {testMask["LRT"] <- TRUE}, #likelihood ratio test
          stop("This type of test is not supported!", call. = FALSE)
   )
 
   # separate switch for logrank flag
-  testMask["logrank"] <- isTRUE(doLogrank[1L])
+  testMask["logrank"] <- doLogrank
+
+  if (!any(testMask)) {
+    warning("Specify which test(s) to do!", call. = FALSE)
+    return(invisible(NULL))
+  }
 
 
   # test statistic ----

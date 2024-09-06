@@ -15,6 +15,7 @@ test_diff(
   param = "delay1",
   type = c("all", "bootstrap", "GOF", "moran", "pearson", "LRT"),
   doLogrank = TRUE,
+  doGOF = TRUE,
   R = 400,
   chiSqApprox = FALSE,
   verbose = 0
@@ -40,6 +41,8 @@ test_diff(
 \item{type}{character. Which type of tests to perform?}
 
 \item{doLogrank}{logical. Do also non-parametric logrank tests?}
+
+\item{doGOF}{logical. Do we also do the GOF-tests here?}
 
 \item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 

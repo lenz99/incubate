@@ -1,4 +1,4 @@
-# incubate 1.3.0.9080
+# incubate 1.3.0.9081
 * allow for random right-censoring
 * MLEw: bugfix in weight approximation (relevant for W3)
 * MLEw: weight functions as non-exported functions (and not as internal data)

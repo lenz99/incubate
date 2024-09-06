@@ -6,10 +6,12 @@
 
 # init -----
 
-cat("\nMC-simulations for test for difference in delay parameters.\n")
-cat("It is ***", toString(Sys.time()), "***\n")
+TODAY <- Sys.Date()
+
+cat("\nMC-simulations around statistical significance tests for difference in delay parameters.\n")
 
 library("incubate")
+version_inc <- packageVersion("incubate")
 # minimal version check:
 #+ 0.7.6 for GOF-Pvalues for restricted & unrestricted model: e.g. gof_mo0 (was gof_mo) and gof_mo1 (new)
 #+ 0.9.8 for names for P-values have changed: boot => bootstrap, gof_mo0 => moran, etc
@@ -20,17 +22,16 @@ library("incubate")
 #+ 1.3.0.9037: allow profiling for MPSE and all MLE-methods, at least with single group..
 #+ 1.3.0.9055: support random right-censoring in rexp_delayed() and rweib_delayed()
 #+ 1.3.0.9077: criterion updated
-stopifnot(packageVersion("incubate") >= "1.3.0.9077")
-cat('incubate package version: ', toString(packageVersion("incubate")), '\n')
+stopifnot(version_inc >= "1.3.0.9077")
+cat('incubate package version: ', toString(version_inc), '\n')
 
+library("tibble")
 library("dplyr", warn.conflicts = FALSE)
 stopifnot(packageVersion("dplyr") > "1.0.10")
-library("purrr")
+library("purrr", warn.conflicts = FALSE)
 library("tidyr", warn.conflicts = FALSE)
-library("tibble")
 suppressPackageStartupMessages(library("R.utils"))
 
-TODAY <- Sys.Date()
 
 
 # command line arguments -----
@@ -63,6 +64,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --n=\t\t sample size number to use in the simulation. By default (n=-1) only smallest sample size is used. n=0 will use all forseen values of n.\n')
   cat('  --scaleSimple\t use only standard value for scale and scale-ratio\n')
   cat('  --dropMLEw\t drop MLEw method\n')
+  cat('. --doGOF\t also perform goodness-of-fit tests\n')
   cat('  --cens\t apply also random right-censoring during the simulation study\n')
   cat('  --slice=\t if given, pick only this number of first scenarios for simulations. If negative, scenarios taken from the tail.\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default is date-dependent.\n')
@@ -116,10 +118,12 @@ myN <- cmdArgs[["n"]]
 stopifnot(!is.null(myN), is.numeric(myN), length(myN) == 1L)
 myN <- ceiling(myN)
 
-myPrint <- isTRUE(any(c("print", "p") %in% tolower(names(cmdArgs))))
-myDropMLEw <- isTRUE(any("dropmlew" %in% tolower(names(cmdArgs))))
-myScaleSimple <- isTRUE(any(c("scalesimple", "scale", "scales") %in% tolower(names(cmdArgs))))
-myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
+cmdArgsLo <- tolower(names(cmdArgs))
+myPrint <- isTRUE(any(c("print", "p") %in% cmdArgsLo))
+myDropMLEw <- isTRUE(any("dropmlew" %in% cmdArgsLo))
+myDoGOF <- isTRUE(any("dogof" %in% cmdArgsLo))
+myScaleSimple <- isTRUE(any(c("scalesimple", "scale", "scales") %in% cmdArgsLo))
+myCens <- isTRUE(any(c("cens", "censoring") %in% cmdArgsLo))
 
 
 
@@ -129,7 +133,7 @@ myCens <- isTRUE(any(c("cens", "censoring") %in% tolower(names(cmdArgs))))
 if (mySeed > 0L) set.seed(mySeed)
 
 # choose the sample sizes
-nVctr <- if (myN > 0) myN else c(15, 20, 50) ## 100  8, 12, 20, 75
+nVctr <- if (myN > 0) myN else c(11, 15, 20, 50) ## 100  8, 12, 20, 75
 
 simSetting <- tidyr::expand_grid(n_x = nVctr,
                                  delay_x = 5,
@@ -247,12 +251,16 @@ if (myPrint) {
   if (mySeed>0) {
     cat('Seed was set initially to', mySeed,'\n')
   } else {
-    cat('See was **not** set!\n')
+    cat('Seed was **not** set!\n')
   }
   cat('Results directory is set to ', myResultsDir, '\n')
 
   quit(save = 'no')
 }#fi myPrint
+
+
+
+cat("It is ***", toString(Sys.time()), "***\n")
 
 # set up parallel computing ----
 if (USE_FUTURE) {
@@ -339,9 +347,10 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                        try(expr = {
                                                          # test difference in delay1 in exponential model
                                                          te_diff <- test_diff(x = x, y = y, distribution = model, param = "delay1",
-                                                                              method = method, profiled = profiled, R = R, type = "all",
+                                                                              method = method, profiled = profiled,
+                                                                              R = R, type = "all",
                                                                               # log-rank test only once (e.g. MPSE, profiled)
-                                                                              doLogrank = method == "MPSE" && profiled) %>%
+                                                                              doLogrank = method == "MPSE" && profiled, doGOF = myDoGOF) %>%
                                                            suppressWarnings()
                                                          # bootstrap P-value for combined test for difference in parameters delay+rate
                                                          #+only if the scale (=1/rate for exponential) is indeed different betw groups
@@ -350,7 +359,8 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                              te_diff2 <- test_diff(x = x, y = y, distribution = model,
                                                                                    param = c("delay1", if (model == "exponential") "rate1" else "scale1"),
                                                                                    method = method, profiled = profiled,
-                                                                                   R = R, type = "bootstrap") %>%
+                                                                                   R = R, type = "bootstrap",
+                                                                                   doLogrank = FALSE, doGOF = FALSE) %>%
                                                                suppressWarnings()
                                                            }, #yrt inner
                                                            silent = TRUE)
