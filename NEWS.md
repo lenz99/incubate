@@ -1,18 +1,19 @@
-# incubate 1.3.0.9077
+# incubate 1.3.0.9080
 * allow for random right-censoring
 * MLEw: bugfix in weight approximation (relevant for W3)
-* MLEw: weight functions as non-exported functions (and not internal data)
+* MLEw: weight functions as non-exported functions (and not as internal data)
 * criterion= as character option, use MLEc as standard criterion for MLEw method (as it has no own likelihood function)
 * implement S3-function `logLik`
 * implement delayed normal distribution
+* delay_test: use name LRT (instead of LR) for likelihood ratio tests
 
 # incubate 1.3.0
 * implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter
 * use some log-transformed parameters internally for more stable and less constrained optimization
 * `test_diff`: allow for likelihood-ratio test
 * include restricted mean survival time function for delayed exponential and Weibull
-* [experimental] implement two delay phases for exponential and for Weibull
-* update simulation R-scripts (in `inst/scripts/`) to also use ML-based estimation and LR-tests, with and without censoring
+* [experimental] implement two delay phases for exponential and for Weibull distribution functions
+* update simulation R-scripts (in `inst/scripts/`) to also use ML-based estimation and LR-tests (LRT), with and without censoring
 
 # incubate 1.2.1
 * fix package help after changes in roxygen
@@ -22,7 +23,7 @@
 * `test_diff`:
     * test-statistic gets lower bound of 0 enforced (a restricted model can not have better fit than unrestricted model)
     * deactivate Anderson-Darling (AD) GOF-test as its performance in simulations under two-group setting was unsatisfactory
-* include simulation R-scripts in package under `inst/scripts/` folder. When the package is installed the scripts are found at in the -directory `scripts/` within the package.
+* include simulation R-scripts in package under `inst/scripts/` folder. When the package is installed the scripts are found in the `scripts/` sub-directory of the package installation.
 * rename methods:
     * 'MSE' => 'MPSE' (as the term MSE has already other meanings)
     * 'MLE' => 'MLE0' (to indicate that this is the standard MLE that is not appropriate for delay models)

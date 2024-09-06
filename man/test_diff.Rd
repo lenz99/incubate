@@ -13,7 +13,7 @@ test_diff(
   profiled = method != "MPSE",
   ties = c("density", "equispaced", "error"),
   param = "delay1",
-  type = c("all", "bootstrap", "GOF", "moran", "pearson", "LR"),
+  type = c("all", "bootstrap", "GOF", "moran", "pearson", "LRT"),
   doLogrank = TRUE,
   R = 400,
   chiSqApprox = FALSE,

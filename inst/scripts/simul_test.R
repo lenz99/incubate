@@ -16,7 +16,7 @@ library("incubate")
 #+ 1.1.9.9000 script is developed as part of the incubate package (not separate as part of the MS)
 #+ 1.1.9.9014 ties='density' as default now also for tests
 #+ 1.1.9.9016 avoid attributes, use transform() for Pearson/AD GOF tests
-#+ 1.3.0.9025: rename logrank P-values to logrank and logrank_pp (to avoid confusion with likelihood ratio (=LR) tests)
+#+ 1.3.0.9025: rename logrank P-values to logrank and logrank_pp to avoid confusion with likelihood ratio tests (LRT)
 #+ 1.3.0.9037: allow profiling for MPSE and all MLE-methods, at least with single group..
 #+ 1.3.0.9055: support random right-censoring in rexp_delayed() and rweib_delayed()
 #+ 1.3.0.9077: criterion updated

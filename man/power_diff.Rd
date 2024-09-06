@@ -2,13 +2,13 @@
 % Please edit documentation in R/delay_test.R
 \name{power_diff}
 \alias{power_diff}
-\title{Power simulation function for a two-group comparison of the delay parameter.}
+\title{Power simulation function for a two-group comparison of the delay parameter}
 \usage{
 power_diff(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
   param = "delay1",
-  test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LR"),
+  test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LRT"),
   eff = stop("Provide parameters for both groups that reflect the effect!"),
   n = NULL,
   r = 1,
@@ -27,7 +27,7 @@ power_diff(
 
 \item{param}{character. Parameter name(s) which are to be tested for difference and for which to simulate the power. Default value is \code{'delay1'}.}
 
-\item{test}{character. Which test to use for this power estimation?}
+\item{test}{character. Which test to use for this power estimation? E.g. LRT}
 
 \item{eff}{list. The two list elements contain the model parameters (as understood by the delay-distribution functions provided by this package) for the two groups.}
 

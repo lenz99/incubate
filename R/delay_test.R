@@ -644,7 +644,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                       method = c("MPSE", "MLEn", "MLEw", "MLEc"), profiled = method != "MPSE",
                       ties = c("density", "equispaced", "error"),
                       param = "delay1",
-                      type = c("all", "bootstrap", "GOF", "moran", "pearson", "LR"), doLogrank = TRUE,
+                      type = c("all", "bootstrap", "GOF", "moran", "pearson", "LRT"), doLogrank = TRUE,
                       R = 400,
                       chiSqApprox = FALSE, verbose = 0) {
 
@@ -705,19 +705,19 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   }
 
   # bitmask for test types
-  testMask <- rlang::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'logrank', 'LR'))
+  testMask <- rlang::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'logrank', 'LRT'))
 
   switch(EXPR = type,
          all = {
            testMask <- testMask | TRUE
            testMask[c("pearson", "moran")] <- method == "MPSE"
          },
-         # bootstrap + log-rank-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLR=?!
+         # bootstrap + log-rank-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLRT=?!
          bootstrap = { testMask["bootstrap"] <- TRUE },
          GOF = {testMask[c("pearson", "moran")] <- method == "MPSE"},
          moran = {testMask["moran"] <- method == "MPSE"},
          pearson = {testMask["pearson"] <- method == "MPSE"},
-         LR = {testMask["LR"] <- TRUE}, #likelihood ratio test
+         LRT = {testMask["LRT"] <- TRUE}, #likelihood ratio test
          stop("This type of test is not supported!", call. = FALSE)
   )
 
@@ -845,10 +845,10 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     GOF_pears1 <- test_GOF(delayFit = fit1, method = 'pearson')
   }
 
-  P_LR <- NULL
-  if (testMask[['LR']]) {
-    # likelihood ratio test (LR-test), based on the criterion that was requested (MPSE or ML-based)
-    P_LR <- stats::pchisq(q = ts_obs[["val"]], df = length(param), lower.tail = FALSE)
+  P_LRT <- NULL
+  if (testMask[["LRT"]]) {
+    # likelihood ratio test (LRT), based on the criterion that was requested (MPSE or ML-based)
+    P_LRT <- stats::pchisq(q = ts_obs[["val"]], df = length(param), lower.tail = FALSE)
   }
 
   t0_dist <- P_boot <- chisq_df_hat <- NULL
@@ -909,7 +909,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       }, silent = TRUE)
     }#fi
 
-    # note P-value from bootstrap only when at least half the nominal simulation runs have succeeded
+    # keep P-value from bootstrap only when at least half the nominal simulation runs have succeeded
     if (length(t0_dist) >= (R+1)/2+1) {
       P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
     }
@@ -943,7 +943,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       # save only non-NULL p-values
       P = purrr::compact(list(
         bootstrap = P_boot,
-        LR = P_LR,
+        LRT = P_LRT,
         moran = as.vector(GOF_mo0$p.value),
         moran1 = as.vector(GOF_mo1$p.value),
         pearson = as.vector(GOF_pears0$p.value),
@@ -1009,7 +1009,7 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 }
 
 
-#' Power simulation function for a two-group comparison of the delay parameter.
+#' Power simulation function for a two-group comparison of the delay parameter
 #'
 #' There are two ways of operation:
 #' 1. `power=NULL` Given sample size `n` it simulates the power.
@@ -1028,7 +1028,7 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @param twoPhase logical(1). Do we model two phases per group? Default is `FALSE`, i.e. a single delay phase per group.
 #' @param eff list. The two list elements contain the model parameters (as understood by the delay-distribution functions provided by this package) for the two groups.
 #' @param param character. Parameter name(s) which are to be tested for difference and for which to simulate the power. Default value is `'delay1'`.
-#' @param test character. Which test to use for this power estimation?
+#' @param test character. Which test to use for this power estimation? E.g. LRT
 #' @param n integer. Number of observations per group for the power simulation or `NULL` when n is to be estimated for a given power.
 #' @param power numeric. `NULL` when power is to be estimated for a given sample size or a desired power is specified (and `n` is estimated).
 #' @param r numeric. Ratio of both groups sizes, ny / nx. Default value is 1, i.e., balanced group sizes. Must be positive.
@@ -1040,15 +1040,16 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FALSE, param = "delay1",
-                       test = c('bootstrap', 'pearson', 'moran', 'logrank', 'logrank_pp', "LR"),
+                       test = c('bootstrap', 'pearson', 'moran', 'logrank', 'logrank_pp', "LRT"),
                        eff = stop("Provide parameters for both groups that reflect the effect!"),
                        n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
                        nRange = c(5, 150), verbose=0){
 
-  tol_pow <- .001
+  TOL_POW <- sqrt(TOL_NUM)
   distO <- buildDist(match.arg(distribution))
-  if (! missing(test)) test <- tolower(test)
+  #if (!missing(test)) test <- tolower(test)
   test <- match.arg(arg = test)
+  # category: e.g. test name w/o _pp suffix
   test_cat <- sub(pattern = "[_].*$", replacement = "", x = test)
   ranFun <- distO$random
   onames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, transformed = FALSE)
@@ -1060,7 +1061,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
 
   # translate convenience names (for single phase) to canonical names
   unNmbrdIdx <- !grepl(pattern = "[12]", param, fixed = FALSE)
-  if (any(unNmbrdIdx)){
+  if (any(unNmbrdIdx)) {
     param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
     if (verbose > 0L) cat("Unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n")
   }
@@ -1068,35 +1069,38 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
   # only valid names in canonical order
   param <- intersect(onames, param)
 
-  if (!length(param)){
+  if (!length(param)) {
     stop("Provide valid parameter names from the distribution to test for differences in two groups.", call. = FALSE)
   }
   param <- match.arg(param, choices = onames)
 
-  stopifnot( is.null(n) || (is.numeric(n) && length(n) == 1L && is.finite(n) ))
-  stopifnot( is.null(power) || (is.numeric(power) && length(power) == 1L && power > 0L && power < 1L ))
-  if (is.null(n) + is.null(power) != 1L) stop('Either set `n=NULL` or `power=NULL`!')
+  stopifnot(is.null(n) || (is.numeric(n) && length(n) == 1L && is.finite(n)))
+  stopifnot(is.null(power) || (is.numeric(power) && length(power) == 1L && power > 0L && power < 1L))
+  if (is.null(n) + is.null(power) != 1L) {
+    stop('Either set `n=NULL` or `power=NULL`!', call. = FALSE)
+  }
 
-  stopifnot( length(sig.level) == 1L, is.numeric(sig.level), is.finite(sig.level), sig.level > 0L, sig.level < 1L )
+  stopifnot(length(sig.level) == 1L, is.numeric(sig.level), is.finite(sig.level), sig.level > 0L, sig.level < 1L)
   stopifnot(is.numeric(r), length(r) == 1L, r > 0L)
-  stopifnot( length(nPowerSim) == 1L, is.numeric(nPowerSim), nPowerSim >= 3L )
-  stopifnot( length(R) == 1L, is.numeric(R), R >= 3L )
-  stopifnot( length(nRange) == 2L, is.numeric(nRange), nRange[[1L]] > 1L, nRange[[2L]] > nRange[[1L]] )
+  stopifnot(length(nPowerSim) == 1L, is.numeric(nPowerSim), nPowerSim >= 3L)
+  stopifnot(length(R) == 1L, is.numeric(R), R >= 3L)
+  stopifnot(length(nRange) == 2L, is.numeric(nRange), nRange[[1L]] > 1L, nRange[[2L]] > nRange[[1L]])
   nPowerSim <- ceiling(nPowerSim)
   R <- ceiling(R)
 
-  stopifnot( is.list(eff), length(eff) == 2L )
+  stopifnot(is.list(eff), length(eff) == 2L)
   parx <- eff[[1L]]
   pary <- eff[[2L]]
 
-  stopifnot( is.numeric(parx), is.numeric(pary) )
-  stopifnot( length(parx) == length(onames), length(pary) == length(onames))
+  stopifnot(is.numeric(parx), is.numeric(pary))
+  stopifnot(length(parx) == length(onames), length(pary) == length(onames))
   parx <- rlang::set_names(parx, onames)
   pary <- rlang::set_names(pary, onames)
 
 
   simulatePower <- function(nx, ny, B = nPowerSim, R) {
-    nx <- ceiling(nx); ny <- ceiling(ny)
+    nx <- ceiling(nx)
+    ny <- ceiling(ny)
 
     # repeatedly test for difference in parameter on bootstrapped data
     P_dist <- future.apply::future_vapply(X = seq_len(B), FUN.VALUE = double(1L),
@@ -1108,7 +1112,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
 
                                             P_val <- NA_real_
                                             try(expr = {
-                                              P_val <- purrr::pluck(test_diff(x = datx, y = daty,
+                                              P_val <- purrr::pluck(test_diff(x = datx, y = daty, method = "MPSE",
                                                                               distribution = distO, twoPhase = twoPhase,
                                                                               param = param, type = test_cat, R = R),
                                                                     "P", test, .default = NA_real_)
@@ -1119,30 +1123,34 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
 
     P_dist <- P_dist[is.finite(P_dist)]
 
-    if ( !length(P_dist) ){
-      warning("No valid power simulation results.")
+    if (!length(P_dist)) {
+      warning("No valid power simulation results.", call. = FALSE)
       return(invisible(NULL))
     }
 
-    if ( length(P_dist) < 100L )
-      warning("Low resultion for power estimate.")
+    if (length(P_dist) < 100L) {
+      warning("Low resultion for power estimate.", call. = FALSE)
+    }
 
-    if (length(P_dist))
-      sum(P_dist < sig.level) / length(P_dist) else
-        NA_real_
-  } #fun
+    # return
+    if (length(P_dist)) {
+      sum(P_dist < sig.level) / length(P_dist)
+    } else {
+      NA_real_
+    }
+  }#fn simulatePower
 
 
   nx <- ny <- -1
   powerGrid <- NULL
 
-  if (is.null(power)){
+  if (is.null(power)) {
 
-    # easy case: estimate power once!
+    # easy case: estimate power once, from given n
     nx <- ceiling(n)
     ny <- ceiling(r * n)
-    if ( nx < length(onames) || ny < length(onames) ){
-      warning("Too few observations to fit parameters.")
+    if (nx < length(onames) || ny < length(onames)) {
+      warning("Too few observations to fit parameters.", call. = FALSE)
       return(invisible(NULL))
     }
 
@@ -1151,7 +1159,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
   } else {
 
     # estimate n for specified power
-    stopifnot( is.null(n) )
+    stopifnot(is.null(n))
 
     Bmax1 <- 200L
     Rmax1 <- 100L
@@ -1165,20 +1173,22 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
     pow_cand1 <- rep_len(-1, length.out = NBR_CAND1)
 
     # if single n remains, return the power for it (no search for n necessary)
-    if (NBR_CAND1 == 1L) return(power_diff(distribution, twoPhase = twoPhase, param, test = test, eff,
-                                           n = nx_cand1[[1L]], power = NULL,
-                                           r = r, sig.level = sig.level, nPowerSim = nPowerSim, R = R))
+    if (NBR_CAND1 == 1L) {
+      return(power_diff(distribution, twoPhase = twoPhase, param, test = test, eff,
+                        n = nx_cand1[[1L]], power = NULL,
+                        r = r, sig.level = sig.level, nPowerSim = nPowerSim, R = R))
+    }
 
 
     for (i1 in seq_along(nx_cand1)) {
       nxc <- nx_cand1[[i1]]
       pow_cand1[[i1]] <- simulatePower(nx = nxc, ny = nxc * r, B = B1, R = R1)
 
-      if (pow_cand1[[i1]] >= power - tol_pow) break
+      if (pow_cand1[[i1]] >= power - TOL_POW) break
     } #rof
 
     # store preliminary power estimates
-    powerGrid <- tibble::tibble(
+    powerGrid <- tibble(
       nx = nx_cand1[pow_cand1 > 0],
       ny = ceiling(nx * r),
       power = pow_cand1[pow_cand1 > 0],
@@ -1188,36 +1198,40 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
     )
 
     if (NROW(powerGrid) <= 1L) {
-      stop('Failed to find power estimates within specified range!', call. = FALSE)
+      stop("Failed to find power estimates within specified range!", call. = FALSE)
     }
 
     REFINE <- TRUE #NROW(powerGrid) >= 2L
 
     # check first iteration
-    if (i1 == 1L){
+    if (i1 == 1L) {
       warning('Smallest allowed n already exceeds requested power!', call. = FALSE)
       REFINE <- FALSE
     }
 
     # check last iteration
-    if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 && pow_cand1[[NBR_CAND1]] < power - tol_pow){
-      warning(glue('Failed to reach requested power with maximally allowed n: {nx_cand1[[NBR_CAND1]]} ',
-                   'yields a power of {as_percent(pow_cand1[[NBR_CAND1]])}.'))
+    if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 && pow_cand1[[NBR_CAND1]] < power - TOL_POW) {
+      warning(glue("Failed to reach requested power with maximally allowed n: ",
+                   " {nx_cand1[[NBR_CAND1]]} yields a power of {as_percent(pow_cand1[[NBR_CAND1]])}."),
+              call. = FALSE)
       REFINE <- FALSE
-    }
+    }# fi
 
 
-    if (!REFINE){
+    if (!REFINE) {
       nx <- ceiling(nx_cand1[[i1]])
       ny <- ceiling(nx_cand1[[i1]] * r)
-      power <- if (B1 < nPowerSim || R1 < R) stats::weighted.mean(x = c(pow_cand1[[i1]], simulatePower(nx, ny, B = nPowerSim, R = R)),
-                                                                  w = c(B1, nPowerSim)) else
-                                                                    pow_cand1[[i1]]
+      power <- if (B1 < nPowerSim || R1 < R) {
+        stats::weighted.mean(x = c(pow_cand1[[i1]], simulatePower(nx, ny, B = nPowerSim, R = R)),
+                             w = c(B1, nPowerSim))
+      } else {
+        pow_cand1[[i1]]
+      }
     } else {
       powerMod <- if (NROW(powerGrid) == 2L) stats::lm(power ~ nx, data = powerGrid) else stats::lm(power ~ poly(nx, 2), data = powerGrid)
-      powerPred <- tibble::tibble(nx = seq.int(from = nRange[[1L]], to = nRange[[2L]], by = 1L),
-                                  predpower = stats::predict.lm(powerMod, newdata = data.frame(nx = nx)),
-                                  diffpower = .data$predpower - power)
+      powerPred <- tibble(nx = seq.int(from = nRange[[1L]], to = nRange[[2L]], by = 1L),
+                          predpower = stats::predict.lm(powerMod, newdata = data.frame(nx = nx)),
+                          diffpower = .data$predpower - power)
       # examine close neighbourhood of predicted best n
       powerPredInd <- intersect(seq_len(NROW(powerPred)), c(-1L, 0L, 1L) + which.max(powerPred$diffpower >= 0L))
 
@@ -1225,13 +1239,13 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
       NBR_CAND2 <- length(nx_cand2)
       pow_cand2 <- rep_len(-1, length.out = NBR_CAND2)
 
-      for (i2 in seq_along(nx_cand2)){
+      for (i2 in seq_along(nx_cand2)) {
         nxc <- nx_cand2[[i2]]
         pow_cand2[[i2]] <- simulatePower(nx = nxc, ny = nxc * r, B = nPowerSim, R = R)
 
-      } #rof
+      }#rof
 
-      powerGrid2 <- tibble::tibble(
+      powerGrid2 <- tibble(
         nx = nx_cand2[pow_cand2 > 0],
         ny = ceiling(nx * r),
         power = pow_cand2[pow_cand2 > 0],
@@ -1239,18 +1253,18 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
         B = nPowerSim,
         R = R)
 
-      stopifnot( any(powerGrid2$power >= power - tol_pow) )
-      nx <- powerGrid2$nx[which.max(powerGrid2$power >= power - tol_pow)]
+      stopifnot(any(powerGrid2$power >= power - TOL_POW))
+      nx <- powerGrid2$nx[which.max(powerGrid2$power >= power - TOL_POW)]
       ny <- ceiling(nx * r)
       power <- powerGrid2$power[which(powerGrid2$nx == nx)]
 
       # store 2nd round (refinement) power estimates
       powerGrid <- rbind(powerGrid, powerGrid2)
-
     }
-    stopifnot( nx > 0L, ny > 0L, power > 0L)
 
-  }
+    stopifnot(nx > 0L, ny > 0L, power > 0L)
+
+  }#esle is.null(n)
 
   purrr::compact(
     list(name = "Difference in delayed model for time-to-event data in two groups",
