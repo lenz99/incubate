@@ -4,11 +4,9 @@
 # Test delay parameter
 
 
-# init -----
-
-TODAY <- Sys.Date()
-
 cat("\nMC-simulations around statistical significance tests for difference in delay parameters.\n")
+
+# init -----
 
 library("incubate")
 version_inc <- packageVersion("incubate")
@@ -33,6 +31,16 @@ library("tidyr", warn.conflicts = FALSE)
 suppressPackageStartupMessages(library("R.utils"))
 
 
+# capture date/time for seed and timestamp
+TODAY <- Sys.Date()
+NOW <- Sys.time()
+DATETIME_TAG <- format(NOW, format = "%Y-%m-%d-%Hh%Mm%Ss")
+SEED_DEFAULT <- paste0(as.integer(TODAY), format(NOW, format = "%H%M")) %>%
+  as.integer()
+
+stopifnot(is.integer(SEED_DEFAULT), length(SEED_DEFAULT) == 1, SEED_DEFAULT > 11111)
+
+
 
 # command line arguments -----
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
@@ -46,7 +54,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                   R=150, mcnrep=100, n=-1,
                                   # technical settings
                                   resultsDir = getwd(),
-                                  slice=0, seed=as.integer(TODAY),
+                                  slice=0, seed=SEED_DEFAULT,
                                   chnkSize=0, workers=3))
 
 
@@ -130,7 +138,10 @@ myCens <- isTRUE(any(c("cens", "censoring") %in% cmdArgsLo))
 
 # set up simulation setting -----
 
-if (mySeed > 0L) set.seed(mySeed)
+if (mySeed > 0L) {
+  set.seed(mySeed)
+  cat("Set seed to ", mySeed, "\n")
+}
 
 # choose the sample sizes
 nVctr <- if (myN > 0) myN else c(11, 15, 20, 50) ## 100  8, 12, 20, 75
@@ -240,10 +251,11 @@ if (!dplyr::near(mySlice, 0)) {
 }#fi mySlice
 
 if (myPrint) {
-  print(knitr::kable(simSetting, format = 'pipe', digits = 2))
-  cat('\n')
-  cat(NROW(simSetting), 'simulation scenarios in total.\n')
-  cat('Each scenario is covered by ', myMCNrep, 'MC-data replications.\n')
+
+  print(knitr::kable(simSetting, format = "pipe", digits = 2))
+  cat("\n")
+  cat(NROW(simSetting), " simulation scenarios in total.\n")
+  cat("Each scenario is covered by ", myMCNrep, "MC-data replications.\n")
   if (myDropMLEw) {
     cat("We don't do MLEw.\n")
   }
@@ -253,14 +265,12 @@ if (myPrint) {
   } else {
     cat('Seed was **not** set!\n')
   }
-  cat('Results directory is set to ', myResultsDir, '\n')
+  cat("Results directory is ", myResultsDir, "\n")
 
-  quit(save = 'no')
+  quit(save = "no")
 }#fi myPrint
 
 
-
-cat("It is ***", toString(Sys.time()), "***\n")
 
 # set up parallel computing ----
 if (USE_FUTURE) {
@@ -447,7 +457,7 @@ addMetaData <- function(da, timeTag) {
 
 # run & save ----
 
-DATETIME_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%Mm%Ss")
+cat("We started at ***", DATETIME_TAG, "***\n")
 rdsBaseName <- paste0("simRes_test_", DATETIME_TAG)
 rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 
@@ -485,17 +495,20 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize) {
                               pattern = paste0('^', rdsBaseName, '_[[:digit:]]+[.]rds$'),
                               full.names = TRUE)
   if (length(chnkFileNames)) {
-    # re-create complete simSetting data
+    # re-create complete simSetting data (in chunked order)
     simSetting <- purrr::map(.x = chnkFileNames, .f = readRDS) %>%
       dplyr::bind_rows() %>%
       addMetaData(timeTag = DATETIME_TAG)
 
     saveRDS(simSetting, file = rdsName)
 
-    if (file.exists(rdsName) && (! exists('infoRDS') || ! inherits( try(infoRDS(rdsName), silent = TRUE), "try-error"))) {
+    if (file.exists(rdsName) && !inherits(try(infoRDS(rdsName), silent = TRUE), "try-error")) {
       message("Removing ", length(chnkFileNames), " intermediate chunked RDS-files!")
       try(file.remove(chnkFileNames))
-    } #fi remove RDS-chunk-files
+    } else {
+      cat("Failed to merge and save ", length(chnkFileNames), " intermediate RDS-files!\n")
+      cat("Please check these intermediate chunked RDS-files and try to merge and cleanup for yourself!\n")
+    }#esle
 
   } else {
     warning("Did not find chunked RDS-output.", call. = FALSE)

@@ -50,15 +50,27 @@ stopifnot( is.character(myType), length(myType) == 1L, nzchar(myType) )
 myType <- match.arg(arg = tolower(myType), choices = c("test", "confint"))
 
 # temporary results files have a date tag in their file name
+# end with s (for seconds)
 simResFileNames <- list.files(myResultsDir,
-                              pattern = paste0('simRes_',myType,'_[234]\\d+.+[.]rds$'),
+                              pattern = paste0("simRes_", myType, "_\\d{4}-\\d{2}-\\d{2}-\\d+.+s[.]rds$"),
                               full.names=TRUE)
 
-if (! length(simResFileNames)) {
+if (!length(simResFileNames)) {
 	cat("No matching temporary result files for ", myType,
 	    " were found in sub-directory ", myResultsDir, "!\n")
-	q(save="no")
-}
+	q(save = "no")
+} else {
+  cat(length(simResFileNames), " temporary files found in sub-directory ", myResultsDir,"!\n")
+  cat("\n  * ")
+  cat(paste(simResFileNames, collapse = "\n  * "))
+  cat("\n")
+  # check if we have the right collection of temporary files
+  if (readline("Is that correct and proceed? [y/N] ") %>%
+    substr(1,1) %>% tolower() != "y") {
+    cat("Quitting upon your request..\n")
+    q(save = "no")
+  }#fi
+}#esle
 
 
 # create namespace for the different runs as vector
@@ -162,12 +174,14 @@ if (myRemoveTemp) {
   cat("\n")
   cat("About to remove temporary result files!\n")
   fnRmv <- file.remove(simResFileNames)
-  cat("Successfully removed ", sum(fnRmv), " temporary RDS-files.\n")
   if (sum(fnRmv)) {
+    cat("Successfully removed ", sum(fnRmv), " temporary RDS-files.\n")
     cat("\n  * ")
     cat(paste(simResFileNames[fnRmv], collapse = "\n  * "))
-  }
+  } else {
+    cat("No temporary RDS-file were removed!\n")
+  }#esle
   cat("\n")
-}
+}#fi
 
 cat("\n~fine~\n")
