@@ -64,8 +64,9 @@ if (!length(simResFileNames)) {
   cat("\n  * ")
   cat(paste(simResFileNames, collapse = "\n  * "))
   cat("\n")
+  cat("Is that correct and proceed? [y/N] ")
   # check if we have the right collection of temporary files
-  if (readline("Is that correct and proceed? [y/N] ") %>%
+  if (readLines(con = "stdin", n = 1L) %>%
     substr(1,1) %>% tolower() != "y") {
     cat("Quitting upon your request..\n")
     q(save = "no")

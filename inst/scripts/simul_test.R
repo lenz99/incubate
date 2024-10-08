@@ -480,7 +480,8 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize) {
   stopifnot(length(rowIdxLst) == chnkNbr)
 
   for (i in seq_along(rowIdxLst)) {
-    simSetting_chnk <- dplyr::slice(simSetting, rowIdxLst[[i]]) %>%
+    simSetting_chnk <- simSetting %>%
+      dplyr::slice(rowIdxLst[[i]]) %>%
       applyMCSims() %>%
       addMetaData(timeTag = DATETIME_TAG)
     #simSetting_chnk <- applyMCSims(simSetDF = simSetting_chnk)
