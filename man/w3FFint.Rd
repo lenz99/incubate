@@ -14,5 +14,6 @@ W3-function for the given sample size. The function returns the W3 weight for th
 }
 \description{
 Generally, the weight W3 depends on the sample size and the shape parameter.
-Here, we return a function that returns W3 for given shape parameter.
+Per group, the sample size is fixed.
+Hence, we return a function that returns W3 for provided shape parameter as argument.
 }

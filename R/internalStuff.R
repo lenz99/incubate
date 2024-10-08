@@ -6,7 +6,7 @@
 #' For small `nObs` we use direct results from Monte-Carlo simulation.
 #' For higher `nObs` we use an approximation (based on Wilson-Hilferty transformation)
 #' @param nObs numeric. number of observations (vectorized)
-#' @return numeric. W1-value corrsponding to nObs. Same length as nObs
+#' @returns numeric. W1-value corrsponding to nObs. Same length as nObs
 w1Fint <- function(nObs) {
 
   if (missing(nObs) || !is.numeric(nObs) || any(!is.finite(nObs))) {
@@ -35,7 +35,7 @@ w1Fint <- function(nObs) {
 #' internal MLEw weight W2
 #' For given sample size of one group
 #' @param nObs numeric. Sample size (vectorized)
-#' @return W2 (same size as nObs)
+#' @returns W2 (same size as nObs)
 w2Fint <- function(nObs) {
 
   if (missing(nObs) || !is.numeric(nObs) || any(!is.finite(nObs))) {
@@ -65,44 +65,47 @@ w2Fint <- function(nObs) {
 #' internal factory method to get weight function for W3 for a given sample size
 #'
 #' Generally, the weight W3 depends on the sample size and the shape parameter.
-#' Here, we return a function that returns W3 for given shape parameter.
+#' Per group, the sample size is fixed.
+#' Hence, we return a function that returns W3 for provided shape parameter as argument.
 #' @param nObs sample size for which to return the W3-function
-#' @return W3-function for the given sample size. The function returns the W3 weight for the given shape
+#' @returns W3-function for the given sample size. The function returns the W3 weight for the given shape
 w3FFint <- function(nObs) {
 
   if (missing(nObs) || length(nObs) != 1L || !is.numeric(nObs) || !is.finite(nObs)) {
     stop("Please provide the single number of observations within group!", call. = FALSE)
   }
 
-  # catch all for n = 1 (or n negative etc)
+  # catch all for n = 1 (or even n negative)
   if (nObs < 2L) return(function(k) 1)
 
   # get coefficients for a Richards' generalized logistic function
-  # if we have fit the parameter nObs directly we use the Richards fit
-  #+otherwise, we rely on the spline approximation of the fit.
-  approx_W3_ind <- which(MLEw_approx[["coef"]][["W3_richards"]]$nObs == nObs)
+  # if we have fit the parameter nObs directly we use this Richards fit
+  #+otherwise, we rely on the spline approximation for each parameter intrapolating the given nObs
+  W3richCoef <- MLEw_approx[["coef"]][["W3_richards"]]
   approx_W3_names <- c("A", "K", "Q", "B", "nu")
+  stopifnot(is.data.frame(W3richCoef), all(c("nObs", approx_W3_names) %in% names(W3richCoef)))
+  approx_W3_ind <- which(W3richCoef$nObs == {nObs})
 
   # check for match in W3_richards
   approx_W3_coefs <- if (length(approx_W3_ind) == 1L) {
-    MLEw_approx[["coef"]][["W3_richards"]][approx_W3_ind, approx_W3_names]
+    W3richCoef[approx_W3_ind, approx_W3_names]
   } else {
-    # nObs was not in MC-sim for W3
+    # nObs was not in MC-sim for W3, use interpolation per Richards coefficient
     list(
-      A = stats::spline(x = MLEw_approx[["coef"]][["W3_richards"]]$nObs,
-                        y = MLEw_approx[["coef"]][["W3_richards"]]$A,
+      A = stats::spline(x = W3richCoef$nObs,
+                        y = W3richCoef$A,
                         method = "natural", xout = {nObs})$y,
-      K = stats::spline(x = MLEw_approx[["coef"]][["W3_richards"]]$nObs,
-                        y = MLEw_approx[["coef"]][["W3_richards"]]$K,
+      K = stats::spline(x = W3richCoef$nObs,
+                        y = W3richCoef$K,
                         method = "natural", xout = {nObs})$y,
-      Q = stats::spline(x = MLEw_approx[["coef"]][["W3_richards"]]$nObs,
-                        y = MLEw_approx[["coef"]][["W3_richards"]]$Q,
+      Q = stats::spline(x = W3richCoef$nObs,
+                        y = W3richCoef$Q,
                         method = "natural", xout = {nObs})$y,
-      B = stats::spline(x = MLEw_approx[["coef"]][["W3_richards"]]$nObs,
-                        y = MLEw_approx[["coef"]][["W3_richards"]]$B,
+      B = stats::spline(x = W3richCoef$nObs,
+                        y = W3richCoef$B,
                         method = "natural", xout = {nObs})$y,
-      nu = stats::spline(x = MLEw_approx[["coef"]][["W3_richards"]]$nObs,
-                         y = MLEw_approx[["coef"]][["W3_richards"]]$nu,
+      nu = stats::spline(x = W3richCoef$nObs,
+                         y = W3richCoef$nu,
                          method = "natural", xout = {nObs})$y
     )
 

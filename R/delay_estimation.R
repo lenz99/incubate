@@ -553,7 +553,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       #we use now always 'sdist_median' (also for isSurv-data, cf test-delay_estimation.R, line 802)
       #method_w <- if (isSurv) "sample" else "sdist_median"
 
-      # little helper function to calculate W1-weight (as function of n)
+      # Calculates W1-weight (as function of n)
       # W1 = mean(z_i) follows a gamma-dist with parameters shape=n and scale=1/n and we estimate W1 as median of it.
       # W1 is also used to get scale parameter during un-profiling.
       # We count all events because it is used to get scale parameter (and in this formula we already correct for censorings),
