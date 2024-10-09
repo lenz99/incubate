@@ -1611,12 +1611,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
   # Objective function to be minimized
   #
   # Depending on selected method, it is negative mean log-spacings for MPSE or negative log-likelihood for MLEn.
-  # For MLEw, the optimization function is based on the squared length of gradient vector (=partial 1st derivatives). Its minimial value 0 corresponds to candidate values for a local extremum.
+  # For MLEw, the optimization function is based on the squared length of gradient (=vector of partial 1st derivatives).
+  # A minimal value 0 corresponds to candidate values for a local extremum.
   # One can estimate parameters by minimizing this objective function.
   #
   # @param `pars` the vector of parameters. transformed when criterion=FALSE and not transformed when criterion=TRUE
   # @param `isOrig` Are parameters on original scale? Or transformed for optimization?
-  # @param criterion character Which log-lik criterion or `NULL` (default) for calculation of optimization function with optional penalization for given method. (This argument is irrelevant for MPSE.)
+  # @param criterion character. Which log-lik criterion or `NULL` (default) for calculation of optimization function with optional penalization for given method. (This argument is ignored for MPSE.)
   # @param `aggregated` logical. For two group case, `aggregated=FALSE` returns values per group, like mean log cum-diffs per group.
   # @param `maximum` logical. Should the objective function be maximized? Default value is `FALSE`: we minimize the objective function.
   # @param `ties.` How to handle ties for the MPSE-function? Default value is 'density'.
@@ -1890,12 +1891,13 @@ buildControl <- function(verbose = 0, profiled, pen_shape = FALSE,
 
 #' Fit a delayed Exponential or Weibull model to one or two given sample(s)
 #'
-#' Maximum product of spacings estimation is used by default to fit the parameters. Estimation via naive maximum likelihood (`method = 'MLEn`) is available, too,
-#' but MLEn yields biased estimates. MLEc is a corrected version of MLE due to Cheng.
+#' Maximum product of spacings estimation is used by default to fit the
+#' parameters. Estimation via naive maximum likelihood (`method = "MLEn"`) is
+#' available, too, but MLEn yields severely biased estimates for small samples.
+#' MLEc is a corrected version of MLEn due to Cheng and Iles (1987).
 #'
-#' @details
-#' The parameter `control=` allows to set specifics of the optimization process of the delay model fit.
-#' Possible list entries are
+#' @details The parameter `control=` allows to set specifics of the optimization
+#' process of the delay model fit. Possible list entries are
 #'
 #' * `verbose` level of verboseness. Default 0 is quiet
 #' * `ties` character. Strategy to handle ties for `method = "MPSE"`. Either 'density' (default), 'equispaced' or 'error'.
@@ -1904,17 +1906,30 @@ buildControl <- function(verbose = 0, profiled, pen_shape = FALSE,
 #' * `MLEw_weight` character. Name of method to build weights for MLEw-method.
 #' * `MLEw_optim` character. Name for strategy to find extremum: either minimization of L2-norm of 1st partial derivatives (as stated in Cousineau, 2009) or using root-finding
 #'
-#' Numerical minimization is normally done by `stats::optim`. If this minimization attempt fails `minqa::bobyqa` is used as fall-back.
-#' For MLEw, we can also use root finding of gradient function instead of minimization of L2-norm of gradient of MLEw-objective function.
+#' Numerical minimization is normally done by `stats::optim`. If this
+#' minimization attempt fails `minqa::bobyqa` is used as fall-back. For MLEw, we
+#' can also use root finding of gradient function instead of minimization of
+#' L2-norm of gradient of MLEw-objective function.
 #'
-#' @param x numeric. observations of 1st group. Can also be a list of data from two groups.
+#' @param x numeric. observations of 1st group. Can also be a list of data from
+#'   two groups.
 #' @param y numeric. observations from 2nd group
-#' @param distribution Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution list-object.
+#' @param distribution Which delayed distribution is assumed? Exponential or
+#'   Weibull. Can be given as character or as distribution list-object.
 #' @param twoPhase logical. Allow for two phases?
-#' @param bind character. parameter names that are bind together in 2-group situation.
-#' @param method character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation *or* 'MLEn' = naive maximum likelihood estimation *or* 'MLEw' = weighted MLE' *or* MLEc' = corrected MLE
-#' @param control list. Details that control the optimization. E.g., profiling, penalization.
-#' @return `incubate_fit` the delay-model fit object with criterion to minimize. Or `NULL` if optimization failed (e.g. too few observations).
+#' @param bind character. parameter names that are bind together in 2-group
+#'   situation.
+#' @param method character. Which method to fit the model? 'MPSE' = maximum
+#'   product of spacings estimation *or* 'MLEn' = naive maximum likelihood
+#'   estimation *or* 'MLEw' = weighted MLE' *or* MLEc' = corrected MLE
+#' @param control list. Details that control the optimization. E.g., profiling,
+#'   penalization.
+#' @returns `incubate_fit` the delay-model fit object with criterion to minimize.
+#'   Or `NULL` if optimization failed (e.g. too few observations).
+#' @references R. C. H. Cheng, T. C. Iles, Corrected Maximum Likelihood in
+#'   Non-Regular Problems, Journal of the Royal Statistical Society: Series B
+#'   (Methodological), Volume 49, Issue 1, September 1987, pp. 95–101,
+#'   DOI: <https://doi.org/10.1111/j.2517-6161.1987.tb01430.x>
 #' @export
 delay_model <- function(x = stop("Specify observations for first group x=!", call. = FALSE), y = NULL,
                         distribution = c("exponential", "weibull", "normal"),

@@ -15,30 +15,39 @@ delay_model(
 )
 }
 \arguments{
-\item{x}{numeric. observations of 1st group. Can also be a list of data from two groups.}
+\item{x}{numeric. observations of 1st group. Can also be a list of data from
+two groups.}
 
 \item{y}{numeric. observations from 2nd group}
 
-\item{distribution}{Which delayed distribution is assumed? Exponential or Weibull. Can be given as character or as distribution list-object.}
+\item{distribution}{Which delayed distribution is assumed? Exponential or
+Weibull. Can be given as character or as distribution list-object.}
 
 \item{twoPhase}{logical. Allow for two phases?}
 
-\item{bind}{character. parameter names that are bind together in 2-group situation.}
+\item{bind}{character. parameter names that are bind together in 2-group
+situation.}
 
-\item{method}{character. Which method to fit the model? 'MPSE' = maximum product of spacings estimation \emph{or} 'MLEn' = naive maximum likelihood estimation \emph{or} 'MLEw' = weighted MLE' \emph{or} MLEc' = corrected MLE}
+\item{method}{character. Which method to fit the model? 'MPSE' = maximum
+product of spacings estimation \emph{or} 'MLEn' = naive maximum likelihood
+estimation \emph{or} 'MLEw' = weighted MLE' \emph{or} MLEc' = corrected MLE}
 
-\item{control}{list. Details that control the optimization. E.g., profiling, penalization.}
+\item{control}{list. Details that control the optimization. E.g., profiling,
+penalization.}
 }
 \value{
-\code{incubate_fit} the delay-model fit object with criterion to minimize. Or \code{NULL} if optimization failed (e.g. too few observations).
+\code{incubate_fit} the delay-model fit object with criterion to minimize.
+Or \code{NULL} if optimization failed (e.g. too few observations).
 }
 \description{
-Maximum product of spacings estimation is used by default to fit the parameters. Estimation via naive maximum likelihood (\verb{method = 'MLEn}) is available, too,
-but MLEn yields biased estimates. MLEc is a corrected version of MLE due to Cheng.
+Maximum product of spacings estimation is used by default to fit the
+parameters. Estimation via naive maximum likelihood (\code{method = "MLEn"}) is
+available, too, but MLEn yields severely biased estimates for small samples.
+MLEc is a corrected version of MLEn due to Cheng and Iles (1987).
 }
 \details{
-The parameter \verb{control=} allows to set specifics of the optimization process of the delay model fit.
-Possible list entries are
+The parameter \verb{control=} allows to set specifics of the optimization
+process of the delay model fit. Possible list entries are
 \itemize{
 \item \code{verbose} level of verboseness. Default 0 is quiet
 \item \code{ties} character. Strategy to handle ties for \code{method = "MPSE"}. Either 'density' (default), 'equispaced' or 'error'.
@@ -48,6 +57,14 @@ Possible list entries are
 \item \code{MLEw_optim} character. Name for strategy to find extremum: either minimization of L2-norm of 1st partial derivatives (as stated in Cousineau, 2009) or using root-finding
 }
 
-Numerical minimization is normally done by \code{stats::optim}. If this minimization attempt fails \code{minqa::bobyqa} is used as fall-back.
-For MLEw, we can also use root finding of gradient function instead of minimization of L2-norm of gradient of MLEw-objective function.
+Numerical minimization is normally done by \code{stats::optim}. If this
+minimization attempt fails \code{minqa::bobyqa} is used as fall-back. For MLEw, we
+can also use root finding of gradient function instead of minimization of
+L2-norm of gradient of MLEw-objective function.
+}
+\references{
+R. C. H. Cheng, T. C. Iles, Corrected Maximum Likelihood in
+Non-Regular Problems, Journal of the Royal Statistical Society: Series B
+(Methodological), Volume 49, Issue 1, September 1987, pp. 95–101,
+DOI: \url{https://doi.org/10.1111/j.2517-6161.1987.tb01430.x}
 }
