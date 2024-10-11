@@ -2,42 +2,32 @@
 # mkuhn, 2023-04-05
 # internal data for the incubate package
 #
-# simulate median weights W1, W2 and W3 for the weighed MLE approach (Cousineau, 2009)
+# simulate median weights W1, W2 and W3
+# for the weighed MLE approach (Cousineau, 2009)
+# results are stored as list in "MLEw_mcs.rds"
 ####
 
 # init -----
 
-message("Script to prepare MLE weights to be stored as internal data of incubate package!")
-message("incubate package installed is: ", packageVersion("incubate"))
-message("Start at ", toString(Sys.time()))
-
-library("rlang")
-library("usethis")
-library("readr") #parse_number
-library("tibble")
-library("tidyr", warn.conflicts = FALSE)
-library("dplyr", warn.conflicts = FALSE)
-library("purrr", warn.conflicts = FALSE)
-library("ggplot2")
-library("cowplot")
-theme_set(theme_cowplot(font_size = 15))
-library("patchwork")
-
-library("future")
-library("future.callr")
-library("furrr")
-
-
+suppressPackageStartupMessages(library("future"))
 suppressPackageStartupMessages(library('R.utils'))
 
+message("Script to prepare MLE weights to be stored as internal data of incubate package!")
+message("incubate package installed is: ", packageVersion("incubate"))
+
+
 TODAY <- Sys.Date()
+NOW <- Sys.time()
 DEBUG <- FALSE
+
 
 # command line arguments -----
 cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
-                                defaults = list(resultsDir = getwd(), seed=as.integer(TODAY),
+                                defaults = list(resultsDir = getwd(),
+                                                seed = as.integer(paste0(as.integer(TODAY) %% 73,
+                                                                         format(NOW, format = "%H%M%S"))),
                                                 # at most 97 cores
                                                 workers = min(97L, future::availableCores(methods = "system", omit = 4)),
                                                 # mcnrep as string, so user can rely on parse_number!
@@ -56,6 +46,24 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --overwrite/--force\t Overwrite data file when it already exists?\n')
   quit(save = 'no')
 }
+
+message("Start at ", toString(NOW))
+
+library("readr") #parse_number
+library("rlang")
+library("tibble")
+library("tidyr", warn.conflicts = FALSE)
+library("dplyr", warn.conflicts = FALSE)
+library("purrr", warn.conflicts = FALSE)
+library("matrixStats")
+
+library("future.callr")
+library("furrr")
+
+library("ggplot2")
+library("cowplot")
+theme_set(theme_cowplot(font_size = 15))
+library("patchwork")
 
 
 mySeed <- cmdArgs[["seed"]]
@@ -81,27 +89,29 @@ if (DEBUG) {
 # fail early
 rdataFile <- file.path(myResultsDir, "MLEw_weights.RData")
 if (file.exists(rdataFile) && !myOverwrite) {
-  stop("File ", rdataFile, "already exists! You would need to set overwrite-flag.")
+  stop("File ", rdataFile, "already exists! You would need to set overwrite-flag.", call. = FALSE)
 }
-
 
 
 
 # set up simulation settings -----
 
-if (mySeed > 0L) set.seed(mySeed)
+if (mySeed > 0L) {
+  set.seed(mySeed)
+}
 if (myWorkers > 1L) {
   future::plan(strategy = future.callr::callr, workers = myWorkers)
 }
 
 
 # distribution of W1 is Gamma with shape n and scale 1/n
-nObs_vctr <- c(1:50, 55, 60, 65, 70, 75, 80, 90, 100, 125, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000) |>
+nObs_vctr <- c(1:50, 55, 60, 65, 70, 75, 80, 90, 100, 125, 150, 200, 250, 500,
+               750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000) |>
   unique()
 #shape relevant for W3
-#XXX add further smaller shapes like .001?
-shape_vctr <- c(.01, .05, .1, .25, .5, .75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7,
-                8:15, 20, 25, 30, 40, 50, 75, 100) |>
+shape_vctr <- c(.001, .005, .01, .05, .1, .2, .25, .5, .75, 1, 1.25, 1.5, 1.75,
+                seq.int(2, 8, by = .5),
+                9:15, 20, 25, 30, 40, 50, 75, 100) |>
   unique()
 
 aggFun <- stats::median; isMedian <- TRUE
@@ -113,7 +123,8 @@ stopifnot(is.function(aggFun), "na.rm" %in% formalArgs(aggFun))
 
 message("Start simulation for W1")
 
-# when 3-param Weibull holds then the mean of z values (where z is Exp(1)) are gamma-distributed with parameter shape n and scale 1/n
+# when 3-param Weibull holds then the mean of z values (where z is Exp(1)) are
+# gamma-distributed with parameter shape n and scale 1/n
 # hence, the mean of W1 is 1 (independently of n)
 W1_mcs <- furrr::future_map_dbl(.x = rlang::set_names(nObs_vctr),
                                 .f = ~ aggFun(stats::rgamma(n=myMCNrep, shape = .x, scale = 1/.x)),
@@ -217,7 +228,8 @@ try(expr = rm(W12_mcs_df, W3_mcs_df), silent = FALSE)
 
 
 # result of Monte-Carlo simulation
-saveRDS(.MLEw_mcs, file = file.path(myResultsDir, "MLEw_mcs.rds"))
+saveRDS(.MLEw_mcs,
+        file = file.path(myResultsDir, "MLEw_mcs.rds"))
 
 
 # tear-down
