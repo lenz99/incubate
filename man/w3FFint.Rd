@@ -2,7 +2,7 @@
 % Please edit documentation in R/internalStuff.R
 \name{w3FFint}
 \alias{w3FFint}
-\title{internal factory method to get weight function for W3 for a given sample size}
+\title{Internal factory method to get weight function for W3 for a given sample size}
 \usage{
 w3FFint(nObs)
 }
@@ -14,6 +14,10 @@ W3-function for the given sample size. The function returns the W3 weight for th
 }
 \description{
 Generally, the weight W3 depends on the sample size and the shape parameter.
-Per group, the sample size is fixed.
+The sample size of a group is fixed.
 Hence, we return a function that returns W3 for provided shape parameter as argument.
+If the sample size occured during the Monte-Carlo simulation study the coefficients of generalized logistic curve are directly returned.
+Otherwise a natural cubic spline is fit on the fly.
+This guarantees that the spline function of the R-version of the current user is used.
+Drawback is that performance is maybe not optimal (\code{w3FFint} is not precompiled but run by the \code{\link[=objFunFactory]{objFunFactory()}} once for either group)
 }

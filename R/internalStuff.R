@@ -62,11 +62,15 @@ w2Fint <- function(nObs) {
 }#fn w2Fint
 
 
-#' internal factory method to get weight function for W3 for a given sample size
+#' Internal factory method to get weight function for W3 for a given sample size
 #'
 #' Generally, the weight W3 depends on the sample size and the shape parameter.
-#' Per group, the sample size is fixed.
+#' The sample size of a group is fixed.
 #' Hence, we return a function that returns W3 for provided shape parameter as argument.
+#' If the sample size occured during the Monte-Carlo simulation study the coefficients of generalized logistic curve are directly returned.
+#' Otherwise a natural cubic spline is fit on the fly.
+#' This guarantees that the spline function of the R-version of the current user is used.
+#' Drawback is that performance is maybe not optimal (`w3FFint` is not precompiled but run by the [objFunFactory()] once for either group)
 #' @param nObs sample size for which to return the W3-function
 #' @returns W3-function for the given sample size. The function returns the W3 weight for the given shape
 w3FFint <- function(nObs) {

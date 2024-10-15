@@ -1024,44 +1024,65 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #'
 #' There are two ways of operation:
 #' 1. `power=NULL` Given sample size `n` it simulates the power.
-#' 2. `n=NULL` Given a power an iterative search is started to find a suitable `n` within a specified range.
+#' 2. `n=NULL` Given a power an iterative search is started to find a suitable
+#' `n` within a specified range.
 #'
-#' In any case, the distribution, the parameters that are tested for, the type of test and the effect size (`eff=`) need to be specified.
-#' The more power simulation rounds (parameter `nPowerSim=`) the more densely the space of data according to the specified model is sampled.
+#' In any case, the distribution, the parameters that are tested for, the type
+#' of test and the effect size (`eff=`) need to be specified. The more power
+#' simulation rounds (parameter `nPowerSim=`) the more densely the space of data
+#' according to the specified model is sampled.
 #'
-#' Note that this second modus (when `n` is estimated) is computationally quite heavy.
-#' The iterative search for `n` uses some heuristics and the estimated sample size might actually give a different power-level.
-#' It is important to check the stated power in the output. The search algorithm comes to results closer to the power aimed at
-#' when the admissible range for sample size (`nRange=`) is chosen sensibly.
-#' In case the estimated sample size and the achieved power is too high it might pay off to rerun the function with an adapted admissible range.
+#' Note that this second modus (when `n` is estimated) is computationally quite
+#' heavy. The iterative search for `n` uses some heuristics and the estimated
+#' sample size might actually give a different power-level. It is important to
+#' check the stated power in the output. The search algorithm comes to results
+#' closer to the power aimed at when the admissible range for sample size
+#' (`nRange=`) is chosen sensibly. In case the estimated sample size and the
+#' achieved power is too high it might pay off to rerun the function with an
+#' adapted admissible range.
 #'
-#' @param distribution character. Which assumed distribution is used for the power calculation.
-#' @param twoPhase logical(1). Do we model two phases per group? Default is `FALSE`, i.e. a single delay phase per group.
-#' @param eff list. The two list elements contain the model parameters (as understood by the delay-distribution functions provided by this package) for the two groups.
-#' @param param character. Parameter name(s) which are to be tested for difference and for which to simulate the power. Default value is `'delay1'`.
+#' @param distribution character. Which assumed distribution is used for the
+#'   power calculation.
+#' @param twoPhase logical(1). Do we model two phases per group? Default is
+#'   `FALSE`, i.e. a single delay phase per group.
+#' @param eff list of length 2. The two list elements are numeric vectors that
+#'   contain the model parameters (as understood by the delay-distribution
+#'   functions provided by this package) for the two groups.
+#' @param param character. Parameter name(s) which are to be tested for
+#'   difference and for which to simulate the power. Default value is
+#'   `'delay1'`.
 #' @param test character. Which test to use for this power estimation? E.g. LRT
-#' @param n integer. Number of observations per group for the power simulation or `NULL` when n is to be estimated for a given power.
-#' @param power numeric. `NULL` when power is to be estimated for a given sample size or a desired power is specified (and `n` is estimated).
-#' @param r numeric. Ratio of both groups sizes, ny / nx. Default value is 1, i.e., balanced group sizes. Must be positive.
+#' @param n integer. Number of observations per group for the power simulation
+#'   or `NULL` when n is to be estimated for a given power.
+#' @param power numeric. `NULL` when power is to be estimated for a given sample
+#'   size or a desired power is specified (and `n` is estimated).
+#' @param r numeric. Ratio of both groups sizes, ny / nx. Default value is 1,
+#'   i.e., balanced group sizes. Must be positive.
 #' @param sig.level numeric. Significance level. Default is 0.05.
-#' @param nPowerSim integer. Number of simulation rounds. Default value 1600 yields a standard error of 0.01 for power if the true power is 80%.
-#' @param R integer. Number of bootstrap samples for test of difference in parameter within each power simulation. It affects the resolution of the P-value for each simulation round. A value of around `R=200` gives a resolution of 0.5% which might be enough for power analysis.
-#' @param nRange integer. Admissible range for sample size when power is pre-specified and sample size is requested.
-#' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
+#' @param nPowerSim integer. Number of simulation rounds. Default value 1600
+#'   yields a standard error of 0.01 for power if the true power is 80%.
+#' @param R integer. Number of bootstrap samples for test of difference in
+#'   parameter within each power simulation. It affects the resolution of the
+#'   P-value for each simulation round. A value of around `R=200` gives a
+#'   resolution of 0.5% which might be enough for power analysis.
+#' @param nRange integer. Admissible range for sample size when power is
+#'   pre-specified and sample size is requested.
+#' @param verbose numeric. How many details are requested? Higher value means
+#'   more details. 0=off, no details.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FALSE, param = "delay1",
                        test = c('bootstrap', 'pearson', 'moran', 'logrank', 'logrank_pp', "LRT"),
                        eff = stop("Provide parameters for both groups that reflect the effect!"),
                        n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
-                       nRange = c(5, 150), verbose=0){
+                       nRange = c(5, 250), verbose=0) {
 
   TOL_POW <- sqrt(TOL_NUM)
   distO <- buildDist(match.arg(distribution))
   #if (!missing(test)) test <- tolower(test)
   test <- match.arg(arg = test)
   # category: e.g. test name w/o _pp suffix
-  test_cat <- sub(pattern = "[_].*$", replacement = "", x = test)
+  test_cat <- sub(pattern = "[_].+$", replacement = "", x = test, fixed = FALSE)
   ranFun <- distO$random
   onames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, transformed = FALSE)
 
@@ -1071,7 +1092,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
   }
 
   # translate convenience names (for single phase) to canonical names
-  unNmbrdIdx <- !grepl(pattern = "[12]", param, fixed = FALSE)
+  unNmbrdIdx <- !grepl(pattern = "[12]$", param, fixed = FALSE)
   if (any(unNmbrdIdx)) {
     param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
     if (verbose > 0L) cat("Unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n")
@@ -1196,7 +1217,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
       pow_cand1[[i1]] <- simulatePower(nx = nxc, ny = nxc * r, B = B1, R = R1)
 
       if (pow_cand1[[i1]] >= power - TOL_POW) break
-    } #rof
+    }#rof
 
     # store preliminary power estimates
     powerGrid <- tibble(
@@ -1226,7 +1247,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
                    " {nx_cand1[[NBR_CAND1]]} yields a power of {as_percent(pow_cand1[[NBR_CAND1]])}."),
               call. = FALSE)
       REFINE <- FALSE
-    }# fi
+    }#fi i1
 
 
     if (!REFINE) {
@@ -1239,7 +1260,11 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
         pow_cand1[[i1]]
       }
     } else {
-      powerMod <- if (NROW(powerGrid) == 2L) stats::lm(power ~ nx, data = powerGrid) else stats::lm(power ~ poly(nx, 2), data = powerGrid)
+      powerMod <- if (NROW(powerGrid) == 2L) {
+        stats::lm(power ~ nx, data = powerGrid)
+      } else {
+        stats::lm(power ~ poly(nx, 2), data = powerGrid)
+      }
       powerPred <- tibble(nx = seq.int(from = nRange[[1L]], to = nRange[[2L]], by = 1L),
                           predpower = stats::predict.lm(powerMod, newdata = data.frame(nx = nx)),
                           diffpower = .data$predpower - power)
@@ -1254,7 +1279,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
         nxc <- nx_cand2[[i2]]
         pow_cand2[[i2]] <- simulatePower(nx = nxc, ny = nxc * r, B = nPowerSim, R = R)
 
-      }#rof
+      }#rof i2
 
       powerGrid2 <- tibble(
         nx = nx_cand2[pow_cand2 > 0],
@@ -1271,7 +1296,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
 
       # store 2nd round (refinement) power estimates
       powerGrid <- rbind(powerGrid, powerGrid2)
-    }
+    }#esle !REFINE
 
     stopifnot(nx > 0L, ny > 0L, power > 0L)
 
@@ -1288,8 +1313,6 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
          nx = nx, ny = ny, N = nx + ny,
          #P_dist = P_dist, ##debug
          powerGrid = powerGrid,
-         power = power
-    )
+         power = power)
   )
 }
-

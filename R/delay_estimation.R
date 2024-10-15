@@ -632,7 +632,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                },
                stop("This method for W2-estimation is not handled here!", call. = FALSE)
         )
-      } #nf w2F
+      }#nf w2F
 
 
       # factory for w3 function that gives the W3-weight for the given shape parameter.
@@ -696,7 +696,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
            W3 = purrr::compact(list(x = w3FF(nObs = length(x), z = z_x, method = control$MLEw_weight),
                                     y = if (twoGroup) w3FF(nObs = length(y), z = z_y, method = control$MLEw_weight))))
     })#lacol
-  } #esle weights
+  }#esle weights
 
 
 
