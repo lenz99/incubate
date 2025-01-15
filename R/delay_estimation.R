@@ -9,7 +9,7 @@ NULL
 #+ ~1/~ use logit-based transformation for delay1: it will enforce non-negativity of delay1. then we do not need lower bound to avoid non-negative.
 #+ 2/ make transformations easier (not via matrices and functions stored but to be implemented more directly)
 #+ 3/ work on rootSolve way to implement MLEw. There we would check that we have indeed local maximum of MLEw
-#+ 4/ check that censorings are implmemented correctly
+#+ 4/ check that censorings are implemented correctly
 #+ 5/ write up MS1
 
 #' Factory method for objective function
@@ -931,7 +931,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
 
   # Extract parameter vector for a specified group
   #
-  # if parameters are for optimization and transformation is requested, profiling is undone (if relevant)
+  # if parameters are for optimization and transformation is requested,
+  # profiling is undone (if relevant)
   # @param group character. Extract parameters for the given group. If NULL, keep all parameters.
   # @param isOpt logical. Are the given parameters on optimization function scale?
   # @param transform logical. Transform parameters?
@@ -951,8 +952,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       return(local({
 
         # recursive calls for the individual groups
-        parx <- extractPars(parV, group = "x", isOpt = isOpt, transform = transform, named = FALSE)
-        pary <- extractPars(parV, group = "y", isOpt = isOpt, transform = transform, named = FALSE)
+        parx <- extractPars(parV, group = "x", isOpt = isOpt,
+                            transform = transform, named = FALSE)
+        pary <- extractPars(parV, group = "y", isOpt = isOpt,
+                            transform = transform, named = FALSE)
 
         # merge the two parameter vectors back together (after a potential transformation)
         res0 <- mergePars(parx = parx, pary = pary, isOpt = resIsOpt)
@@ -984,13 +987,14 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
           if (isOpt) {
             # access observations for specified group
             obs <- if (group == "y") y else x
-            k <- if (distO$dist == 'weibull') res0[[2L]] else 1L
+            k <- if (distO$hasShape) res0[[2L]] else 1L
             # calculate scale parameter
             scale0 <- if (!isSurv) {
               (mean((obs-res0[[1L]])^k) / weights$W1[[group]])^(1/k)
             } else {
               # Surv: only right-censored observations currently implemented!
               stopifnot(attr(obs, which = "type", exact = TRUE) == 'right')
+
               # we consider all times (including censorings) but divide (for mean) only by the number of events
               # right-censored obs prior to delay candidate are set to zer0
               (sum(pmax.int(0, obs[,1L]-res0[[1L]])^k) / (length(obs) - cens$n[[group]][["right"]]) / weights$W1[[group]])^(1/k)
@@ -1253,10 +1257,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
 
   # Penalization for high values of shape per group
   #
-  # For Weibull distribution in MLEw method it penalizes high shape values.
-  # The penalization factor increases with sample size as
-  # location (median) and spread (mad) of the ML-objective function grow with sample size:
-  # most clearly so for MLEn and MLEc. MLEw is less regular (maybe due to bad fits)
+  # For Weibull distribution in MLEw method it penalizes high shape values. The
+  # penalization factor increases with sample size as location (median) and
+  # spread (mad) of the ML-objective function grow with sample size: most
+  # clearly so for MLEn and MLEc. MLEw is less regular (maybe due to bad fits)
   #
   # Older idea was to use start values and estimate lowish average of log-density
   # for the observed values in the group (or: for range of possible values)
@@ -1281,9 +1285,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
 
   # Calculate value to be maximized based on the log-likelihood
   #
-  # Log-likelihood based value to be maximized, either naive, weighted or in corrected form
-  # It is calculated for a single group. A two-group setting will call this function twice, once for each group.
-  # What precisely is calculated depends on its surrounding closure (see variable `method` but also the profiled-flag).
+  # Log-likelihood based value to be maximized, either naive, weighted or in
+  # corrected form It is calculated for a single group. A two-group setting will
+  # call this function twice, once for each group. What precisely is calculated
+  # depends on its surrounding closure (see variable `method` but also the
+  # profiled-flag).
   # For MLEw, we use a value that comes from 1st deriv of log-likelihood.
   # Penalty term is subtracted here, see `penF`
   # @param pars complete vector of parameters (can refer to two groups)
@@ -1294,7 +1300,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
   # @return log-likelihood (certain flavour or related like negative L2-norm of gradient of log-likelihood) for specified group
   getLogLik <- function(pars, group, isOrig = FALSE, methodSelected, isCrit = FALSE) {
 
-    # Old idea was to change signature to be with pars.gr and obs for both getLogLik and getCumDiffs
+    # Old idea: change signature to be with pars.gr and obs for both getLogLik and getCumDiffs
     #+But what are the benefits?
 
     # access observations of group
@@ -1311,7 +1317,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
     nObs <- length(obs)
     stopifnot(nObs > 1L)
     # shape parameter (candidate), set to 1 if not applicable
-    k <- if (distO$dist == 'weibull') pars.gr[[2L]] else 1L
+    k <- if (distO$hasShape) pars.gr[[2L]] else 1L
 
 
     # return value (to be maximized)
@@ -1407,7 +1413,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                         # from equation for shape k
                         -(weights$W2[[group]]/k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc^k)/sum(obs_evc^k))^2 +
                           # from equation for delay
-                          # its the negative of what is in Cousineau, but it is more in line with the likelihood derivation)
+                          # it is the negative of what is in Cousineau, but it is more in line with the likelihood derivation)
                           # (for what it's worth, 1st factor is inverse of harmonic mean)
                           -(w3F(k) - mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)))^2
                           # # contribution of right censorings is in the scale estimate, here no extra contribution!

@@ -737,6 +737,7 @@ mweib_delayed <- function(t=+Inf, delay1, shape1, scale1 = 1, delay2 = NULL, sha
 buildDist <- function(distribution) {
   stopifnot(distribution %in% c("exponential", "weibull", "normal"))
 
+  # return:
   list(
     dist = distribution,
     dist_name = switch(distribution,
@@ -746,6 +747,7 @@ buildDist <- function(distribution) {
                        "unknown distribution"),
     # some properties
     hasDelay = distribution != "normal",
+    hasShape = distribution == "weibull",
     negAllowed = distribution == "normal",
     twoPhaseAllowed = distribution != "normal",
 
@@ -754,17 +756,21 @@ buildDist <- function(distribution) {
                  exponential = pexp_delayed,
                  weibull = pweib_delayed,
                  stop(glue("Unknown distribution {distribution}."), call. = FALSE)),
+
     pdf = switch(distribution,
                  normal = stats::dnorm,
                  exponential = dexp_delayed,
                  weibull = dweib_delayed,
                  stop(glue("Unknown distribution {distribution}."), call. = FALSE)),
+
     random = switch(distribution,
                     normal = stats::rnorm,
                     exponential = rexp_delayed,
                     weibull = rweib_delayed,
                     stop(glue("Unknown distribution {distribution}."), call. = FALSE)),
-    param = function(twoPhase = FALSE, twoGroup = FALSE, bind = NULL, profiled = FALSE, transformed = FALSE) {
+
+    param = function(twoPhase = FALSE, twoGroup = FALSE, bind = NULL,
+                     profiled = FALSE, transformed = FALSE) {
 
       pars <- switch(distribution,
                      normal = c("mean", "sd"),

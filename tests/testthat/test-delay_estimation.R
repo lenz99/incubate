@@ -7,8 +7,9 @@ test_that("Parameter extraction and transformation", {
   #testthat::skip(message = "skip parameter extraction for now")
 
   distO_e <- buildDist(distribution = "exponential")
-  expect_named(distO_e, expected = c("dist", "dist_name", "hasDelay", "negAllowed",
-                                     "twoPhaseAllowed", "cdf", "pdf", "random", "param"))
+  expect_named(distO_e, expected = c("dist", "dist_name", "hasDelay", "hasShape",
+                                     "negAllowed", "twoPhaseAllowed",
+                                     "cdf", "pdf", "random", "param"))
   expect_type(distO_e$param, type = "closure")
 
   # test parameter names of distribution object
@@ -19,8 +20,9 @@ test_that("Parameter extraction and transformation", {
                    expected = c("rate1_tr", "delay1_tr.x", "delay1_tr.y"))
 
   distO_w <- buildDist(distribution = "weibull")
-  expect_named(distO_w, expected = c("dist", "dist_name", "hasDelay", "negAllowed",
-                                     "twoPhaseAllowed", "cdf", "pdf", "random", "param"))
+  expect_named(distO_w, expected = c("dist", "dist_name", "hasDelay", "hasShape",
+                                     "negAllowed", "twoPhaseAllowed",
+                                     "cdf", "pdf", "random", "param"))
   expect_type(distO_w$param, type = "closure")
   expect_identical(distO_w$param(twoPhase = FALSE, twoGroup = TRUE, bind = "shape1", profiled = FALSE, transformed = TRUE),
                    expected = c("shape1_tr", "delay1_tr.x", "scale1_tr.x", "delay1_tr.y", "scale1_tr.y"))
