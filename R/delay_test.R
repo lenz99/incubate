@@ -1027,19 +1027,19 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' 2. `n=NULL` Given a power an iterative search is started to find a suitable
 #' `n` within a specified range.
 #'
-#' In any case, the distribution, the parameters that are tested for, the type
+#' In both cases, the distribution, the parameters that are tested for, the type
 #' of test and the effect size (`eff=`) need to be specified. The more power
 #' simulation rounds (parameter `nPowerSim=`) the more densely the space of data
 #' according to the specified model is sampled.
 #'
 #' Note that this second modus (when `n` is estimated) is computationally quite
 #' heavy. The iterative search for `n` uses some heuristics and the estimated
-#' sample size might actually give a different power-level. It is important to
-#' check the stated power in the output. The search algorithm comes to results
-#' closer to the power aimed at when the admissible range for sample size
-#' (`nRange=`) is chosen sensibly. In case the estimated sample size and the
-#' achieved power is too high it might pay off to rerun the function with an
-#' adapted admissible range.
+#' sample size might actually give a slightly different power-level.
+#' Hence, it is important to check the stated power in the output. The search
+#' algorithm comes to results closer to the power aimed at when the admissible
+#' range for sample size (`nRange=`) is chosen sensibly. In case the estimated
+#' sample size and the achieved power is too high it might pay off to rerun the
+#' function with an adapted admissible range.
 #'
 #' @param distribution character. Which assumed distribution is used for the
 #'   power calculation.
@@ -1078,7 +1078,8 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
                        nRange = c(5, 250), verbose=0) {
 
   TOL_POW <- sqrt(TOL_NUM)
-  distO <- buildDist(match.arg(distribution))
+  distribution <- match.arg(distribution)
+  distO <- buildDist(distribution)
   #if (!missing(test)) test <- tolower(test)
   test <- match.arg(arg = test)
   # category: e.g. test name w/o _pp suffix
@@ -1224,10 +1225,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
       nx = nx_cand1[pow_cand1 > 0],
       ny = ceiling(nx * r),
       power = pow_cand1[pow_cand1 > 0],
-      iter = 1L,
-      B = B1,
-      R = R1
-    )
+      iter = 1L, B = B1, R = R1)
 
     if (NROW(powerGrid) <= 1L) {
       stop("Failed to find power estimates within specified range!", call. = FALSE)
@@ -1263,7 +1261,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
       powerMod <- if (NROW(powerGrid) == 2L) {
         stats::lm(power ~ nx, data = powerGrid)
       } else {
-        stats::lm(power ~ poly(nx, 2), data = powerGrid)
+        stats::lm(power ~ stats::poly(nx, degree = 2), data = powerGrid)
       }
       powerPred <- tibble(nx = seq.int(from = nRange[[1L]], to = nRange[[2L]], by = 1L),
                           predpower = stats::predict.lm(powerMod, newdata = data.frame(nx = nx)),

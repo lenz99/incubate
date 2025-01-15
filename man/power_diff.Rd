@@ -74,17 +74,17 @@ There are two ways of operation:
 }
 }
 \details{
-In any case, the distribution, the parameters that are tested for, the type
+In both cases, the distribution, the parameters that are tested for, the type
 of test and the effect size (\verb{eff=}) need to be specified. The more power
 simulation rounds (parameter \verb{nPowerSim=}) the more densely the space of data
 according to the specified model is sampled.
 
 Note that this second modus (when \code{n} is estimated) is computationally quite
 heavy. The iterative search for \code{n} uses some heuristics and the estimated
-sample size might actually give a different power-level. It is important to
-check the stated power in the output. The search algorithm comes to results
-closer to the power aimed at when the admissible range for sample size
-(\verb{nRange=}) is chosen sensibly. In case the estimated sample size and the
-achieved power is too high it might pay off to rerun the function with an
-adapted admissible range.
+sample size might actually give a slightly different power-level.
+Hence, it is important to check the stated power in the output. The search
+algorithm comes to results closer to the power aimed at when the admissible
+range for sample size (\verb{nRange=}) is chosen sensibly. In case the estimated
+sample size and the achieved power is too high it might pay off to rerun the
+function with an adapted admissible range.
 }

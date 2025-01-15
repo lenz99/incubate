@@ -169,7 +169,12 @@ You provide the desired expected proportion of right censoring π via parameter 
 This information determines the upper limit `Z` for the censoring process `U(0,Z)`.
 The expected proportion of censorings is $P(C<X)$. Due to the independence we get
 \[
-P(C<X) = ∫_0^∞ ∫_0^x f_{X,C}(x,c)dc dx = ∫_0^∞ ∫_0^x f_X(x) f_C(c) dc dx = ∫_0^∞ F_C(x) f_X(x)dx
+\begin{equation*}
+\begin{split}
+P(C<X) &= ∫_0^∞ ∫_0^x f_{X,C}(x,c)dc dx = ∫_0^∞ ∫_0^x f_X(x) f_C(c) dc dx\\
+  &= ∫_0^∞ f_X(x) · \Big(∫_0^x f_C(c) dc\Big) dx = ∫_0^∞ f_X(x) · F_C(x) dx
+\end{split}
+\end{equation*}
 \]
 
 For a uniform censoring process with lower bound 0 and upper bound $Z$
