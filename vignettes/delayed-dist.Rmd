@@ -41,42 +41,122 @@ F(x) &= 1 - \exp(-\big(\frac{x-α}{β}\big)^k) \qquad \text{for } x > α \text{ 
 \end{align*}
 \]
 
-If we have a data sample $\mathbf{x}$ of size $n$ and want to apply **maximum likelihood (ML)** estimation for parameters we get as log-likelihood function
+If we have a data sample $\mathbf{x}$ of size $n$ and want to apply **maximum
+likelihood (ML)** estimation for parameters we get as log-likelihood function
+
 \[
 l_\mathbf{x}(α, k, β) = n \log(k) - nk \log(β) + (k-1) · ∑_{i=1}^n \log(x_i-α) - β^{-k} · ∑_{i=1}^n (x_i - α)^k
 \]
 
+In the presence of **right-censored observations**, the log-likelihood function changes as well.
+Assume, we have in total $n=n_e + n_r$ observations, where
+
+* $n_e$ event observations with index set $O$ _and_
+* $n_r$ right censored observations with index set $R$, _hence_
+* $O ⨃ R = \{1, .., n\}$ and $|O| + |R| = n$
+
+<!-- labelled as $x_{r_1}, ..., x_{r_{n_r}}$. -->
+
+\begin{multline*}
+l_\mathbf{x}(α, k, β) = n_e \log(k) - n_e k \log(β) + (k-1) · ∑_{i ∈ O} \log(x_i-α) - β^{-k} · ∑_{i ∈ O} (x_i - α)^k\\
+- β^{-k} · ∑_{r ∈ R} (x_r - α)^k
+\end{multline*}
+
+This simplifies:
+\[
+l_\mathbf{x}(α, k, β) = n_e \log(k) - n_e k \log(β) + (k-1) · ∑_{i ∈ O} \log(x_i-α) - β^{-k} · ∑_{i=1}^n (x_i - α)^k
+\]
+
+
+One can directly go to (numerically) maximize this log-likelihood function.
+Cousineau (2009) calls this the **iterative approach**.
+
+### Profiling scale parameter β
 We are able to profile out the scale parameter estimate $\hat β$:
-the candidate value for a local extremum with respect to scale β is found be taking the 1^st^ derivative and equating to zer0:
+the candidate value for a local extremum with respect to scale β is found be
+taking the 1^st^ derivative and equating to zer0:
 \[
 \frac{\partial l}{\partial β}(α, k, β) = -\frac{nk}{β} + k β^{-k-1} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0
 \]
-Hence (as $k>0$), $-n + β^{-k} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0$ and further simplifying,
+Hence (as $k>0$), it must hold
+$-n + β^{-k} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0$
+and further simplifying,
 $\hat β = \sqrt[k]{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k}$.
 
-When right-censored observations are present as well, the equation is similar: 
-$\hat β = \sqrt[k]{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k}$, we divide by the number of events $n_e$ only but we sum over all $x_i$ (observed and right-censored). The only problem is when we have right-censorings early than the estimated delay, then we get negative basis. It seems appropriate to set these terms to zero.
+With **right-censored observations** present in the data, the result is
+similar:
 
-If we substitute the β-estimate into the log-likelihood equation we get
+\[
+\frac{\partial l}{\partial β}(α, k, β) = -\frac{n_e k}{β} + k β^{-k-1} · ∑_{i=1}^n (x_i - α)^k
+\overset{!}{=}0
+\]
+Hence (as $k>0$), it must hold
+$-n_e + β^{-k} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0$.
+The solution is
+$\hat β = \sqrt[k]{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k}$, we divide by
+the number of events $n_e$ only but we sum over all $x_i$ (observed and
+right-censored).
+
+The only problem is when we have right-censorings earlier than the estimated
+delay α, then we potentially get negative contriubtions to the radicand. It
+seems appropriate to set these terms to zero.
+
+
+### Simplified log-likelihood
+If we substitute the β-estimate into the log-likelihood equation we get a
+simplified function to maximize.
 \[
 \begin{align}
 l^P_{\mathbf{x}}(α, k) &= n \log(k) - n \log(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k) + (k-1) · ∑_{i=1}^n \log(x_i-α) - n\\
    &= n · \Big[ \log(k) - \log\big(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · \frac{1}{n} ∑_{i=1}^n \log(x_i-α) - 1\Big]
 \end{align}
 \]
-In the presence of right-censored observations, the equation for $l^P_{\mathbf{x}}(α, k)$ is the same, except that we use the number of observed event $n_e$ (instead of $n$) everywhere. In particular, we have no explicit contribution from the right-censored observations. They influence the scale parameter $\hat β$, though.
+
+In the presence of **right-censored observations**, the equation for
+$l^P_{\mathbf{x}}(α, k)$ is similar but different.
+We have to use the number of observed event $n_e$ (instead of $n$) everywhere.
+\[
+\begin{align}
+l^P_{\mathbf{x}}(α, k) &= n_e \log(k) - n_e \log\big(\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · ∑_{i∈O} \log(x_i-α) - n_e\\
+   &= n_e · \Big[ \log(k) - \log\big(\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) - 1\Big]
+\end{align}
+\]
+The right-censored observations occur both in the simplified log-likelihood as well as in
+the scale parameter estimate $\hat β$.
+
+
+### Partial Derivatives of simplified log-likelihood
+We can use derivatives of the simplified log-likelihood to find candidates for
+**local** maxima of it. Cousineau (2009) calls this
+the **two step approach** (as opposed to the non-profiled iterative approach
+above).
+
 
 Forming the partial derivatives of $l^P(α, k)$ we get:
 \[
 \begin{aligned}
 \frac{\partial l^P}{\partial α}(α, k) &= n · \Big[ \frac{\frac{1}{n} ∑_{i=1}^n k (x_i - α)^{k-1}}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
-  &= n · \Big[ k · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
+  &= k · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} - (k-1) · ∑_{i=1}^n \frac{1}{x_i-α}\\
 \frac{\partial l^P}{\partial k}(α, k) &= n · \Big[ \frac{1}{k} - \frac{\frac{1}{n} ∑_i \log(x_i-α) · (x_i-α)^k}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]\\
-  &= n · \Big[ \frac{1}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]
+  &= \frac{n}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} + ∑_{i=1}^n \log(x_i-α)
 \end{aligned}
 \]
 
-Setting these two partial derivatives to zer0 we get:
+
+In the presence of **right-censored observations**, the derivatives become:
+\[
+\begin{aligned}
+\frac{\partial l^P}{\partial α}(α, k) &= n_e · \Big[ \frac{\frac{1}{n_e} ∑_{i=1}^n k (x_i - α)^{k-1}}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n_e} ∑_{i∈O} \frac{1}{x_i-α}\Big]\\
+  &= k · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{\frac{1}{n_e}∑_{i=1}^n (x_i - α)^k} - (k-1) · ∑_{i∈O} \frac{1}{x_i-α}\\
+\frac{\partial l^P}{\partial k}(α, k) &= n_e · \Big[ \frac{1}{k} - \frac{\frac{1}{n_e} ∑_{i=1}^n \log(x_i-α) · (x_i-α)^k}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k} + \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) \Big]\\
+  &= \frac{n_e}{k} - \frac{∑_{i=1}^n\log(x_i-α) · (x_i-α)^k}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k} + ∑_{i∈O} \log(x_i-α)
+\end{aligned}
+\]
+
+
+### Local extrema candidates
+Setting these two partial derivatives to zer0 we get equations for candidate
+solutions of local extrema:
 
 * from delay α
 \[
@@ -88,22 +168,37 @@ Setting these two partial derivatives to zer0 we get:
 
 * from shape $k$
 \[
-\frac{1}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) = 0
+\frac{1}{k} - \frac{∑_{i=1}^n \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) = 0
+\]
+
+
+In the presence of **right-censored observations**, the solution equations are:
+
+* from delay α
+\[
+\frac{k}{k-1} - \frac{1}{n_e} ∑_{i∈O} \frac{1}{x_i-α} · \frac{∑_{i=1}^n (x_i - α)^k}{∑_{i=1}^n (x_i - α)^{k-1}} = 0
+\]
+
+* from shape $k$
+\[
+\frac{1}{k} - \frac{∑_{i=1}^n \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) = 0
 \]
 
 
 ### Weighted MLE (MLEw)
-Cousineau (2009) proposes a slightly varied equation to solve for the parameter estimates.
-The scale parameter β gets estimated using a weighting factor $W_1$,
+Cousineau (2009) proposes a slightly varied equation to solve for the parameter
+estimates. The scale parameter β gets estimated using a weighting factor $W_1$,
 \[
 \hat β = \sqrt[k]{\frac{1}{n} ∑_{i=1}^n \frac{(x_i - α)^k}{W_1}}
 \]
 
-For the remaining parameters, we modify the partial derivatives equations of the profiled log-likelihood function.
-It can be seen to come from the following partial derivatives of a modified log-likelihood function,
-where $W_1$, $W_2$ and $W_3(k)$ are seen as weights that depend on sample size $n$.
-Actually, these weights are random variables that ultimately depend on the true parameter α and $k$
-but we treat $W_1$ and $W_2$ as fixed for given $n$ and we model $W_3$ as function of shape $k$ for given $n$.
+For the remaining parameters, we modify the partial derivatives equations of the
+profiled log-likelihood function. It can be seen to come from the following
+partial derivatives of a modified log-likelihood function, where $W_1$, $W_2$
+and $W_3(k)$ are seen as weights that depend on sample size $n$. Actually, these
+weights are random variables that ultimately depend on the true parameter α and
+$k$ but we treat $W_1$ and $W_2$ as fixed for given $n$ and we model $W_3$ as
+function of shape $k$ for given $n$.
 
 \[
 \begin{aligned}
@@ -149,9 +244,9 @@ x1 <- 7
 ggplot() + xlim(0, 7) +
   geom_function(fun = \(alpha1) -log1p((x1 - 2 * alpha1)/alpha1), n = 1001) +
   labs(x = expression(alpha), y = expression(tilde(alpha))) |
-  
+
   ggplot() + xlim(-9, 9) +
-  geom_function(fun = \(alpha1_tr) x1 / (expm1(-alpha1_tr)+2), n = 1001) + 
+  geom_function(fun = \(alpha1_tr) x1 / (expm1(-alpha1_tr)+2), n = 1001) +
   labs(x = expression(tilde(alpha)), y = expression(alpha),
        caption = bquote("transformation for data with " * x[(1)] == .(x1)))
 ```
@@ -160,7 +255,7 @@ ggplot() + xlim(0, 7) +
 
 
 
-## Random right censoring
+## Implementing random right censoring
 The functions for random generation of data `rexp_delayed()` and `rweib_delayed()`
 have an option to produce data under a random right censoring scheme.
 Currently, only random right censoring under a uniform censoring distribution is supported.
@@ -202,10 +297,29 @@ sum(x[,2] == 0)/length(x)
 The density of delayed Weibull is
 $f_X(x) = 𝟙_{x≥α} · \frac{k}{σ} · (\frac{x-α}{σ})^{k-1} \exp(-(\frac{x-α}{σ})^k)$
 with shape parameter $k$ and scale parameter $σ$.
-Then, using integration by parts and using 
+Then, using integration by parts and using
 $∫_0^∞ \exp(-a · x^b) dx = \frac{1}{b} a^{-1/b} · Γ(\frac{1}{b})$
 for $a=1$ and $b=k$, the shape parameter,
 we get
 \[
 π = P(C<X) = \frac{α + \frac{σ}{k}·Γ(\frac{1}{k})}{Z} \qquad ⇔ \qquad Z = \frac{α + \frac{σ}{k}·Γ(\frac{1}{k})}{π}
 \]
+
+
+## MLEc
+Corrected MLE (MLEc) was proposed by Cheng and Iles (1987). It uses the normal likelihood except for the first observation that is instrumental for the delay estimation. For the first observation MLEc uses the difference in cumulative distribution function between the first two observations.
+The log-likelihood function becomes, using $z_i := x_i - α$,
+
+\[
+\begin{align}
+l_\mathbf{x}(α, k, β) &= \log(\exp(-(\frac{z_2}{β})^k) - \exp(-(\frac{z_1}{β})^k))
++ (n-1) \log(k) - (n-1) k \log(β) + (k-1) · ∑_{i=2}^n \log z_i - β^{-k} · ∑_{i=2}^n z_i^k\\
+&= -(\frac{z_1}{β})^k + \log(1-\exp(-\frac{z_2^k - z_1^k}{β^k}) + (n-1) \log(k) - (n-1) k \log(β) + (k-1) · ∑_{i=2}^n \log z_i - β^{-k} · ∑_{i=2}^n z_i^k
+\end{align}
+\]
+We could use 1st Taylor approximation to simplify $\log(1+z) = z - \frac{z^2}{2} + \frac{z^3}{3} ∓ ... ≈ z$ for all $z$ close to zero, $|z|<1$:
+\[
+l_\mathbf{x}(α, k, β) ≈ -(\frac{z_1}{β})^k - \exp(-\frac{z_2^k - z_1^k}{β^k}) + (n-1) \log(k) - (n-1) k \log(β) + (k-1) · ∑_{i=2}^n \log z_i - β^{-k} · ∑_{i=2}^n z_i^k
+\]
+
+We could use partial derivatives to find local maxima of this approximate log-likelihood.
