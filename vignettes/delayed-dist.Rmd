@@ -53,7 +53,7 @@ Assume, we have in total $n=n_e + n_r$ observations, where
 
 * $n_e$ event observations with index set $O$ _and_
 * $n_r$ right censored observations with index set $R$, _hence_
-* $O ⨃ R = \{1, .., n\}$ and $|O| + |R| = n$
+* $|O| + |R| = n$ and $O ⨃ R = \{1, .., n\}$
 
 <!-- labelled as $x_{r_1}, ..., x_{r_{n_r}}$. -->
 
@@ -62,7 +62,7 @@ l_\mathbf{x}(α, k, β) = n_e \log(k) - n_e k \log(β) + (k-1) · ∑_{i ∈ O} 
 - β^{-k} · ∑_{r ∈ R} (x_r - α)^k
 \end{multline*}
 
-This simplifies:
+This simplifies to
 \[
 l_\mathbf{x}(α, k, β) = n_e \log(k) - n_e k \log(β) + (k-1) · ∑_{i ∈ O} \log(x_i-α) - β^{-k} · ∑_{i=1}^n (x_i - α)^k
 \]
@@ -113,21 +113,21 @@ l^P_{\mathbf{x}}(α, k) &= n \log(k) - n \log(\frac{1}{n} ∑_{i=1}^n (x_i - α)
 \]
 
 In the presence of **right-censored observations**, the equation for
-$l^P_{\mathbf{x}}(α, k)$ is similar but different.
-We have to use the number of observed event $n_e$ (instead of $n$) everywhere.
+$l^P_{\mathbf{x}}(α, k)$ is similar but different. We have to use the number of
+observed event $n_e$ (instead of $n$) in most cases.
 \[
 \begin{align}
 l^P_{\mathbf{x}}(α, k) &= n_e \log(k) - n_e \log\big(\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · ∑_{i∈O} \log(x_i-α) - n_e\\
    &= n_e · \Big[ \log(k) - \log\big(\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) - 1\Big]
 \end{align}
 \]
-The right-censored observations occur both in the simplified log-likelihood as well as in
-the scale parameter estimate $\hat β$.
+The right-censored observations occur both in the simplified log-likelihood as
+well as in the scale parameter estimate $\hat β$.
 
 
 ### Partial Derivatives of simplified log-likelihood
 We can use derivatives of the simplified log-likelihood to find candidates for
-**local** maxima of it. Cousineau (2009) calls this
+**local maxima** of it. Cousineau (2009) calls this
 the **two step approach** (as opposed to the non-profiled iterative approach
 above).
 
@@ -162,7 +162,7 @@ solutions of local extrema:
 \[
 \begin{aligned}
 \frac{k}{k-1} · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α} &= 0\\
-\frac{k}{k-1} - \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α} · \frac{∑_{i=1}^n (x_i - α)^k}{∑_{i=1}^n (x_i - α)^{k-1}} &= 0
+\frac{k}{k-1} - \frac{1}{n} \big(∑_{i=1}^n \frac{1}{x_i-α}\big) · \frac{∑_{i=1}^n (x_i - α)^k}{∑_{i=1}^n (x_i - α)^{k-1}} &= 0
 \end{aligned}
 \]
 
@@ -176,7 +176,7 @@ In the presence of **right-censored observations**, the solution equations are:
 
 * from delay α
 \[
-\frac{k}{k-1} - \frac{1}{n_e} ∑_{i∈O} \frac{1}{x_i-α} · \frac{∑_{i=1}^n (x_i - α)^k}{∑_{i=1}^n (x_i - α)^{k-1}} = 0
+\frac{k}{k-1} - \frac{1}{n_e} \big(∑_{i∈O} \frac{1}{x_i-α}\big) · \frac{∑_{i=1}^n (x_i - α)^k}{∑_{i=1}^n (x_i - α)^{k-1}} = 0
 \]
 
 * from shape $k$
@@ -193,12 +193,13 @@ estimates. The scale parameter β gets estimated using a weighting factor $W_1$,
 \]
 
 For the remaining parameters, we modify the partial derivatives equations of the
-profiled log-likelihood function. It can be seen to come from the following
+profiled log-likelihood function. It appears to come from the following
 partial derivatives of a modified log-likelihood function, where $W_1$, $W_2$
-and $W_3(k)$ are seen as weights that depend on sample size $n$. Actually, these
-weights are random variables that ultimately depend on the true parameter α and
-$k$ but we treat $W_1$ and $W_2$ as fixed for given $n$ and we model $W_3$ as
-function of shape $k$ for given $n$.
+and $W_3(k)$ are seen as weights that depend on sample size $n$.
+<!-- XXX Not 100% sure, though! Re-think here! -->
+Actually, these weights are random variables that ultimately depend on the true
+parameter α and $k$ but we treat $W_1$ and $W_2$ as fixed for given $n$ and we
+model $W_3$ as function of shape $k$ for given $n$.
 
 \[
 \begin{aligned}

@@ -1324,7 +1324,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
     rVal <- switch(EXPR = methodSelected,
            MLEn = {
              if (!profiled || distO$dist != 'weibull') {
-               # not Weibull or
+               # other than Weibull or
                # Weibull log-likelihood with all parameters (scale is not profiled out)
                if (!isSurv) {
                  # numeric, non-Surv
@@ -1339,6 +1339,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                         stop("This Surv-type is not supported!", call. = FALSE))
                }#esle !isSurv
              } else {
+               # Weibull, scale profiled out (via scale formula as function of shape and delay)
                stopifnot(profiled, distO$dist == 'weibull')
                if (!isSurv) {
                  # numeric response, non-Surv
@@ -1346,11 +1347,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  #cat("\nDelay a: ", pars.gr[["delay1"]], "Shape k: ", k, " (", pars[2], ")\n") #DDD debug
 
                  # return early when we have too high delay parameter
-                 if (obs_c[[1L]] < 0) return(NA_real_)
+                 if (obs_c[[1L]] < 0) {
+                   return(NA_real_)
+                 }
                  # objective function to maximize:
                  # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
                  # 2nd & 3rd summand could also be: - log(sum(obs_c^k)) + log(n*k)
-                 nObs * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1)
+                 nObs * ((k-1) * mean(log(obs_c)) - log(sum(obs_c^k)) + log(nObs) + log(k) - 1)
 
                  # alternative:
                  #indirect way: !profiled_llik_directly
@@ -1366,14 +1369,12 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  # Surv
                  switch(attr(obs, which = "type", exact = TRUE),
                         right = {
-                          obs_c <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
-
+                          # all observations (event or right-censored), centred
+                          obs_c <- obs[, 1L] - pars.gr[[1L]]
+                          nObs_e <- nObs - cens$n[[group]][["right"]]
                           # we used "partial derivative = 0" equation to profile out scale parameter,
                           #+but otherwise, use log-likelihood function directly
-                          (nObs - cens$n[[group]][["right"]]) * ((k-1) * mean(log(obs_c)) - log(mean(obs_c^k)) + log(k) - 1)
-                            # # contribution of right censorings is in the scale estimate, here no extra contriubtion!
-                            # sum(rlang::exec(distO$cdf, !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
-
+                          nObs_e * ((k-1) * mean(log(obs_c[cens$ind[[group]]$obs])) - log(sum(obs_c^k)) + log(nObs_e) + log(k) - 1)
                         },
                         stop("This Surv-type is not supported!", call. = FALSE)
                  )#hctiws
@@ -1407,18 +1408,18 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                # Surv-response
                switch(EXPR = attr(obs, which = "type", exact = TRUE),
                       right = {
-                        obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
+                        # all observations (event or right-censored), centred
+                        obs_c <- obs[, 1L] - pars.gr[[1L]]
+                        obs_evc <- obs_c[cens$ind[[group]]$obs]
+                        #obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
 
                         # objective function to maximize
                         # from equation for shape k
-                        -(weights$W2[[group]]/k + mean(log(obs_evc)) - sum(log(obs_evc) * obs_evc^k)/sum(obs_evc^k))^2 +
+                        -(weights$W2[[group]]/k - sum(log(obs_c) * obs_c^k)/sum(obs_c^k) + mean(log(obs_evc)))^2 +
                           # from equation for delay
                           # it is the negative of what is in Cousineau, but it is more in line with the likelihood derivation)
-                          # (for what it's worth, 1st factor is inverse of harmonic mean)
-                          -(w3F(k) - mean(1/obs_evc) * sum(obs_evc^k) / sum(obs_evc^(k-1)))^2
-                          # # contribution of right censorings is in the scale estimate, here no extra contribution!
-                          # sum(rlang::exec(distO$cdf,  !!! c(list(q=obs[cens$ind[[group]]$right,1L], lower.tail = FALSE, log.p = TRUE), pars.gr))) +
-
+                          # (for what it's worth, 1st factor in 2nd summand is inverse of harmonic mean)
+                          -(w3F(k) - mean(1/obs_evc) * sum(obs_c^k) / sum(obs_c^(k-1)))^2
                       },
                       stop("This Surv-type is not supported here!", call. = FALSE))
              }#esle !isSurv
