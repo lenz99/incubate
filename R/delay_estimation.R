@@ -1339,7 +1339,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                         stop("This Surv-type is not supported!", call. = FALSE))
                }#esle !isSurv
              } else {
-               # Weibull, scale profiled out (via scale formula as function of shape and delay)
+               # Weibull, scale profiled out
+               # scale as function of shape and delay (via first derivative)
                stopifnot(profiled, distO$dist == 'weibull')
                if (!isSurv) {
                  # numeric response, non-Surv
@@ -1351,9 +1352,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                    return(NA_real_)
                  }
                  # objective function to maximize:
-                 # we use 1st derivative to profile out scale parameter but use log-likelihood function directly otherwise
-                 # 2nd & 3rd summand could also be: - log(sum(obs_c^k)) + log(n*k)
-                 nObs * ((k-1) * mean(log(obs_c)) - log(sum(obs_c^k)) + log(nObs) + log(k) - 1)
+                 # use log-likelihood function directly for delay and shape
+                 # the scale parameter is profiled out (using 1st derivative)
+                 # we use log(mean(obs_c^k)) = log(sum(obs_c^k)) - log(nObs)
+                 # actually, log(n) + log(k) = log(n*k)
+                 nObs * ((k-1) * mean(log(obs_c)) - log(sum(obs_c^k)) + log(nObs * k) - 1)
 
                  # alternative:
                  #indirect way: !profiled_llik_directly
@@ -1373,8 +1376,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                           obs_c <- obs[, 1L] - pars.gr[[1L]]
                           nObs_e <- nObs - cens$n[[group]][["right"]]
                           # we used "partial derivative = 0" equation to profile out scale parameter,
-                          #+but otherwise, use log-likelihood function directly
-                          nObs_e * ((k-1) * mean(log(obs_c[cens$ind[[group]]$obs])) - log(sum(obs_c^k)) + log(nObs_e) + log(k) - 1)
+                          #+but otherwise, use log-likelihood function directly on delay and shape
+                          nObs_e * ((k-1) * mean(log(obs_c[cens$ind[[group]]$obs])) - log(sum(obs_c^k)) + log(nObs_e * k) - 1)
                         },
                         stop("This Surv-type is not supported!", call. = FALSE)
                  )#hctiws

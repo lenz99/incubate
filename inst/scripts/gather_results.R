@@ -46,7 +46,7 @@ myResultsTag <- cmdArgs[["resultsTag"]]
 stopifnot( is.character(myResultsTag), length(myResultsTag) == 1L, nzchar(myResultsTag) )
 
 myType <- cmdArgs[["type"]]
-stopifnot( is.character(myType), length(myType) == 1L, nzchar(myType) )
+stopifnot(is.character(myType), length(myType) == 1L, nzchar(myType))
 myType <- match.arg(arg = tolower(myType), choices = c("test", "confint"))
 
 # temporary results files have a date tag in their file name

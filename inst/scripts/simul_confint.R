@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# evaluate bootstrap confidence intervals for one-group situation
+# Evaluate bootstrap confidence intervals for one-group situation
 # either MPSE or MLE based fits
 
 
@@ -21,15 +21,16 @@ cat('incubate version ', incubate_ver, '\n')
 # mkuhn, 2022-06-??: v1.1.9 new meaning for SMD_factor
 # mkuhn, 2022-07-02: v1.2.1.9001 is first to have name-change MPSE
 # mkuhn, 2022-07-13: v1.2.1.9010 sets ties='density' as new default for single group fits
-stopifnot(utils::compareVersion(incubate_ver, "1.3.1.9010") >= 0L)
+# mkuhn, 2025-01-20: v1.3.0.9084 fix likelihood for data with right-censored observations
+stopifnot(utils::compareVersion(incubate_ver, "1.3.0.9084") >= 0L)
 
 
-library('dplyr', warn.conflicts = FALSE)
-library('purrr')
-library('stringr')
-library('tidyr')
-library('tibble')
-suppressPackageStartupMessages(library('R.utils'))
+library("dplyr", warn.conflicts = FALSE)
+library("purrr")
+library("stringr")
+library("tidyr")
+library("tibble")
+suppressPackageStartupMessages(library("R.utils"))
 
 
 TODAY <- Sys.Date()
@@ -39,14 +40,18 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 asValues = TRUE,
                                 excludeReserved = FALSE, excludeEnvVars = TRUE,
                                 defaults = list(resultsDir=getwd(),
-                                                dist='exponential', method='MPSE', seed=as.integer(TODAY), bs_data='parametric', smd_factor='all', bs_infer='all',
-                                                implement='own', slice=0, chnkSize=0, workers=6, R=150, mcnrep=100))
+                                                seed=as.integer(TODAY),
+                                                dist="exponential",
+                                                method="MPSE",
+                                                bs_data="parametric", smd_factor="all",
+                                                bs_infer="all", implement="own",
+                                                slice=0, chnkSize=0, workers=6, R=150, mcnrep=100))
 
 
-if (any(c('help', 'h') %in% names(cmdArgs))){
+if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('Run Monte-Carlo simulations with delayed Exponential or Weibull data for a single group setting.\n')
   cat('A confidence interval is constructed for all involved parameters and its properties "width" and "coverage" are calculated.\n')
-  cat('Sample size, delay, scale and scale ratio (between the two groups) and shape use different fixed values that are specified within the script.\n')
+  cat('Sample size, scale and shape use different fixed values that are specified within the script. Delay is fixed to a single value.\n')
   cat('Parameter options are:\n')
   cat('  --help\t print this help\n')
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
@@ -68,56 +73,56 @@ if (any(c('help', 'h') %in% names(cmdArgs))){
 }
 
 myResultsDir <- cmdArgs[["resultsDir"]]
-stopifnot( is.character(myResultsDir), dir.exists(myResultsDir),
-           # check read & write permission (first octal information)
-           (file.mode(myResultsDir) %>% as.character() %>% substr(1,1) %>% as.octmode() & 6) == '6')
+stopifnot(is.character(myResultsDir), dir.exists(myResultsDir),
+          # check read & write permission (first octal information)
+          (file.mode(myResultsDir) |> as.character() |> substr(1,1) |> as.octmode() & 6) == '6')
 
 myDist <- cmdArgs[["dist"]]
-stopifnot( is.character(myDist), length(myDist) == 1L )
+stopifnot(is.character(myDist), length(myDist) == 1L)
 myDist <- match.arg(arg = tolower(myDist), choices = c("exponential", "weibull"))
 
 myMethod <- cmdArgs[["method"]]
-stopifnot( is.character(myMethod), length(myMethod) == 1L )
-myMethod <- match.arg(arg = toupper(myMethod), choices = c('MPSE', 'MLE0', 'ALL'))
+stopifnot(is.character(myMethod), length(myMethod) == 1L)
+myMethod <- match.arg(arg = toupper(myMethod), choices = c('MPSE', 'MLEn', 'ALL'))
 
 myWorkers <- cmdArgs[["workers"]]
-stopifnot( is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L )
+stopifnot(is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L)
 
 myChnkSize <- cmdArgs[["chnkSize"]]
-stopifnot( is.numeric(myChnkSize), length(myChnkSize) == 1L )
+stopifnot(is.numeric(myChnkSize), length(myChnkSize) == 1L)
 
 myR <- cmdArgs[["R"]]
-stopifnot( is.numeric(myR), length(myR) == 1L, myR >= 1L )
+stopifnot(is.numeric(myR), length(myR) == 1L, myR >= 1L)
 
 myMCNrep <- cmdArgs[["mcnrep"]]
-stopifnot( is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L )
+stopifnot(is.numeric(myMCNrep), length(myMCNrep) == 1L, myMCNrep >= 1L)
 
 mySlice <- cmdArgs[["slice"]]
-stopifnot( ! is.null(mySlice), is.numeric(mySlice), is.finite(mySlice), length(mySlice) == 1L )
+stopifnot(!is.null(mySlice), is.numeric(mySlice), is.finite(mySlice), length(mySlice) == 1L)
 mySlice <- round(mySlice)
 
 myBS_data <- cmdArgs[["bs_data"]]
-stopifnot( ! is.null(myBS_data), is.character(myBS_data), length(myBS_data) == 1L )
+stopifnot(!is.null(myBS_data), is.character(myBS_data), length(myBS_data) == 1L)
 myBS_data <- match.arg(arg = tolower(myBS_data), choices = c('ordinary', 'parametric', 'all'))
 
 mySMD_factor <- cmdArgs[["smd_factor"]]
-stopifnot( is.character(mySMD_factor), length(mySMD_factor) == 1L )
+stopifnot(is.character(mySMD_factor), length(mySMD_factor) == 1L)
 mySMD_factor <- tolower(mySMD_factor)
 
 myBS_infer <- cmdArgs[["bs_infer"]]
-stopifnot( ! is.null(myBS_infer), is.character(myBS_infer), length(myBS_infer) == 1L )
-myBS_infer <- match.arg(arg = tolower(myBS_infer), choices = c('normal', 'normal0', 'lognormal', 'quantile', 'quantile0', 'logquantile', 't0', 't', 'all'))
+stopifnot(!is.null(myBS_infer), is.character(myBS_infer), length(myBS_infer) == 1L)
+myBS_infer <- match.arg(arg = tolower(myBS_infer),
+                        choices = c('normal', 'normal0', 'lognormal', 'quantile', 'quantile0', 'logquantile', 't0', 't', 'all'))
 
 myImpl <- cmdArgs[["implement"]]
-stopifnot( ! is.null(myImpl), is.character(myImpl), length(myImpl) == 1L )
+stopifnot(!is.null(myImpl), is.character(myImpl), length(myImpl) == 1L)
 myImpl <- match.arg(arg = tolower(myImpl), choices = c('own', 'boot', 'all'))
 
 mySeed <- cmdArgs[['seed']]
-stopifnot( is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L )
+stopifnot(is.numeric(mySeed), length(mySeed) == 1L, mySeed >= 0L)
 
 
 myPrint <- isTRUE(any(c('print', 'p') %in% tolower(names(cmdArgs))))
-
 mySingle <- isTRUE(any(c('single', '1') %in% tolower(names(cmdArgs))))
 
 
@@ -125,7 +130,7 @@ mySingle <- isTRUE(any(c('single', '1') %in% tolower(names(cmdArgs))))
 
 # set up simulation setting -----
 
-if (mySeed > 0L){
+if (mySeed > 0L) {
   set.seed(mySeed) ##used to be: 12
 }
 
@@ -135,11 +140,11 @@ simSetting <- tidyr::expand_grid(n = c(5, 8, 10, 12, 20), #, 50, 100), # low n m
                                  shape = unique(case_when(
                                    myDist == 'exponential' ~ 1,
                                    myDist == 'weibull' ~ c(.5, 2))),
-                                 method = c('MPSE', 'MLE0'),
+                                 method = c('MPSE', 'MLEn'),
                                  bs_data = c('parametric', 'ordinary'),
                                  smd_factor = c(0, .1, 0.25, 0.5, 0.75, 1, 2),
                                  implement = c('own', 'boot'),
-                                 # bootstrap inference propoerties come last
+                                 # bootstrap inference properties come last
                                  bs_infer = c('quantile0', 'quantile', 'logquantile_.00001', 'logquantile_.001', 'logquantile_.1', 'logquantile_.25', 'logquantile_.5', 'logquantile_1', 'logquantile_2', 'logquantile_3', 'logquantile_5', 'logquantile_10', 'logquantile_15', 'logquantile_20', 'logquantile_25',
                                               'normal0', 'normal', 'lognormal_.00001', 'lognormal_.001', 'lognormal_.1', 'lognormal_.25', 'lognormal_.5', 'lognormal_1', 'lognormal_2', 'lognormal_3', 'lognormal_5', 'lognormal_10', 'lognormal_15', 'lognormal_20', 'lognormal_25'), #, 't0', 't'),
                                  level = c(.9, .95, .99)) %>%
@@ -155,31 +160,31 @@ if (myMethod != 'ALL') {
 
 # first select the inference methods
 if (myBS_infer != 'all') {
-  simSetting <- simSetting %>%
+  simSetting <- simSetting |>
     dplyr::filter(bs_infer == myBS_infer)
 }
 
 # nest simSetting: pack all bs_infer together
-simSetting <- simSetting %>%
+simSetting <- simSetting |>
   dplyr::nest_by(n, delay, scale, shape, method, bs_data, smd_factor, implement, .key = 'bs_infer')
 
 
 if (myBS_data != 'all') {
-  simSetting <- simSetting %>%
+  simSetting <- simSetting |>
     dplyr::filter(bs_data == myBS_data)
 }
 
 if (mySMD_factor != 'all') {
   mySMD_factor <- suppressWarnings(as.numeric(mySMD_factor))
-  if (is.finite(mySMD_factor)){
-    simSetting <- simSetting %>%
-      dplyr::mutate(smd_factor = mySMD_factor) %>%
+  if (is.finite(mySMD_factor)) {
+    simSetting <- simSetting |>
+      dplyr::mutate(smd_factor = mySMD_factor) |>
       dplyr::distinct()
   } else stop('Could not parse the value given for smd_factor=')
 }
 
 if (myImpl != 'all') {
-  simSetting <- simSetting %>%
+  simSetting <- simSetting |>
     dplyr::filter(implement == myImpl)
 }
 
@@ -195,13 +200,13 @@ if (mySingle) {
                   dplyr::near(scale, 5L), method == 'MPSE')
 }
 
-if (! dplyr::near(mySlice, 0L)) {
+if (!dplyr::near(mySlice, 0L)) {
   # use base::head to ignore rowwise()
   simSetting <- head(simSetting, n = mySlice)
 
 }
 
-if (NROW(simSetting) == 0L){
+if (NROW(simSetting) == 0L) {
   cat('No scenarios selected for simulation.\n')
   quit(save = 'no')
 }
@@ -217,9 +222,9 @@ if (myPrint) {
 
 
 # set up parallel computing ----
-if (myWorkers > 1L){
-  library('future.callr')
-  library('future.apply')
+if (myWorkers > 1L) {
+  library("future.callr")
+  library("future.apply")
 
   future::plan(strategy = future.callr::callr, workers = myWorkers)
 }
@@ -235,7 +240,7 @@ if (myWorkers > 1L){
 #' @param bsInferDF dataframe. inference scenarios to build confidence interval for, defined by bs_infer & level
 #' @param agg flag. Aggregate values over runs
 #' @return dataframe. coverage and width in the different Monte-Carlo runs.
-simfun <- function(dist, n, delay, scale, shape, method, bs_data, smd_factor, implement, bsInferDF, agg = TRUE){
+simfun <- function(dist, n, delay, scale, shape, method, bs_data, smd_factor, implement, bsInferDF, agg = TRUE) {
   stopifnot(is.data.frame(bsInferDF), 'level' %in% names(bsInferDF),
             is.numeric(bsInferDF$level), all(bsInferDF$level > 0L & bsInferDF$level < 1L))
 
@@ -271,25 +276,27 @@ simfun <- function(dist, n, delay, scale, shape, method, bs_data, smd_factor, im
                                 # hack: have different options for log-shift (in case of log-transformation)
                                 bs_inf <- bsInferDF$bs_infer[.x]
                                 log_shift <- NA_real_
-                                if (startsWith(bs_inf, 'log')){
+                                if (startsWith(bs_inf, 'log')) {
                                   bs_inf_split <- stringr::str_split(bs_inf, pattern = stringr::fixed('_'))[[1L]]
                                   bs_inf <- bs_inf_split[[1L]]
                                   if (length(bs_inf_split) == 2L) log_shift <- as.numeric(bs_inf_split[[2L]])
                                 }
                                 confint(dm, level = bsInferDF$level[.x], bs_data = bsDatObj,
                                             bs_infer = bs_inf, logshift_delay = log_shift,
-                                            useBoot = implement == 'boot')} %>%
-                                tibble::as_tibble(rownames = 'param') %>% purrr::set_names(nm = c('param', 'lower', 'upper')) %>%
-                                dplyr::inner_join(x = paramDF, y = ., by = 'param') %>%
+                                            useBoot = implement == 'boot')} |>
+                                tibble::as_tibble(rownames = 'param') |>
+                                purrr::set_names(nm = c('param', 'lower', 'upper')) |>
+                                dplyr::inner_join(x = paramDF, y = _, by = 'param') |>
                                 dplyr::mutate(width = upper - lower) %>%
-                                dplyr::rowwise(param) %>%
-                                dplyr::mutate(covered = dplyr::between(truth, left = lower, right = upper)) %>%
-                                dplyr::ungroup() %>%
-                                dplyr::select(param, width, covered) %>%
-                                tidyr::pivot_longer(cols = c(width, covered), names_to = 'quality', values_to = 'value'),
-                              .id = 'bsInferDFRow') %>%
-        dplyr::mutate(bsInferDFRow = as.numeric(bsInferDFRow)) %>%
-        dplyr::inner_join(y = bsInferDF, by = c(bsInferDFRow = 'ID')) %>%
+                                dplyr::rowwise(param) |>
+                                dplyr::mutate(covered = dplyr::between(truth, left = lower, right = upper)) |>
+                                dplyr::ungroup() |>
+                                dplyr::select(param, width, covered) |>
+                                tidyr::pivot_longer(cols = c(width, covered),
+                                                    names_to = 'quality', values_to = 'value'),
+                              .id = 'bsInferDFRow') |>
+        dplyr::mutate(bsInferDFRow = as.numeric(bsInferDFRow)) |>
+        dplyr::inner_join(y = bsInferDF, by = dplyr::join_by(bsInferDFRow == 'ID')) |>
         dplyr::select(!bsInferDFRow)
     }, silent = TRUE)
 
@@ -297,20 +304,23 @@ simfun <- function(dist, n, delay, scale, shape, method, bs_data, smd_factor, im
   }, simplify = FALSE, future.seed = TRUE)
 
 
-  ciList <- ciList %>%
+  ciList <- ciList |>
     # drop NULLs
-    purrr::compact() %>%
+    purrr::compact() |>
     # bind results together
-    dplyr::bind_rows(.id = 'run') %>%
+    dplyr::bind_rows(.id = 'run') |>
     # mkuhn, 2022-07-13: check for finite value
     dplyr::filter(is.finite(value))
 
-  if (agg){
-    ciList <- ciList %>%
-      group_by(param, quality, bs_infer, level) %>%
-      summarize(nagg = n(), meanv = mean(value, na.rm = TRUE), medianv = median(value, na.rm = TRUE), .groups = 'drop') %>%
+  if (agg) {
+    ciList <- ciList |>
+      summarize(nagg = n(),
+                meanv = mean(value, na.rm = TRUE),
+                medianv = median(value, na.rm = TRUE),
+                .by = c(param, quality, bs_infer, level)) |>
       # mean of coverage, median of width
-      mutate(mv = if_else(quality == 'covered', true = meanv, false = medianv)) %>%
+      mutate(mv = if_else(quality == 'covered',
+                          true = meanv, false = medianv)) |>
       dplyr::select(!c(meanv, medianv))
   }
 
@@ -320,17 +330,17 @@ simfun <- function(dist, n, delay, scale, shape, method, bs_data, smd_factor, im
 #' run MC-simulations for each scenario sequentially (row-by-row)
 #' @param agg flag. Aggregate values over runs
 #' @return extended tibble with results and environment meta information
-applySimFun <- function(simSetDF, agg=TRUE){
-  stopifnot( length(dplyr::groups(simSetDF)) > 0L )
+applySimFun <- function(simSetDF, agg=TRUE) {
+  stopifnot(length(dplyr::groups(simSetDF)) > 0L)
 
-  simSetDF %>%
+  simSetDF |>
     #rowwise() %>%
     # encapsulate with list(..) to get a list column (and not a complaint)
     mutate(ci_res = list(simfun(dist = myDist, n=n, delay=delay, scale = scale, shape = shape,
                                 method = method, bs_data = bs_data, smd_factor = smd_factor, implement = implement, bsInferDF = bs_infer,
                                 agg = agg)),
            # drop bs_infer (as it is fused into ci_res)
-           bs_infer = NULL) %>%
+           bs_infer = NULL) |>
     ungroup()
     # mutate(incubate = as.character(packageVersion('incubate')),
     #        Rversion = R.version.string,
@@ -358,20 +368,20 @@ DATETIME_TAG <- format(Sys.time(), format = "%Y-%m-%d-%Hh%Mm%Ss")
 rdsBaseName <- paste0("simRes_confint_", DATETIME_TAG, "_agg"[AGG])
 rdsName <- file.path(myResultsDir, paste0(rdsBaseName, ".rds"))
 
-if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
+if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize) {
   # no chunking
-  simSetting <- applySimFun(simSetDF = simSetting, agg = AGG) %>%
+  simSetting <- applySimFun(simSetDF = simSetting, agg = AGG) |>
     addMetaData(timeTag = DATETIME_TAG)
   saveRDS(simSetting, file = rdsName)
 } else {
   # work in chunks
   rowIdx <- seq_len(NROW(simSetting))
   chunk_nbr <- (length(rowIdx) %/% myChnkSize)+1L
-  stopifnot( chunk_nbr > 1L, chunk_nbr <= 999999L )
+  stopifnot(chunk_nbr > 1L, chunk_nbr <= 999999L)
   # stripe over the scenarios
   rowIdxLst <- split(rowIdx, f = rep_len(x=seq_len(chunk_nbr), length.out = length(rowIdx)))
-  stopifnot( length(rowIdxLst) == chunk_nbr )
-  for (i in seq_along(rowIdxLst)){
+  stopifnot(length(rowIdxLst) == chunk_nbr)
+  for (i in seq_along(rowIdxLst)) {
     #slice does not work on rowwise tibbles (as it works *per group*)
     simSetting_chk <- applySimFun(simSetDF = simSetting[rowIdxLst[[i]],], agg = AGG)
     rdsChkName <- file.path(myResultsDir, paste0(rdsBaseName, "_", sprintf("%06d", i), ".rds"))
@@ -383,18 +393,18 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
   # merge chunked output!
   chkFileNames <- list.files(path = myResultsDir, pattern = paste0('^', rdsBaseName, '_[[:digit:]]+[.]rds$'),
                              full.names = TRUE)
-  if ( length(chkFileNames) ){
+  if (length(chkFileNames)) {
     chkFiles <- purrr::map(.x = chkFileNames, .f = readRDS)
 
-    saveRDS(chkFiles %>%
-              dplyr::bind_rows() %>%
+    saveRDS(chkFiles |>
+              dplyr::bind_rows() |>
               addMetaData(timeTag = DATETIME_TAG),
             file = rdsName)
 
-    if ( file.exists(rdsName) && (! exists('infoRDS') || ! inherits( try(infoRDS(rdsName), silent = TRUE), "try-error")) ){
+    if (file.exists(rdsName) && (! exists('infoRDS') || ! inherits( try(infoRDS(rdsName), silent = TRUE), "try-error")) ){
       message("Removing ", length(chkFileNames), " intermediate chunked RDS-files!")
       try(file.remove(chkFileNames))
-    } #fi remove chk RDS files
+    }#fi remove chk RDS files
 
   } else {
     warning("Failed to find chunked RDS-output.")
@@ -409,7 +419,9 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize){
 cat("\n+++\nThese are warnings from the script:\n+++\n")
 warnings()
 
-if (myWorkers > 1L) future::plan(strategy = future::sequential)
+if (myWorkers > 1L) {
+  future::plan(strategy = future::sequential)
+}
 
 
 cat("It is ***", toString(Sys.time()), "***\n")

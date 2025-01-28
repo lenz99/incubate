@@ -49,6 +49,7 @@ cmdArgs <- R.utils::commandArgs(trailingOnly=TRUE,
                                 defaults = list(
                                   # simulation settings
                                   dist="exponential",
+                                  # assumed model for estimation and testing
                                   model="exponential",
                                   scenario="MS",
                                   R=150, mcnrep=100, n=-1,
@@ -378,6 +379,8 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                        },#yrt outer
                                                        silent = TRUE)
 
+                                                       # results dataframe in long format:
+                                                       #+test and pvalue columns
                                                        res_i <- NULL
                                                        if (!is.null(te_diff)) {
                                                          res_i <- tibble::enframe(unlist(te_diff$P), name = "test", value = "pvalue") %>%
@@ -389,7 +392,8 @@ doMCSim <- function(DGPsetting, dropMLEw = FALSE) {
                                                                                     param = paste(te_diff2$param, collapse = "+"),
                                                                                     R_eff = length(te_diff2$testDist),
                                                                                     test = "bootstrap",
-                                                                                    pvalue = purrr::pluck(te_diff2, "P", "bootstrap", .default = NA_real_))
+                                                                                    pvalue = purrr::pluck(te_diff2, "P", "bootstrap",
+                                                                                                          .default = NA_real_))
                                                          }#fi te_diff2
                                                        }#fi te_diff
 
