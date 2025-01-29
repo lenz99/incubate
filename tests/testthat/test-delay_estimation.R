@@ -380,10 +380,14 @@ test_that("Parameter extraction and transformation", {
 })
 
 
-test_that("Censored obs", {
-  # numeric, non-Surv
+test_that("Handle Surv-objects", {
+
+  library("survival", quietly = TRUE)
+
+  # numeric, non-Surv (no ties)
   ti_x <- sort(2 + rpois(17, lambda = 5) + rnorm(17, sd = .1))
   ti_y <- sort(5 + rpois(11, lambda = 2.8) + rnorm(11, sd = .1))
+
 
   # right-censoring
   ti_x2 <- Surv(ti_x); ti_y2 <- Surv(ti_y)
@@ -393,6 +397,7 @@ test_that("Censored obs", {
   # interval-censoring
   ti_x3 <- Surv(ti_x, time2=NA, event = rep_len(1, length(ti_x)), type = "interval")
   ti_y3 <- Surv(ti_y, time2=NA, event = rep_len(1, length(ti_y)), type = "interval")
+
 
 
   # single group
@@ -414,6 +419,27 @@ test_that("Censored obs", {
   expect_error(delay_model(x = ti_x2c, y = ti_y3, bind = "rate1"), regexp = "same type")
 })
 
+
+test_that("Censored response", {
+
+  library("survival", quietly = TRUE)
+
+  # early right censorings can lead to negative obs_c => which explodes in log()
+  # stems from
+  # rweib_delayed(n=17, delay1=5, shape1 = 1.2, scale1=2.3, cens=.35)
+  xr <- Surv(c(5.30, 5.67, 5.74, 5.77, 5.83, 6.13, 6.28, 6.61, 6.89,
+               7.03, 7.23, 7.94, 8.13, 9.89, 10.84, 11.50, 15.19),
+             event = c(0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1))
+
+  # no warning about log(neg. value)
+  expect_no_warning(object = {
+    fmr <- delay_model(x = xr, distribution = "weibu", method = "MLEw")
+  }, message = "NaN")
+  expect_s3_class(fmr, class = "incubate_fit")
+  expect_identical(fmr$nobs, expected = c(x=17, y=0))
+  # delay estimate is somewhat close to original value of MC-sim
+  expect_equal(coef(fmr)[[1]], expected = 5, tolerance = .15)
+})
 
 
 test_that("Fit delayed Exponentials", {

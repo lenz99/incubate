@@ -1283,7 +1283,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
 
 
 
-  # Calculate value to be maximized based on the log-likelihood
+  # Calculate objective function to be maximized based on the log-likelihood
   #
   # Log-likelihood based value to be maximized, either naive, weighted or in
   # corrected form It is calculated for a single group. A two-group setting will
@@ -1323,9 +1323,13 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
     # return value (to be maximized)
     rVal <- switch(EXPR = methodSelected,
            MLEn = {
-             if (!profiled || distO$dist != 'weibull') {
-               # other than Weibull or
-               # Weibull log-likelihood with all parameters (scale is not profiled out)
+             # objective fn to be maximized:
+             # log-likelihood
+
+             if (!(profiled && distO$dist == "weibull")) {
+               # all cases except profiled Weibull
+               # directly give log-likelihood (iterative approach)
+
                if (!isSurv) {
                  # numeric, non-Surv
                  sum(rlang::exec(distO$pdf, !!! c(list(x=obs, log=TRUE), pars.gr)))
@@ -1339,9 +1343,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                         stop("This Surv-type is not supported!", call. = FALSE))
                }#esle !isSurv
              } else {
-               # Weibull, scale profiled out
-               # scale as function of shape and delay (via first derivative)
+               # Weibull, scale parameter profiled out:
+               # scale as function of shape and delay (via 1st derivative)
                stopifnot(profiled, distO$dist == 'weibull')
+
                if (!isSurv) {
                  # numeric response, non-Surv
                  obs_c <- obs - pars.gr[[1L]]
@@ -1351,11 +1356,12 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  if (obs_c[[1L]] < 0) {
                    return(NA_real_)
                  }
+
                  # objective function to maximize:
                  # use log-likelihood function directly for delay and shape
                  # the scale parameter is profiled out (using 1st derivative)
                  # we use log(mean(obs_c^k)) = log(sum(obs_c^k)) - log(nObs)
-                 # actually, log(n) + log(k) = log(n*k)
+                 # and log(n) + log(k) = log(n*k)
                  nObs * ((k-1) * mean(log(obs_c)) - log(sum(obs_c^k)) + log(nObs * k) - 1)
 
                  # alternative:
@@ -1372,12 +1378,23 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  # Surv
                  switch(attr(obs, which = "type", exact = TRUE),
                         right = {
+
                           # all observations (event or right-censored), centred
+                          #+then, pick all observed events
                           obs_c <- obs[, 1L] - pars.gr[[1L]]
+                          obs_evc <- obs_c[cens$ind[[group]]$obs] #ind refers to full vector obs_c
+
+                          # for later calculations (=> log)
+                          #+restrict obs_c to positive entries
+                          obs_c <- obs_c[which(obs_c>0)]
+
+                          # nbr of observed events
                           nObs_e <- nObs - cens$n[[group]][["right"]]
+
+                          # objective fn to maximize: log-likelihood
                           # we used "partial derivative = 0" equation to profile out scale parameter,
                           #+but otherwise, use log-likelihood function directly on delay and shape
-                          nObs_e * ((k-1) * mean(log(obs_c[cens$ind[[group]]$obs])) - log(sum(obs_c^k)) + log(nObs_e * k) - 1)
+                          nObs_e * ((k-1) * mean(log(obs_evc)) - log(sum(obs_c^k)) + log(nObs_e * k) - 1)
                         },
                         stop("This Surv-type is not supported!", call. = FALSE)
                  )#hctiws
@@ -1387,6 +1404,9 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
 
            # weighted MLE
            MLEw = {
+             # objective fn to be maximized:
+             # neg. squared L2-norm of (score equations + weights)
+
              stopifnot(profiled)
              stopifnot(distO$hasDelay, distO$dist != "normal")
 
@@ -1398,30 +1418,34 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                # numeric response, non-Surv
                obs_c <- obs - pars.gr[[1L]]
 
-               # consider length of 1st derivative vector: it vanishes for any local extremum (necessary condition)
+               # consider length of 1st derivative vector:
+               #+it vanishes for any local extremum (necessary condition)
                #+hence, neg of squared summands are maximized to come close to 0 (could also be abs() iso/ square)
-               -(weights$W2[[group]]/k + mean(log(obs_c)) - sum(log(obs_c) * obs_c^k)/sum(obs_c^k))^2 +
-                 # 1st factor is inverse of harmonic mean
+               # from equation for shape k
+               -(weights$W2[[group]]/k - sum(log(obs_c) * obs_c^k)/sum(obs_c^k) + mean(log(obs_c)))^2 +
+                 # from equation for delay
+                 # mean(1/obs_evc) is inverse of harmonic mean
                  -(w3F(k) - mean(1/obs_c) * sum(obs_c^k)/sum(obs_c^(k-1)))^2
-                 # penalization term
-                 #XXX is it safe/right scale if we subtract penalty term here on objective function coming from length of 1st deriv vector (indirect way)
-                 #-penF(k, nObs = nObs)
 
              } else {
                # Surv-response
                switch(EXPR = attr(obs, which = "type", exact = TRUE),
                       right = {
                         # all observations (event or right-censored), centred
+                        #+then, pick all observed events
                         obs_c <- obs[, 1L] - pars.gr[[1L]]
-                        obs_evc <- obs_c[cens$ind[[group]]$obs]
-                        #obs_evc <- obs[cens$ind[[group]]$obs, 1L] - pars.gr[[1L]]
+                        obs_evc <- obs_c[cens$ind[[group]]$obs] #ind refers to full vector obs_c
 
-                        # objective function to maximize
+                        # for later calculations (=> log)
+                        #+restrict obs_c to positive entries
+                        obs_c <- obs_c[which(obs_c>0)]
+
+                        # obj fun (to max)
                         # from equation for shape k
                         -(weights$W2[[group]]/k - sum(log(obs_c) * obs_c^k)/sum(obs_c^k) + mean(log(obs_evc)))^2 +
                           # from equation for delay
                           # it is the negative of what is in Cousineau, but it is more in line with the likelihood derivation)
-                          # (for what it's worth, 1st factor in 2nd summand is inverse of harmonic mean)
+                          # (for what it's worth, mean(1/obs_evc) is inverse of harmonic mean)
                           -(w3F(k) - mean(1/obs_evc) * sum(obs_c^k) / sum(obs_c^(k-1)))^2
                       },
                       stop("This Surv-type is not supported here!", call. = FALSE))
@@ -1439,14 +1463,16 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
              rVal
            }, #MLEw
 
-           # corrected MLE
-           # objective function to maximize
            MLEc = {
+             # objective function to be maximized:
+             # corrected MLE
+
              stopifnot(nObs >= 2L)
              # contribution of first observation is corrected for: we take first two different values
              ind12 <- indForefront[[group]]
 
-             # MLEc profiling leads to difficult equation for scale (looks like Lambert W could be necessary but it is even more complicated)
+             # MLEc profiling leads to difficult equation for scale
+             #+(looks like Lambert W could be necessary but it is even more complicated)
              # add more test routines for MLEc
 
              if (!isSurv) {
