@@ -11,7 +11,7 @@ version_inc <- packageVersion("incubate")
 # minimal version check:
 # v1.3.0.9084 fix likelihood for data with right-censored observations (mkuhn, 2025-01-20)
 stopifnot(version_inc >= "1.3.0.9084")
-cat('incubate package version: ', toString(version_inc), '\n')
+cat('(incubate v', toString(version_inc), ')\n', sep = "")
 
 library("tibble")
 library("dplyr", warn.conflicts = FALSE)
@@ -21,11 +21,13 @@ library("tidyr", warn.conflicts = FALSE)
 suppressPackageStartupMessages(library("R.utils"))
 
 
-# capture date/time for seed and timestamp
+# capture date/time for seed and time stamp
 TODAY <- Sys.Date()
 NOW <- Sys.time()
 DATETIME_TAG <- format(NOW, format = "%Y-%m-%d-%Hh%Mm%Ss")
-rdsBaseName <- paste0("simRes_estim_", DATETIME_TAG)
+# base name for output file
+OUTPUT_BASENAME <- paste0("simRes_estim_", DATETIME_TAG)
+DELAY_V <- 5
 
 SEED_DEFAULT <- paste0(as.integer(TODAY), format(NOW, format = "%H%M")) |>
   as.integer()
@@ -54,7 +56,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('Run Monte-Carlo simulations with delayed Weibull data for a single group.\n')
   cat('Parameters are estimated repeatedly so that estimation performance can be assessed.\n')
   cat('Sample size, scale and shape use different fixed values (see code in this script).\n')
-  cat("Delay is fixed throughout this script.\n")
+  cat("Delay is a nuisance parameter and stays fixed at value ",DELAY_V,".\n", sep = "")
   cat('Command line parameter options allow to adjust what this script actually does:\n')
   cat('  --help\t print this help\n')
   cat('  --print\t show scenarios to simulate and exit.\n')
@@ -65,7 +67,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --seed=\t if given, set random seed at the start of the script. Default depends on current date-time.\n')
   cat('  --chnkSize=\t chunk size to write out results having processed so many scenarios. Default is no chunking (=0).\n')
   cat('  --workers=\t number of parallel computations using `future.callr` and `future.apply`. The only level of parallelization is across the MC-replications for each simulation setting.\n')
-  cat('  --mcnrep=\t size of Monte-Carlo study: it is the number of replicated bootstrap data sets on which statistical tests are done.\n')
+  cat('  --mcnrep=\t size of Monte-Carlo study: it is the number of simulated data sets and parameter estimates.\n')
   quit(save = 'no')
 }
 
@@ -112,7 +114,7 @@ if (mySeed > 0L) {
 nVctr <- if (myN > 0) myN else c(11, 15, 20, 50) ## 100  8, 12, 20, 75
 
 simSetting <- tidyr::expand_grid(nObs = nVctr,
-                                 delay = 5,
+                                 delay = DELAY_V,
                                  scale = c(5, 10), #c(1, 2, 5),
                                  shape = c(.5, 1, 2),
                                  # cens = 0: all observed (=no censoring)
@@ -141,7 +143,11 @@ if (myN < 0) {
 if (!dplyr::near(mySlice, 0)) {
   simSetting <- local({
 
-    sliceF <- if (mySlice > 0) dplyr::slice_head else dplyr::slice_tail
+    sliceF <- if (mySlice > 0) {
+      dplyr::slice_head
+    } else {
+      dplyr::slice_tail
+    }
 
     simSetting |>
       sliceF(n = abs(mySlice))
@@ -187,7 +193,8 @@ if (USE_FUTURE) {
 #' @param DGPsetting numeric. data generation process. a row from `simSetting`.
 #'   It encodes parameters that specify the data generating process for both
 #'   groups
-#' @return dataframe. estimation results
+#' @param N_mcrep numeric. Number of MC-simulation runs
+#' @return dataframe, estimation results per MC-run.
 doMCSim <- function(DGPsetting, N_mcrep) {
   # settings from the environment:
   stopifnot(length(N_mcrep) == 1, is.numeric(N_mcrep), N_mcrep >= 1)
@@ -201,6 +208,19 @@ doMCSim <- function(DGPsetting, N_mcrep) {
   shape <- DGPsetting[[4]]
   cens <- DGPsetting[[5]]
 
+  estimMethods <- tibble::tribble(~software, ~method, ~profiled, ~weight,
+                                  "incubate", "MLEn", TRUE, NA_character_,
+                                  "incubate", "MLEw", TRUE, "sdist_median")
+
+  # Cousineau-weights are only available for n<=16
+  if (nObs <= 16) {
+    estimMethods <- estimMethods |>
+      tibble::add_case(software = "incubate", method = "MLEw", profiled = TRUE,
+                       weight = "cousineau2009")
+  }#fi
+  estimMethods <- estimMethods |>
+    dplyr::rowwise()
+
 
   # run MC-replicates for each estimation method in turn
   #+for the specified data generating process setting (`DGPsetting`)
@@ -213,44 +233,30 @@ doMCSim <- function(DGPsetting, N_mcrep) {
                                                 x <- rweib_delayed(n = nObs, delay1 = delay, scale1 = scaleV, shape1 = shape, cens = cens) |>
                                                   sort.int()
 
-                                                # estimate MLEw fit
-                                                estimCoefs <- NULL
-                                                try(expr = {
-                                                  # estimate coefficients with sdist-weights
-                                                  estimCoefs <- delay_model(x = x, y = NULL,
-                                                                           distribution = "weibull",
-                                                                           method = "MLEw",
-                                                                           control = list(MLEw_weight = "sdist_median",
-                                                                                          profiled = TRUE)) |>
-                                                    #suppressWarnings() |>
-                                                    #create dataframe with parameter estimates
-                                                    coef() |>
-                                                    tibble::enframe(name = "param", value = "value") |>
-                                                    tibble::add_column(MLEw_weight = "sdist_median", package = "incubate",
-                                                                       .before = 1)
+                                                estimMethods |>
+                                                  dplyr::mutate(estimRes = list({
 
-                                                  if (nObs <= 16) {
-                                                    # estimate coefficients with sdist-weights
-                                                    estimCoefs <- delay_model(x = x, y = NULL,
-                                                                                    distribution = "weibull",
-                                                                                    method = "MLEw",
-                                                                                    control = list(MLEw_weight = "cousineau2009",
-                                                                                                   profiled = TRUE)) |>
-                                                      #suppressWarnings() |>
-                                                      #create dataframe with parameter estimates
-                                                      coef() |>
-                                                      tibble::enframe(name = "param", value = "value") |>
-                                                      tibble::add_column(MLEw_weight = "cousineau2009",  package = "incubate",
-                                                                         .before = 1) |>
-                                                      dplyr::bind_rows(estimCoefs)
-                                                  }#fi
+                                                    fm_w <- coef_w <- NULL
+
+                                                    try(expr = {
+                                                      fm_w <- delay_model(x = {{x}}, y = NULL,
+                                                                          distribution = "weibull", twoPhase = FALSE,
+                                                                          method = method,
+                                                                          control =  list(profiled = profiled,
+                                                                                          MLEw_weight = if (is.na(weight)) NULL else weight))
+                                                    }, silent = TRUE)
 
 
-                                                }, silent = TRUE)
-
-                                                # keep data
-                                                estimCoefs |>
-                                                  # nest() avoids duplications
+                                                    if (!is.null(fm_w)) {
+                                                      coef_w <- fm_w |>
+                                                        coef() |>
+                                                        tibble::enframe(name = "param", value = "value")
+                                                    }#fi
+                                                    coef_w
+                                                  })) |>
+                                                  # drop scenarios that did not work out!
+                                                  dplyr::filter(!is.null(estimRes), is.list(estimRes)) |>
+                                                  tidyr::unnest(estimRes) |>
                                                   tidyr::nest(.key = "estim") |>
                                                   tibble::add_column(data = list(x), .before = 1)
 
@@ -262,7 +268,7 @@ doMCSim <- function(DGPsetting, N_mcrep) {
 
   # bind together into a single long tibble
   dplyr::bind_rows(estimList, .id = "run")
-} #fn doMCSim
+}#fn doMCSim
 
 
 #' Run MC-simulations for each scenario sequentially (row-by-row)
@@ -301,14 +307,16 @@ addMetaData <- function(resDat, timeTag) {
 #' Saves results data to disk.
 #' @param resDat simulation results data
 #' @param chnkIdx file chunk ID or `NULL` if not chunked file
-#' @returns side effect: writes out data to disk
+#' @returns name of results file (invisibly). side effect: writes out data to disk
 writeOutData <- function(resDat, chnkIdx = NULL) {
   stopifnot(nzchar(myResultsDir))
-  stopifnot(nzchar(rdsBaseName), length(rdsBaseName) == 1)
+  stopifnot(nzchar(OUTPUT_BASENAME), length(OUTPUT_BASENAME) == 1)
   stopifnot(exists("DATETIME_TAG"), nzchar(DATETIME_TAG),
             length(DATETIME_TAG) == 1)
   stopifnot(is.data.frame(resDat))
 
+
+  outpFile <- NULL
 
   if (is.null(chnkIdx)) {
 
@@ -319,28 +327,30 @@ writeOutData <- function(resDat, chnkIdx = NULL) {
     # save simulation data (per setting and per run)
     resDat_u |>
       dplyr::select(!all_of("estim")) |>
-      saveRDS(file = file.path(myResultsDir, paste0(rdsBaseName, "_data.rds")))
+      saveRDS(file = file.path(myResultsDir, paste0(OUTPUT_BASENAME, "_data.rds")))
 
     message("Writing out simulation results to file..")
     # save estim results (per setting and per run)
+    outpFile <- file.path(myResultsDir, paste0(OUTPUT_BASENAME, ".rds"))
     resDat_u |>
       dplyr::select(!all_of("data")) |>
       addMetaData(timeTag = DATETIME_TAG) |>
-      saveRDS(file = file.path(myResultsDir, paste0(rdsBaseName, ".rds")))
+      saveRDS(file = outpFile)
 
   } else {
     stopifnot(is.numeric(chnkIdx), length(chnkIdx) == 1, chnkIdx >= 1)
     chnkIdx <- trunc(chnkIdx)
-    message("Writing out chunk ", chnkIdx, " to file..")
 
+    message("Writing out chunk ", chnkIdx, " to file..")
+    outpFile <- file.path(myResultsDir, paste0(OUTPUT_BASENAME, "_", sprintf("%06d", chnkIdx), ".rds"))
     resDat |>
       addMetaData(timeTag = DATETIME_TAG) |>
-      saveRDS(file = file.path(myResultsDir, paste0(rdsBaseName, "_", sprintf("%06d", chnkIdx), ".rds")))
+      saveRDS(file = outpFile)
   }
 
   # return
-  invisible(NULL)
-}#fn
+  invisible(outpFile)
+}#fn writeOutData
 
 
 # run & save ----
@@ -368,21 +378,21 @@ if (myChnkSize < 1L || NROW(simSetting) <= myChnkSize) {
     simSetting |>
       dplyr::slice(rowIdxLst[[i]]) |>
       applyMCSims() |>
-      writeOutData(chnkFile = i)
+      writeOutData(chnkIdx = i)
   }#rof
 
   # merge chunked output!
   chnkFileNames <- list.files(path = myResultsDir,
-                              pattern = paste0('^', rdsBaseName, '_[[:digit:]]+[.]rds$'),
+                              pattern = paste0('^', OUTPUT_BASENAME, '_[[:digit:]]+[.]rds$'),
                               full.names = TRUE)
   if (length(chnkFileNames)) {
     # re-create complete simulation results data (in chunked order)
-    purrr::map(.x = chnkFileNames, .f = readRDS) |>
+    resOutputFN <- purrr::map(.x = chnkFileNames, .f = readRDS) |>
       dplyr::bind_rows() |>
       writeOutData()
 
     # clean up intermediate chunked result files
-    if (file.exists(rdsName) && !inherits(try(infoRDS(rdsName), silent = TRUE), "try-error")) {
+    if (file.exists(resOutputFN) && !inherits(try(infoRDS(resOutputFN), silent = TRUE), "try-error")) {
       message("Removing ", length(chnkFileNames), " intermediate chunked RDS-files!")
       try(file.remove(chnkFileNames))
     } else {
