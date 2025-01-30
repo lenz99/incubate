@@ -327,6 +327,7 @@ writeOutData <- function(resDat, chnkIdx = NULL) {
     # save simulation data (per setting and per run)
     resDat_u |>
       dplyr::select(!all_of("estim")) |>
+      addMetaData(timeTag = DATETIME_TAG) |>
       saveRDS(file = file.path(myResultsDir, paste0(OUTPUT_BASENAME, "_data.rds")))
 
     message("Writing out simulation results to file..")
