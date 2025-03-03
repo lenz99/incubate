@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# Evaluate parameter estimation in delayed exponential or Weibull setting
+# Evaluate parameter estimation in delayed Weibull setting
 # We look at bias and precision of estimation.
 
 cat("\nMC-simulations around parameter estimation in a single group setting\n")
@@ -19,6 +19,9 @@ stopifnot(packageVersion("dplyr") > "1.0.10")
 library("purrr", warn.conflicts = FALSE)
 library("tidyr", warn.conflicts = FALSE)
 suppressPackageStartupMessages(library("R.utils"))
+# we use future_replicate
+#+(even when using sequential plan [=no parallelization])
+library("future.apply")
 
 
 # capture date/time for seed and time stamp
@@ -27,12 +30,13 @@ NOW <- Sys.time()
 DATETIME_TAG <- format(NOW, format = "%Y-%m-%d-%Hh%Mm%Ss")
 # base name for output file
 OUTPUT_BASENAME <- paste0("simRes_estim_", DATETIME_TAG)
-DELAY_V <- 5
+DELAY_V <- 50
 
 SEED_DEFAULT <- paste0(as.integer(TODAY), format(NOW, format = "%H%M")) |>
   as.integer()
 
-stopifnot(is.integer(SEED_DEFAULT), length(SEED_DEFAULT) == 1, SEED_DEFAULT > 11111)
+stopifnot(is.integer(SEED_DEFAULT),
+          length(SEED_DEFAULT) == 1, SEED_DEFAULT > 11111)
 
 
 
@@ -111,14 +115,19 @@ if (mySeed > 0L) {
 }
 
 # choose sample sizes: is there a specific sample size given?
-nVctr <- if (myN > 0) myN else c(11, 15, 20, 50) ## 100  8, 12, 20, 75
+nVctr <- if (myN > 0) {
+  myN
+} else {
+  c(11, 15, 20, 50) ## 100  8, 12, 20, 75
+}
 
 simSetting <- tidyr::expand_grid(nObs = nVctr,
                                  delay = DELAY_V,
                                  scale = c(5, 10), #c(1, 2, 5),
                                  shape = c(.5, 1, 2),
-                                 # cens = 0: all observed (=no censoring)
-                                 cens = c(0, 0.1, 0.2, 0.3))
+                                 #cens = 0: all observed (=no censoring)
+                                 cens = c(0, 0.1, 0.2, 0.3)
+)
 
 # sanity/health checks
 simSetting <- simSetting |>
@@ -139,7 +148,8 @@ if (myN < 0) {
 }
 
 
-# slicing in simulation settings (from head or from tail depending on sign)
+# slicing in simulation scenarios
+#+using head or tail depending on sign)
 if (!dplyr::near(mySlice, 0)) {
   simSetting <- local({
 
@@ -174,9 +184,9 @@ if (myPrint) {
 
 
 # set up parallel computing ----
+
 if (USE_FUTURE) {
   library("future.callr")
-  library("future.apply")
 
   future::plan(strategy = future.callr::callr, workers = myWorkers)
 }#fi USE_FUTURE
@@ -208,17 +218,18 @@ doMCSim <- function(DGPsetting, N_mcrep) {
   shape <- DGPsetting[[4]]
   cens <- DGPsetting[[5]]
 
-  estimMethods <- tibble::tribble(~software, ~method, ~profiled, ~weight,
-                                  "incubate", "MLEn", TRUE, NA_character_,
-                                  "incubate", "MLEw", TRUE, "sdist_median")
+  estimMethods <- tibble::tribble(~method, ~profiled, ~weight,
+                                  "MLEn", TRUE, NA_character_,
+                                  "MLEw", TRUE, "sdist_median")
 
   # Cousineau-weights are only available for n<=16
   if (nObs <= 16) {
     estimMethods <- estimMethods |>
-      tibble::add_case(software = "incubate", method = "MLEw", profiled = TRUE,
+      tibble::add_case(method = "MLEw", profiled = TRUE,
                        weight = "cousineau2009")
   }#fi
   estimMethods <- estimMethods |>
+    dplyr::mutate(software = "incubate", .before = 1) |>
     dplyr::rowwise()
 
 
