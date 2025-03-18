@@ -2,13 +2,18 @@
 # test utility functions of this package
 
 test_that("MLEw weight objects", {
+  # we consider the package-internal list MLEw_approx
   expect_true(exists("MLEw_approx"))
-  expect_named(MLEw_approx, expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
+  expect_named(MLEw_approx,
+               expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
   expect_type(MLEw_approx[["MCsim"]], type = "list")
-  expect_named(MLEw_approx[["MCsim"]], expected = c("nObs", "W1", "W2"))
+  expect_named(MLEw_approx[["MCsim"]],
+               expected = c("nObs", "W1", "W2"))
+  # MC results from Cousineau (2009)
   MCsim_cous09 <- MLEw_approx[["MCsim_cousineau2009"]]
   expect_type(MCsim_cous09, type = "list")
-  expect_named(MCsim_cous09, expected = c("type", "location", "n", "shape", "value"))
+  expect_named(MCsim_cous09,
+               expected = c("type", "location", "n", "shape", "value"))
   # we have a location J
   expect_true("J" %in% MCsim_cous09$location)
   # range of shape
@@ -17,26 +22,25 @@ test_that("MLEw weight objects", {
   # W3 is ordered for shape (ascending) per given n
   purrr::walk(.x = unique(MCsim_cous09$n[MCsim_cous09$type == "W3"]),
               .f = \(nObs) {
-                shapes <- MCsim_cous09$shape[MCsim_cous09$type == "W3" & MCsim_cous09$location == "J" & MCsim_cous09$n == {nObs}]
+                shapes <- MCsim_cous09$shape[MCsim_cous09$type == "W3" &
+                                               MCsim_cous09$location == "J" &
+                                               MCsim_cous09$n == nObs]
                 # shapes are increasing
                 expect_identical(shapes, c(0.5, 1, 1.5, 2, 2.5))
               })
-  # W1: cf Cousineau (2009), table 2
-  with(MCsim_cous09, expect_equal(value[type == "W1" & location == "J" & n %in% c(3, 5, 15)], expected = c(0.891, 0.934, 0.978)))
-  with(MCsim_cous09, expect_equal(value[type == "W1" & location == "G" & n %in% c(2, 7, 13)], expected = c(0.763, 0.929, 0.962)))
-  # W2: cf Cousineau (2009), table 3
-  with(MCsim_cous09, expect_equal(value[type == "W2" & location == "J" & n %in% c(3, 5, 15)], expected = c(0.517, 0.711, 0.902)))
-  with(MCsim_cous09, expect_equal(value[type == "W2" & location == "G" & n %in% c(2, 7, 13)], expected = c(0.163, 0.742, 0.860)))
-  # W3: cf Cousineau (2009), table 4
-  with(MCsim_cous09, expect_equal(value[type == "W3" & location == "J" & shape == 0.5 & n %in% c(3, 5, 15)], expected = c(3.081, 4.806, 12.069)))
-  with(MCsim_cous09, expect_equal(value[type == "W3" & location == "G" & shape == 1.5 & n %in% c(2, 7, 13)], expected = c(1.524, 2.184, 2.403)))
+  with(MCsim_cous09, {
+    # W1: cf Cousineau (2009), table 2
+    expect_equal(value[type == "W1" & location == "J" & n %in% c(3, 5, 15)], expected = c(0.891, 0.934, 0.978))
+    expect_equal(value[type == "W1" & location == "G" & n %in% c(2, 7, 13)], expected = c(0.763, 0.929, 0.962))
+    # W2: cf Cousineau (2009), table 3
+    expect_equal(value[type == "W2" & location == "J" & n %in% c(3, 5, 15)], expected = c(0.517, 0.711, 0.902))
+    expect_equal(value[type == "W2" & location == "G" & n %in% c(2, 7, 13)], expected = c(0.163, 0.742, 0.860))
+    # W3: cf Cousineau (2009), table 4
+    expect_equal(value[type == "W3" & location == "J" & shape == 0.5 & n %in% c(3, 5, 15)], expected = c(3.081, 4.806, 12.069))
+    expect_equal(value[type == "W3" & location == "G" & shape == 1.5 & n %in% c(2, 7, 13)], expected = c(1.524, 2.184, 2.403))
+  })
 
   expect_named(MLEw_approx[["coef"]], expected = c("W2", "W3_richards"))
-  expect_named(MLEw_approx[["fun"]], expected = c("genLogisticF", "genLogisticJ"))
-  # MLEw_approx[["fun"]] contains only functions
-  purrr::walk(.x = names(MLEw_approx[["fun"]]),
-              .f = function(nam) expect_type(MLEw_approx[["fun"]][[nam]], "closure"))
-
 
   expect_length(w1Fint(seq_len(3)), n = 3)
   expect_type(w1Fint(5), type = "double")
@@ -62,7 +66,7 @@ test_that("MLEw weight objects", {
   expect_equal(w2Fint(8), expected = 0.817, tolerance = 1e-3)
   expect_equal(w2Fint(15), expected = 0.902, tolerance = 1e-3)
 
-  # Cousineau: Nearly unbaised.. (Table 4)
+  # Cousineau: Nearly unbiased.. (Table 4)
   # agreement here is not as high: W3 is more challenging, in particular for small shape
   #+our median is based on higher sample size in our MC-sim
   shapes <- seq.int(0.5, 2.5, by=.5)
@@ -93,6 +97,41 @@ test_that("MLEw weight objects", {
                apply(MARGIN = 2, FUN = min, simplify = TRUE) |>
                min(),
              expected = 0)
+})
+
+
+test_that("Richards's generalized logistic function", {
+
+  # we consider the package-internal list MLEw_approx
+  expect_true(exists("MLEw_approx"))
+  expect_named(MLEw_approx,
+               expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
+
+  expect_named(MLEw_approx[["fun"]], expected = c("genLogisticF", "genLogisticJ"))
+  # MLEw_approx[["fun"]] contains only functions
+  purrr::walk(.x = names(MLEw_approx[["fun"]]),
+              .f = function(nam) expect_type(MLEw_approx[["fun"]][[nam]], "closure"))
+
+  myN <- sample(x = seq.int(from = 2, to = 1000), size = 1)
+  myShapes <- sample(x = seq.int(from = .05, to = 25, by = .05), size = 5)
+  # some parameters values
+  startL <- list(A = .01,
+                 K = log1p(log(2*myN)),
+                 Q = .01 + abs(stats::rnorm(n=1, mean = 2, sd = .1)),
+                 B = .01 + abs(stats::rnorm(n=1, mean = 1.5, sd = .1)),
+                 nu = .01 + abs(stats::rnorm(n=1, mean = .75, sd = .1)))
+
+  # test gradient function
+  all.equal(purrr::map(.x = myShapes,
+                       .f = ~numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
+                                            x = as.numeric(startL), xVal = .x)) |>
+              # convert to single matrix, columns = nbr of parameters
+              unlist() |> matrix(ncol = 5, byrow = TRUE),
+
+            #current=
+            MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
+                                         xVal = myShapes),
+            tolerance = 1e-7)
 
 })
 

@@ -1,8 +1,9 @@
 # mkuhn, 2023-04-11
 # adds MLE-weights table as internal data to package
 #
-# the MLE-weights are established through a Monte-Carlo simulation (mcs), see inst/scripts/simul_MLEweights.R
-# Based on this, we build here approximating function.
+# the MLE-weights are established through a Monte-Carlo simulation (MCS),
+# see inst/scripts/simul_MLEweights.R
+# Here, we build approximating function based on this MCS.
 # Code to explore which are good/best approximations W1, W2 and W3 are in scratch/MLEw_weights2.R.
 # The package incubate makes use of these functions in MLEw_approx[["fun"]]
 ####
@@ -134,32 +135,29 @@ MLEw_approx$coef <- list(
 
 
 
-
-
-
-
 if (rlang::is_interactive()) {
   plDatW2 <- MLEw_mcs$W12 |>
     dplyr::filter(nObs > 1) |>
-    dplyr::mutate(W2mod = predict(fm_W2),
-                  W2approx = w2F(nObs))
+    dplyr::mutate(W2mod = predict(fm_W2))
 
   ggplot(data = plDatW2,
          mapping = aes(x = nObs, y = W2)) +
-    geom_point(alpha = .7) + #geom_line() +
-    geom_point(mapping = aes(y = W2mod), size = .5, col = "darkred", alpha = .4) +
-    geom_line(mapping = aes(y = W2mod), col = "darkred", alpha = .3, linetype = "dotted") +
-    geom_line(mapping = aes(y = W2approx), col = "darkblue", alpha = .4, linetype = "dotdash") +
+    geom_point(alpha = .57, col = "lightgrey", size = 2) + #geom_line() +
+    geom_point(mapping = aes(y = W2mod), size = .5, col = "darkred", alpha = .2) +
+    geom_line(mapping = aes(y = W2mod), col = "darkred", alpha = .1, linetype = "dotted") +
+    geom_vline(xintercept = N_DIRECT, col = "darkgrey") +
     scale_x_log10() +
     labs(title = "W2: median of MC-sim and fitted W2-function",
-         subtitle = "Modell: red, Approx-fun: blue") |
+         subtitle = "Modell: darkred") |
 
 
-    ggplot(data = plDatW2,
-           mapping = aes(x = W2, y = W2-W2approx)) +
+    ggplot(data = plDatW2 |> dplyr::filter(nObs > N_DIRECT),
+           mapping = aes(x = W2, y = W2mod-W2)) +
     geom_point() +
+    geom_hline(yintercept = 0, col = "darkgrey") +
     #scale_y_sqrt() +
-    labs(title = "Agreement of W2 (median)", subtitle = "approx vs simulation")
+    labs(title = "Bias of modelled W2 vs MC-simulation (median)",
+         subtitle = paste("beyond n =", N_DIRECT))
 } #fi
 
 
@@ -222,12 +220,10 @@ W3 <- MLEw_mcs$W3 |>
     llW3 = log(lW3),
     lp1lW3 = log1p(lW3))
 
-
 # test jacobian for some sample size nObs
 myN <- sample(unique(W3$nObs), size = 1)
+myShapes <- stats::rlnorm(n=5, meanlog = .51, sdlog = 2)
 stopifnot(length(myN) == 1)
-W3i <- W3 |> dplyr::filter(nObs == myN)
-stopifnot(exists("W3i"), NROW(W3i) > 1)
 
 # some parameters values
 startL <- list(A = .01,
@@ -237,8 +233,7 @@ startL <- list(A = .01,
                nu = .01 + abs(stats::rnorm(n=1, mean = .75, sd = .1)))
 
 # test gradient function
-idx <- sort(sample(x = NROW(W3i), size = 5, replace = FALSE))
-all.equal(purrr::map(.x = W3i$lshape[idx],
+all.equal(purrr::map(.x = myShapes,
                      .f = ~numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
                                           x = as.numeric(startL), xVal = .x)) |>
             # convert to single matrix, columns = nbr of parameters
@@ -246,7 +241,7 @@ all.equal(purrr::map(.x = W3i$lshape[idx],
 
           #current=
           MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
-                                       xVal = W3i$lshape[idx]),
+                                       xVal = myShapes),
           tolerance = 1e-7)
 
 
@@ -290,7 +285,8 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
       # reuse previous myN
       stopifnot(exists("myN"), is.finite(myN))
 
-      W3i <- W3i |>
+      W3i <- W3 |>
+        dplyr::filter(nObs == {{myN}}) |>
         dplyr::mutate(lp1lW3_pred = predict(fm_W3_indiv[[as.character(myN)]]))
 
       ggplot(data = W3i,
