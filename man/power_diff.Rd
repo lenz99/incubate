@@ -9,13 +9,14 @@ power_diff(
   twoPhase = FALSE,
   param = "delay1",
   test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LRT"),
+  method = c("MPSE", "MLEw", "MLEc", "MLEn"),
   eff = stop("Provide parameters for both groups that reflect the effect!"),
   n = NULL,
   r = 1,
   sig.level = 0.05,
   power = NULL,
   nPowerSim = 1600,
-  R = 201,
+  R = 200,
   nRange = c(5, 250),
   verbose = 0
 )
@@ -31,7 +32,10 @@ power calculation.}
 difference and for which to simulate the power. Default value is
 \code{'delay1'}.}
 
-\item{test}{character. Which test to use for this power estimation? E.g. LRT}
+\item{test}{character. Which test to use for this power estimation? E.g.,
+bootstrap, LRT or logrank_pp.}
+
+\item{method}{character. Which method in case of parametric test.}
 
 \item{eff}{list of length 2. The two list elements are numeric vectors that
 contain the model parameters (as understood by the delay-distribution
@@ -57,7 +61,8 @@ P-value for each simulation round. A value of around \code{R=200} gives a
 resolution of 0.5\% which might be enough for power analysis.}
 
 \item{nRange}{integer. Admissible range for sample size when power is
-pre-specified and sample size is requested.}
+pre-specified and sample size is requested. The routine might not find the
+optimal sample size when this range is set too wide.}
 
 \item{verbose}{numeric. How many details are requested? Higher value means
 more details. 0=off, no details.}
@@ -81,10 +86,11 @@ according to the specified model is sampled.
 
 Note that this second modus (when \code{n} is estimated) is computationally quite
 heavy. The iterative search for \code{n} uses some heuristics and the estimated
-sample size might actually give a slightly different power-level.
+sample size might actually give a slightly different power level.
 Hence, it is important to check the stated power in the output. The search
-algorithm comes to results closer to the power aimed at when the admissible
-range for sample size (\verb{nRange=}) is chosen sensibly. In case the estimated
-sample size and the achieved power is too high it might pay off to rerun the
-function with an adapted admissible range.
+algorithm comes to better results when the admissible
+range for sample size (\verb{nRange=}) is chosen sensibly and not too wide.
+In case the estimated sample size and the achieved power is too high it might
+pay off to rerun the function with an adapted admissible range for the sample
+size by giving a narrower range in \verb{nRange=}.
 }

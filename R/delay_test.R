@@ -609,18 +609,24 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 
 #' Test the difference for model parameter(s) between two uncorrelated groups
 #'
-#' The test is in fact a model comparison between a null model where the parameters are enforced to be equal and an unconstrained full model.
-#' The model parameters can be fit with various methods: MPSE, MLEn, MLEc or MLEw.
-#' Parametric bootstrap tests and likelihood ratio tests are supported.
-#' As test statistic for the bootstrap test we use twice the difference in best (=lowest) objective function value, i.e. 2 * (`val_0` - `val_1`).
-#' The factor 2 is irrelevant but it becomes reminiscent of a likelihood ratio test statistic albeit the objective function is not a negative log-likelihood
-#' in all cases (e.g. it is the negative of the maximum product spacing metric for the MPSE-method).
+#' The test is in fact a model comparison between a null model where the
+#' parameters are enforced to be equal and an unconstrained full model. The
+#' model parameters can be fit with various methods: MPSE, MLEn, MLEc or MLEw.
+#' Parametric bootstrap tests and likelihood ratio tests are supported. As test
+#' statistic for the bootstrap test we use twice the difference in best
+#' (=lowest) objective function value, i.e. 2 * (`val_0` - `val_1`). The factor
+#' 2 does not matter but it becomes reminiscent of a likelihood ratio test
+#' statistic albeit the objective function is not a negative log-likelihood in
+#' all cases (e.g. it is the negative of the maximum product spacing metric for
+#' the MPSE-method).
 #'
-#' High values of this difference speak against the null-model (i.e. high `val_0` indicates bad fit under 0-model and low values of `val_1` indicate a good fit under the more general model1.
-#' The test is implemented as a parametric bootstrap test, i.e. we
+#' High values of this difference speak against the null model (i.e., high
+#' `val_0` indicates bad fit under the null model0 and/or low values of `val_1`
+#' indicate a good fit under the more general model1. The test is implemented as
+#' a parametric bootstrap test, i.e., we
 #'
-#' 1. take given null-model fit as ground truth
-#' 2. regenerate data according to this model.
+#' 1. take the given null-model fit as ground truth
+#' 2. regenerate data according to this model fit
 #' 3. recalculate the test statistic
 #' 4. appraise the observed test statistic in light of the generated distribution under H0
 #'
@@ -635,17 +641,19 @@ test_GOF <- function(delayFit, method = c("moran", "pearson", "nikulin", "NRR"),
 #' @param ties character. How to handle ties in data vector of a group?
 #' @param type character. Which type of tests to perform?
 #' @param doLogrank logical. Do also non-parametric logrank tests?
-#' @param doGOF logical. Do we also do the GOF-tests here?
+#' @param doGOF logical. Do also the GOF-tests?
 #' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param chiSqApprox logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
-#' @return list with the results of the test. Element P contains the different P-values, for instance from parametric bootstrap
+#' @return list with the results of the test. Element P contains the different
+#'   P-values, for instance from parametric bootstrap
 #' @export
-test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c("exponential", "weibull"), twoPhase = FALSE,
-                      method = c("MPSE", "MLEn", "MLEw", "MLEc"), profiled = method != "MPSE",
+test_diff <- function(x, y = stop("Provide data for group y!"),
+                      distribution = c("exponential", "weibull"), twoPhase = FALSE,
+                      method = c("MPSE", "MLEw", "MLEc", "MLEn"), profiled = method != "MPSE",
                       ties = c("density", "equispaced", "error"),
                       param = "delay1",
-                      type = c("all", "bootstrap", "GOF", "moran", "pearson", "LRT"),
+                      type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LRT"),
                       doLogrank = TRUE, doGOF = TRUE,
                       R = 400,
                       chiSqApprox = FALSE, verbose = 0) {
@@ -674,7 +682,8 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   ties <- match.arg(arg = ties)
 
   if (method != "MPSE" && doGOF && type %in% c("moran", "pearson", "GOF")) {
-    warning("Goodness-of-fit (GOF) tests are only supported with MPSE currently!", call. = FALSE)
+    warning("Goodness-of-fit (GOF) tests are only supported with MPSE currently!",
+            call. = FALSE)
     return(invisible(NULL))
   }
 
@@ -699,7 +708,9 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   unNmbrdIdx <- !endsWith(param, suffix = "1") & !endsWith(param, suffix = "2")
   if (any(unNmbrdIdx)) {
     param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
-    if (verbose > 0L) cat("The unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n")
+    if (verbose > 0L) {
+      cat("The unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n")
+    }
   }
 
   # retain only valid names in canonical order
@@ -710,8 +721,9 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
          call. = FALSE)
   }
 
-  # bitmask for test types: start all negative
-  testMask <- rlang::set_names(logical(5L), nm = c('bootstrap', 'pearson', 'moran', 'logrank', 'LRT'))
+  # bitmask for test types: start all FALSE
+  testMask <- rlang::set_names(logical(5L),
+                               nm = c("bootstrap", "pearson", "moran", "logrank", "LRT"))
 
   switch(EXPR = type,
          all = {
@@ -721,13 +733,15 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
          # bootstrap + log-rank-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLRT=?!
          bootstrap = { testMask["bootstrap"] <- TRUE },
          GOF = {testMask[c("pearson", "moran")] <- method == "MPSE" && doGOF},
-         moran = {testMask["moran"] <- method == "MPSE" && doGOF},
          pearson = {testMask["pearson"] <- method == "MPSE" && doGOF},
+         moran = {testMask["moran"] <- method == "MPSE" && doGOF},
+         logrank = {doLogrank <- TRUE}, #do only logrank tests, see below
          LRT = {testMask["LRT"] <- TRUE}, #likelihood ratio test
+
          stop("This type of test is not supported!", call. = FALSE)
   )
 
-  # separate switch for logrank flag
+  # separate switch for additionally doing logrank tests
   testMask["logrank"] <- doLogrank
 
   if (!any(testMask)) {
@@ -805,7 +819,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
       if (any(coefs[startsWith(names(coefs), "shape")] > 7.1)) {
         if (verbose > 0) {
-          warning("Weibull fit with very high shape parameter > 7.1 rejected", call. = FALSE)
+          warning("Weibull fit with very high shape parameter (>7.1) rejected", call. = FALSE)
         }
         return(invisible(NULL))
       }#fi
@@ -822,11 +836,14 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
          fit0 = fit0, fit1 = fit1)
   }#fn testStat
 
+
   # observed test statistic
   ts_obs <- testStat(x, y, strict = TRUE)
-  if (is.null(ts_obs) || !is.list(ts_obs) || !is.numeric(ts_obs[["val"]]) || ts_obs[["val"]] < -TOL_NUM) {
-    stop("Delay model failed for restricted null-model or free full model", call. = FALSE)
-  }
+  if (is.null(ts_obs) || !is.list(ts_obs) || !is.numeric(ts_obs[["val"]]) ||
+      ts_obs[["val"]] < -TOL_NUM) {
+    stop("Delay model failed for restricted null-model or free full model",
+         call. = FALSE)
+  }#fi
 
   fit0 <- ts_obs[["fit0"]] # restricted (bind=)
   fit1 <- ts_obs[["fit1"]] # unrestricted
@@ -842,18 +859,18 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
   # spacings-based GOF-test
   GOF_mo0 <- GOF_mo1 <- NULL
-  if (testMask[['moran']]) {
-    GOF_mo0 <- test_GOF(delayFit = fit0, method = 'moran')
-    GOF_mo1 <- test_GOF(delayFit = fit1, method = 'moran')
+  if (testMask[["moran"]]) {
+    GOF_mo0 <- test_GOF(delayFit = fit0, method = "moran")
+    GOF_mo1 <- test_GOF(delayFit = fit1, method = "moran")
     #if (verbose > 0L) cat("Moran test stat for fit0: ", GOF_mo0$statistic, "\n")
   }
 
   # Pearson GOF-test based on Chi-square distribution.
   # under H0, expect counts according to uniform distribution
   GOF_pears0 <- GOF_pears1 <- NULL
-  if (testMask[['pearson']]) {
-    GOF_pears0 <- test_GOF(delayFit = fit0, method = 'pearson')
-    GOF_pears1 <- test_GOF(delayFit = fit1, method = 'pearson')
+  if (testMask[["pearson"]]) {
+    GOF_pears0 <- test_GOF(delayFit = fit0, method = "pearson")
+    GOF_pears1 <- test_GOF(delayFit = fit1, method = "pearson")
   }
 
   P_LRT <- NULL
@@ -863,7 +880,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   }
 
   t0_dist <- P_boot <- chisq_df_hat <- NULL
-  if (testMask[['bootstrap']]) {
+  if (testMask[["bootstrap"]]) {
     # parametric bootstrap:
     # generate R samples (x, y) by random sampling from the fitted H0-model (e.g. common delay through bind=),
     #+where all nuisance parameters are at their fitted value
@@ -879,6 +896,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
 
     retL <- 1L+(verbose>0L)
     t0_dist <- future.apply::future_vapply(X = seq_len(R),
+                                           FUN.VALUE = double(retL),
                                            FUN = function(dummy) {
 
                                              # generate new data according to given fitted null-model
@@ -895,7 +913,6 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
                                              }
 
                                            },
-                                           FUN.VALUE = double(retL),
                                            future.packages = c("incubate", "purrr", "rlang"),
                                            future.seed = TRUE,
                                            future.globals = TRUE #c("retL", "distO", "ranFunArgsX", "ranFunArgsY", "testStat", "delay_model", "MLEw_approx"),
@@ -921,10 +938,13 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
     }#fi
 
     # keep P-value from bootstrap only when at least half the nominal simulation runs have succeeded
-    if (length(t0_dist) >= (R+1)/2+1) {
+    if (length(t0_dist) >= (R+1)/2 + 1) {
       P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist)+1L)
+    } else {
+        warning("Bootstrap failed as less than half of the simulations succeeded!",
+                call. = FALSE)
     }
-  } # bootstrap
+  }#fi bootstrap
 
 
   # Log-rank tests
@@ -932,13 +952,14 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
   if (testMask[["logrank"]]) {
     # data in long format
     dat_2gr <- tibble::tibble(evtime = if (isSurv) c(x,y) else Surv(c(x,y)),
-                              group = rep.int(c("x", "y"), times = c(length(x), length(y))))
+                              group = rep.int(c("x", "y"),
+                                              times = c(length(x), length(y))))
     P_logrank <- stats::pchisq(q = survival::survdiff(evtime ~ group, rho = 0, data = dat_2gr)$chisq,
                                df = 1L, lower.tail = FALSE)
     # Peto & Peto modified Gehan-Wilcoxon test
     P_logrank_pp <- stats::pchisq(q = survival::survdiff(evtime ~ group, rho = 1, data = dat_2gr)$chisq,
                                   df = 1L, lower.tail = FALSE)
-  }
+  }#fi logrank
 
 
   structure(
@@ -948,7 +969,7 @@ test_diff <- function(x, y = stop("Provide data for group y!"), distribution = c
       #fit0 = fit0, fit1 = fit1, # debug only?!
       t_obs = ts_obs[["val"]],
       testDist = t0_dist,
-      R = if (testMask[['bootstrap']]) length(t0_dist),
+      R = if (testMask[["bootstrap"]]) length(t0_dist),
       chisq_df_hat = chisq_df_hat,
       param = param,
       # save only non-NULL p-values
@@ -1034,12 +1055,13 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #'
 #' Note that this second modus (when `n` is estimated) is computationally quite
 #' heavy. The iterative search for `n` uses some heuristics and the estimated
-#' sample size might actually give a slightly different power-level.
+#' sample size might actually give a slightly different power level.
 #' Hence, it is important to check the stated power in the output. The search
-#' algorithm comes to results closer to the power aimed at when the admissible
-#' range for sample size (`nRange=`) is chosen sensibly. In case the estimated
-#' sample size and the achieved power is too high it might pay off to rerun the
-#' function with an adapted admissible range.
+#' algorithm comes to better results when the admissible
+#' range for sample size (`nRange=`) is chosen sensibly and not too wide.
+#' In case the estimated sample size and the achieved power is too high it might
+#' pay off to rerun the function with an adapted admissible range for the sample
+#' size by giving a narrower range in `nRange=`.
 #'
 #' @param distribution character. Which assumed distribution is used for the
 #'   power calculation.
@@ -1051,7 +1073,9 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #' @param param character. Parameter name(s) which are to be tested for
 #'   difference and for which to simulate the power. Default value is
 #'   `'delay1'`.
-#' @param test character. Which test to use for this power estimation? E.g. LRT
+#' @param test character. Which test to use for this power estimation? E.g.,
+#'   bootstrap, LRT or logrank_pp.
+#' @param method character. Which method in case of parametric test.
 #' @param n integer. Number of observations per group for the power simulation
 #'   or `NULL` when n is to be estimated for a given power.
 #' @param power numeric. `NULL` when power is to be estimated for a given sample
@@ -1066,15 +1090,17 @@ plot.incubate_test <- function(x, y, title, subtitle, ...){
 #'   P-value for each simulation round. A value of around `R=200` gives a
 #'   resolution of 0.5% which might be enough for power analysis.
 #' @param nRange integer. Admissible range for sample size when power is
-#'   pre-specified and sample size is requested.
+#'   pre-specified and sample size is requested. The routine might not find the
+#'   optimal sample size when this range is set too wide.
 #' @param verbose numeric. How many details are requested? Higher value means
 #'   more details. 0=off, no details.
 #' @return List of results of power simulation. Or `NULL` in case of errors.
 #' @export
 power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FALSE, param = "delay1",
-                       test = c('bootstrap', 'pearson', 'moran', 'logrank', 'logrank_pp', "LRT"),
+                       test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LRT"),
+                       method = c("MPSE", "MLEw", "MLEc", "MLEn"),
                        eff = stop("Provide parameters for both groups that reflect the effect!"),
-                       n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 201,
+                       n = NULL, r = 1, sig.level = 0.05, power = NULL, nPowerSim = 1600, R = 200,
                        nRange = c(5, 250), verbose=0) {
 
   TOL_POW <- sqrt(TOL_NUM)
@@ -1082,8 +1108,13 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
   distO <- buildDist(distribution)
   #if (!missing(test)) test <- tolower(test)
   test <- match.arg(arg = test)
+  method <- match.arg(arg = method)
+  stopifnot(length(test) == 1, nzchar(test))
   # category: e.g. test name w/o _pp suffix
   test_cat <- sub(pattern = "[_].+$", replacement = "", x = test, fixed = FALSE)
+  if (test_cat != test) {
+    stopifnot(startsWith(test, prefix = "logrank"))
+  }#fi
   ranFun <- distO$random
   onames <- distO$param(twoPhase = twoPhase, twoGroup = FALSE, transformed = FALSE)
 
@@ -1109,15 +1140,17 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
 
   stopifnot(is.null(n) || (is.numeric(n) && length(n) == 1L && is.finite(n)))
   stopifnot(is.null(power) || (is.numeric(power) && length(power) == 1L && power > 0L && power < 1L))
-  if (is.null(n) + is.null(power) != 1L) {
+  if (!xor(is.null(n), is.null(power))) {
     stop('Either set `n=NULL` or `power=NULL`!', call. = FALSE)
   }
 
-  stopifnot(length(sig.level) == 1L, is.numeric(sig.level), is.finite(sig.level), sig.level > 0L, sig.level < 1L)
+  stopifnot(length(sig.level) == 1L, is.numeric(sig.level), is.finite(sig.level),
+            sig.level > 0L, sig.level < 1L)
   stopifnot(is.numeric(r), length(r) == 1L, r > 0L)
-  stopifnot(length(nPowerSim) == 1L, is.numeric(nPowerSim), nPowerSim >= 3L)
-  stopifnot(length(R) == 1L, is.numeric(R), R >= 3L)
-  stopifnot(length(nRange) == 2L, is.numeric(nRange), nRange[[1L]] > 1L, nRange[[2L]] > nRange[[1L]])
+  stopifnot(length(nPowerSim) == 1L, is.numeric(nPowerSim), nPowerSim >= 5L)
+  stopifnot(length(R) == 1L, is.numeric(R), R >= 5L)
+  stopifnot(length(nRange) == 2L, is.numeric(nRange),
+            nRange[[1L]] > 1L, nRange[[2L]] > nRange[[1L]])
   nPowerSim <- ceiling(nPowerSim)
   R <- ceiling(R)
 
@@ -1131,12 +1164,15 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
   pary <- rlang::set_names(pary, onames)
 
 
+  # @param B number of simulations to estimate power
+  # @param R number of bootstrap samples for testing difference (only used for bootstrap test)
   simulatePower <- function(nx, ny, B = nPowerSim, R) {
     nx <- ceiling(nx)
     ny <- ceiling(ny)
 
     # repeatedly test for difference in parameter on bootstrapped data
-    P_dist <- future.apply::future_vapply(X = seq_len(B), FUN.VALUE = double(1L),
+    P_dist <- future.apply::future_vapply(X = seq_len(B),
+                                          FUN.VALUE = double(1L),
                                           FUN = function(dummy) {
                                             # generate data according to chosen model
                                             #+and with the specified effect
@@ -1145,7 +1181,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
 
                                             P_val <- NA_real_
                                             try(expr = {
-                                              P_val <- purrr::pluck(test_diff(x = datx, y = daty, method = "MPSE",
+                                              P_val <- purrr::pluck(test_diff(x = datx, y = daty, method = method,
                                                                               distribution = distO, twoPhase = twoPhase,
                                                                               param = param, type = test_cat, R = R),
                                                                     "P", test, .default = NA_real_)
@@ -1179,7 +1215,7 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
 
   if (is.null(power)) {
 
-    # easy case: estimate power once, from given n
+    # easy case: estimate power once, for given n
     nx <- ceiling(n)
     ny <- ceiling(r * n)
     if (nx < length(onames) || ny < length(onames)) {
@@ -1194,25 +1230,24 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
     # estimate n for specified power
     stopifnot(is.null(n))
 
-    Bmax1 <- 200L
-    Rmax1 <- 100L
-    B1 <- min(Bmax1, nPowerSim)
-    R1 <- min(Rmax1, R)
+    # quick first screening round
+    B1 <- min(200L, nPowerSim)
+    R1 <- min(100L, R)
     i2 <- -1L
 
     # 1st iteration
     nx_cand1 <- unique(ceiling(seq.int(from = nRange[[1L]], to = nRange[[2L]], length.out = 5L)))
     NBR_CAND1 <- length(nx_cand1)
-    pow_cand1 <- rep_len(-1, length.out = NBR_CAND1)
 
     # if single n remains, return the power for it (no search for n necessary)
     if (NBR_CAND1 == 1L) {
-      return(power_diff(distribution, twoPhase = twoPhase, param, test = test, eff,
-                        n = nx_cand1[[1L]], power = NULL,
+      return(power_diff(distribution, twoPhase = twoPhase, param,
+                        test = test, method = method,
+                        eff, n = nx_cand1[[1L]], power = NULL,
                         r = r, sig.level = sig.level, nPowerSim = nPowerSim, R = R))
-    }
+    }#fi
 
-
+    pow_cand1 <- rep_len(-1, length.out = NBR_CAND1)
     for (i1 in seq_along(nx_cand1)) {
       nxc <- nx_cand1[[i1]]
       pow_cand1[[i1]] <- simulatePower(nx = nxc, ny = nxc * r, B = B1, R = R1)
@@ -1228,19 +1263,22 @@ power_diff <- function(distribution = c("exponential", "weibull"), twoPhase = FA
       iter = 1L, B = B1, R = R1)
 
     if (NROW(powerGrid) <= 1L) {
-      stop("Failed to find power estimates within specified range!", call. = FALSE)
-    }
+      stop("Failed to find power estimates within specified range!",
+           call. = FALSE)
+    }#fi
 
     REFINE <- TRUE #NROW(powerGrid) >= 2L
 
     # check first iteration
     if (i1 == 1L) {
-      warning('Smallest allowed n already exceeds requested power!', call. = FALSE)
+      warning("Smallest allowed n already exceeds requested power!",
+              call. = FALSE)
       REFINE <- FALSE
     }
 
     # check last iteration
-    if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 && pow_cand1[[NBR_CAND1]] < power - TOL_POW) {
+    if (i1 == NBR_CAND1 && pow_cand1[[NBR_CAND1]] > -1 &&
+        pow_cand1[[NBR_CAND1]] < power - TOL_POW) {
       warning(glue("Failed to reach requested power with maximally allowed n: ",
                    " {nx_cand1[[NBR_CAND1]]} yields a power of {as_percent(pow_cand1[[NBR_CAND1]])}."),
               call. = FALSE)

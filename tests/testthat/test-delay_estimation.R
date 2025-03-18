@@ -424,21 +424,44 @@ test_that("Censored response", {
 
   library("survival", quietly = TRUE)
 
-  # early right censorings can lead to negative obs_c => which explodes in log()
-  # stems from
-  # rweib_delayed(n=17, delay1=5, shape1 = 1.2, scale1=2.3, cens=.35)
-  xr <- Surv(c(5.30, 5.67, 5.74, 5.77, 5.83, 6.13, 6.28, 6.61, 6.89,
-               7.03, 7.23, 7.94, 8.13, 9.89, 10.84, 11.50, 15.19),
-             event = c(0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1))
+  local({
+    # early right censorings can lead to negative obs_c => which explodes in log()
+    # data stem from rweib_delayed(n=17, delay1=5, shape1 = 1.2, scale1=2.3, cens=.35)
+    xr <- Surv(c(5.30, 5.67, 5.74, 5.77, 5.83, 6.13, 6.28, 6.61, 6.89,
+                 7.03, 7.23, 7.94, 8.13, 9.89, 10.84, 11.50, 15.19),
+               event = c(0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1))
 
-  # no warning about log(neg. value)
-  expect_no_warning(object = {
-    fmr <- delay_model(x = xr, distribution = "weibu", method = "MLEw")
-  }, message = "NaN")
-  expect_s3_class(fmr, class = "incubate_fit")
-  expect_identical(fmr$nobs, expected = c(x=17, y=0))
-  # delay estimate is somewhat close to original value of MC-sim
-  expect_equal(coef(fmr)[[1]], expected = 5, tolerance = .15)
+    expect_s3_class(xr, "Surv")
+    # no warning about log(neg. value)
+    expect_no_warning(object = {
+      fmr <- delay_model(x = xr, distribution = "weibu", method = "MLEw")
+    }, message = "NaN")
+    expect_s3_class(fmr, class = "incubate_fit")
+    expect_identical(fmr$nobs, expected = c(x=17, y=0))
+    # delay estimate is somewhat close to original value of MC-sim
+    expect_equal(coef(fmr)[[1]], expected = 5, tolerance = .15)
+  })
+
+  local({
+    # from MC-study for estimation with MLEw
+    # Weibull, delay=50, scale=10, shape=.5, cens=.3 (run='6591')
+    # leads to huge scale estimate: is this problematic/a bug?
+    xr <- structure(c(50.01537038, 50.02035397, 50.26236779,
+                      50.76028195, 51.63941942, 51.9748065, 53.18645016,
+                      54.19293334, 54.97244851, 57.83978461, 59.27425993,
+                      71.64327435, 139.5760608, 166.6492835, 167.1776227,
+                      1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0),
+                    dim = c(15L, 2L),
+                    dimnames = list(NULL, c("time", "status")),
+                    type = "right", class = "Surv")
+    expect_s3_class(xr, "Surv")
+    expect_no_warning(object = {
+      fmr <- delay_model(x = xr, distribution = "weibu", method = "MLEw")
+    }, message = NULL)
+    # true delay = 50
+    expect_equal(coef(fmr)[[1]], expected = 50, tolerance = 1e2)
+  })
+
 })
 
 
