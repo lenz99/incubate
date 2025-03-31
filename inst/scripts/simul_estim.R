@@ -10,7 +10,8 @@ library("incubate")
 version_inc <- packageVersion("incubate")
 # minimal version check:
 # v1.3.0.9084 fix likelihood for data with right-censored observations (mkuhn, 2025-01-20)
-stopifnot(version_inc >= "1.3.0.9084")
+# v1.3.0.9092 fix in rexp_delayed and rweib_delayed with cens= (mkuhn, 2025-03-31)
+stopifnot(version_inc >= "1.3.0.9092")
 cat('(incubate v', toString(version_inc), ')\n', sep = "")
 
 library("tibble")
@@ -30,7 +31,7 @@ NOW <- Sys.time()
 DATETIME_TAG <- format(NOW, format = "%Y-%m-%d-%Hh%Mm%Ss")
 # base name for output file
 OUTPUT_BASENAME <- paste0("simRes_estim_", DATETIME_TAG)
-DELAY_V <- 50
+DELAY_V <- 300
 
 SEED_DEFAULT <- paste0(as.integer(TODAY), format(NOW, format = "%H%M")) |>
   as.integer()
@@ -118,13 +119,16 @@ if (mySeed > 0L) {
 nVctr <- if (myN > 0) {
   myN
 } else {
-  c(11, 15, 20, 50) ## 100  8, 12, 20, 75
+  # sample sizes from Cousineau: 8, 16, 32
+  c(8, 16, 32, 50) #10, 15, 20, 50) ## 100  8, 12, 20, 75
 }
 
 simSetting <- tidyr::expand_grid(nObs = nVctr,
                                  delay = DELAY_V,
-                                 scale = c(5, 10), #c(1, 2, 5),
-                                 shape = c(.5, 1, 2),
+                                 #scale as nuisance parameter
+                                 scale = 100, #c(5, 10), #c(1, 2, 5),
+                                 #shape from cousienau
+                                 shape = c(.5, 1, 1.5, 2, 2.5),
                                  #cens = 0: all observed (=no censoring)
                                  cens = c(0, 0.1, 0.2, 0.3)
 )

@@ -389,6 +389,6 @@ test_that("Censored random samples from delayed distributions", {
                              FUN = mean)
   purrr::walk(.x = seq_len(NROW(sDFAgg)),
               .f = \(idx) expect_equal(sDFAgg$censDiff[idx], expected = 0,
-                                       tolerance = sDFAgg$cens[idx]/2))
+                                       tolerance = sDFAgg$cens[idx]/3))
   #sDFAgg$cens[i]/17 + exp(-(sDFAgg$shape1[i]*7.1))
 })
