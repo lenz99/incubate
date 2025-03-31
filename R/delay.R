@@ -363,27 +363,34 @@ mexp_delayed <- function(t=+Inf, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = N
 #' * `scale` (as inverse of rate)
 #'
 #' @details
-#' Additional arguments are forwarded via `...` to the underlying functions of the exponential distribution in the stats-package.
+#' Additional arguments are forwarded via `...` to the underlying functions of
+#' the exponential distribution in the stats-package.
 #'
-#' The numerical arguments other than `n` are recycled to the length of the result. Only the first elements of the logical arguments are used.
+#' The numerical arguments other than `n` are recycled to the length of the
+#' result. Only the first elements of the logical arguments are used.
 #'
 #' @param x A numeric vector of values for which to get the density.
 #' @param q A numeric vector of quantile values.
-#' @param t A numeric vector of times that restrict the mean survival. Default is `+Inf`, i.e., the unrestricted mean survival time.
+#' @param t A numeric vector of times that restrict the mean survival. Default
+#'   is `+Inf`, i.e., the unrestricted mean survival time.
 #' @param p A numeric vector of probabilities.
 #' @param n integer. Number of random observations requested.
 #' @param delay1 numeric. The first delay, must be non-negative.
 #' @param shape1 numeric. First shape parameter, must be positive.
-#' @param scale1 numeric. First scale parameter (inverse of rate), must be positive.
+#' @param scale1 numeric. First scale parameter (inverse of rate), must be
+#'   positive.
 #' @param delay numeric. Alias for first delay.
 #' @param shape numeric. Alias for first shape.
 #' @param scale numeric. Alias for first scale.
 #' @param delay2 numeric. The second delay, must be non-negative.
 #' @param shape2 numeric. The second shape parameter, must be non-negative.
-#' @param scale2 numeric. The second scale parameter (inverse of rate), must be positive.
+#' @param scale2 numeric. The second scale parameter (inverse of rate), must be
+#'   positive.
 #' @param log logical. Return value on log-scale?
 #' @param lower.tail logical. Give cumulative probability of lower tail?
-#' @param log.p logical. P-value on log-sclae?
+#' @param log.p logical. P-value on log-scale?
+#' @param cens numeric. Proportion of random right-censored observations. For
+#'   small values of shape1, on average fewer censorings are achieved.
 #' @return Functions pertaining to the delayed Weibull distribution:
 #' * `dweib_delayed` gives the density
 #' * `pweib_delayed` gives the vector of cumulative probabilities or the gradient matrix (nbr parameters x quantile times)
@@ -652,13 +659,16 @@ rweib_delayed <- function(n, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
     if (near(cens, 0)) {
       return(evTime)
     } else {
-      # independent uniform censoring process U(alpha, Z)
+      # independent uniform censoring process U(delay1, Z)
       #+where Z is chosen as to give expected proportion of right-censoring
       # with shape1 minute the upper bound of the uniform support explodes and hence few censorings
-      #+little bias upward for shape1 parameter helps to prop up censoring level in these cases
-      censTime <- stats::runif(n = n,
-                               min = delay1,
-                               max = delay1 + scale1/(cens * shape1) * gamma(1/shape1))
+      #+correct upward for small shape1 parameter helps to prop up censoring level in these cases
+      censTime <- local({
+        shape1B <- max(0.25, if (shape1 < 1) sqrt(shape1) else shape1)
+        stats::runif(n = n,
+                     min = delay1,
+                     max = delay1 + scale1/(cens * shape1B) * gamma(1/shape1B))
+      })
       censIdx <- which(censTime < evTime)
 
       # result: element-wise minimum of both processes

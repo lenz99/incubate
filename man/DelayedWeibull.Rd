@@ -88,13 +88,15 @@ mweib_delayed(
 
 \item{shape1}{numeric. First shape parameter, must be positive.}
 
-\item{scale1}{numeric. First scale parameter (inverse of rate), must be positive.}
+\item{scale1}{numeric. First scale parameter (inverse of rate), must be
+positive.}
 
 \item{delay2}{numeric. The second delay, must be non-negative.}
 
 \item{shape2}{numeric. The second shape parameter, must be non-negative.}
 
-\item{scale2}{numeric. The second scale parameter (inverse of rate), must be positive.}
+\item{scale2}{numeric. The second scale parameter (inverse of rate), must be
+positive.}
 
 \item{delay}{numeric. Alias for first delay.}
 
@@ -108,13 +110,17 @@ mweib_delayed(
 
 \item{lower.tail}{logical. Give cumulative probability of lower tail?}
 
-\item{log.p}{logical. P-value on log-sclae?}
+\item{log.p}{logical. P-value on log-scale?}
 
 \item{p}{A numeric vector of probabilities.}
 
 \item{n}{integer. Number of random observations requested.}
 
-\item{t}{A numeric vector of times that restrict the mean survival. Default is \code{+Inf}, i.e., the unrestricted mean survival time.}
+\item{cens}{numeric. Proportion of random right-censored observations. For
+small values of shape1, on average fewer censorings are achieved.}
+
+\item{t}{A numeric vector of times that restrict the mean survival. Default
+is \code{+Inf}, i.e., the unrestricted mean survival time.}
 }
 \value{
 Functions pertaining to the delayed Weibull distribution:
@@ -137,8 +143,10 @@ Besides the additional parameter \code{delay}, the other two Weibull-parameters 
 }
 }
 \details{
-Additional arguments are forwarded via \code{...} to the underlying functions of the exponential distribution in the stats-package.
+Additional arguments are forwarded via \code{...} to the underlying functions of
+the exponential distribution in the stats-package.
 
-The numerical arguments other than \code{n} are recycled to the length of the result. Only the first elements of the logical arguments are used.
+The numerical arguments other than \code{n} are recycled to the length of the
+result. Only the first elements of the logical arguments are used.
 }
 \keyword{distribution}
