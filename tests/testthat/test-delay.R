@@ -298,11 +298,13 @@ test_that("Partial derivatives of CDF of delayed distribution", {
 
 
 test_that("Censored random samples from delayed distributions", {
-  set.seed(12345)
-  settingsDF <- expand.grid(delay1 = c(0, 2, 5, 10, 25), rate1 = c(0.001, .5, 1, 2, 5), cens = c(0, .1, .2, .3))
+  set.seed(2025-03-28)
+  settingsDF <- expand.grid(delay1 = c(0, 2, 5, 10, 25, 50, 75, 100),
+                            rate1 = c(0.001, .5, 1, 2, 5),
+                            cens = c(0, .05, .1, .15, .2, .25, .3, .35, .4, .5))
   settingsDF$censObs <- purrr::pmap_dbl(.l = settingsDF,
                                         .f = function(...) {
-                                          ds <- rexp_delayed(n = 13500, ...)
+                                          ds <- rexp_delayed(n = 15510, ...)
                                           if (survival::is.Surv(ds)) {
                                             1L - sum(ds[,2]) / length(ds)
                                           } else {
@@ -310,18 +312,36 @@ test_that("Censored random samples from delayed distributions", {
                                             0
                                           }
                                         })
-  settingsDF$censDiff <- settingsDF$cens - settingsDF$censObs
+  # diff = bias, deviation from expected target value
+  #+neg diff means too few censorings
+  settingsDF$censDiff <- settingsDF$censObs - settingsDF$cens
 
-  # all random draws with cens=0 have no observed censorings
-  expect_identical(settingsDF[settingsDF$cens == 0, "censObs"], expected = rep_len(0, length.out = sum(settingsDF$cens == 0)))
-  sDFAgg <- stats::aggregate(settingsDF, by = censDiff ~ rate1 + cens, FUN = mean)
-  for (i in seq_len(NROW(sDFAgg))) {
-    expect_equal(sDFAgg$censDiff[i], expected = 0, tolerance = sDFAgg$cens[i]/20)
-  }
+  # check: none of the random draws with cens=0 has observed censorings
+  idxZer0 <- which(settingsDF$cens == 0)
+  expect_gt(length(idxZer0), 0)
+  expect_identical(settingsDF[idxZer0, "censObs"],
+                   expected = rlang::rep_along(idxZer0, 0))
+  # #viz:
+  # ggplot(settingsDF |> filter(cens > 0), aes(x = cens, y = censDiff, shape = factor(rate1), col = ordered(rate1))) +
+  #   geom_smooth(se=F, method = "lm", formula = y~poly(x,2), linewidth = 0.5, linetype = "dashed") +
+  #   geom_jitter(width = .015, height = 0) +
+  #   labs(col = "Rate", shape = "Rate", y = "Cens Prop Bias")
+
+
+  sDFAgg <- stats::aggregate(settingsDF,
+                             by = censDiff ~ rate1 + cens,
+                             FUN = mean)
+  purrr::walk(.x = seq_len(NROW(sDFAgg)),
+              .f = \(idx) expect_equal(sDFAgg$censDiff[idx],
+                                       expected = 0,
+                                       tolerance = .001 + sDFAgg$cens[idx]^2/3))
 
 
   # Weibull with censorings
-  settingsDF <- expand.grid(delay1 = c(0, 2, 5, 10, 25), shape1 = c(0.1, 0.25, .5, 1, 2), scale1 = c(.1, .5, 1, 5), cens = c(0, .1, .2, .3))
+  settingsDF <- expand.grid(delay1 = c(0, 2, 5, 10, 25, 50, 100),
+                            shape1 = c(0.1, 0.25, .5, 1, 2),
+                            scale1 = c(.1, .5, 1, 5),
+                            cens = c(0, .1, .2, .3))
   settingsDF$censObs <- purrr::pmap_dbl(.l = settingsDF,
                                         .f = function(...) {
                                           ds <- rweib_delayed(n = 17500, ...)
@@ -332,14 +352,29 @@ test_that("Censored random samples from delayed distributions", {
                                             0
                                           }
                                         })
-  # deviation from expected censoring proportion
-  settingsDF$censDiff <- settingsDF$cens - settingsDF$censObs
+  # diff = bias, deviation from expected target value
+  #+neg diff means too few censorings
+  settingsDF$censDiff <- settingsDF$censObs - settingsDF$cens
+  #viz:
+  # ggplot(settingsDF, aes(x = cens, y = censDiff, shape = factor(scale1), col = ordered(scale1))) +
+  #   geom_smooth(se=F, method = "lm", formula = y~x+0, linewidth = 0.5, linetype = "dashed") +
+  #   geom_jitter(width = .015, height = 0) +
+  #   labs(col = "Shape", shape = "Shape", y = "Cens Prop Bias") + facet_wrap(vars(shape1))
 
-  # all random draws with cens=0 have no observed censorings
-  expect_identical(settingsDF[settingsDF$cens == 0, "censObs"], expected = rep_len(0, length.out = sum(settingsDF$cens == 0)))
+  # none of the random draws with cens=0 has observed censorings
+  idxZer0 <- which(settingsDF$cens == 0)
+  expect_gt(length(idxZer0), 0)
+  expect_identical(settingsDF[idxZer0, "censObs"],
+                   expected = rlang::rep_along(idxZer0, 0))
 
-  sDFAgg <- stats::aggregate(settingsDF, by = censDiff ~ shape1 + scale1 + cens, FUN = mean)
+  sDFAgg <- stats::aggregate(settingsDF,
+                             by = censDiff ~ shape1 + scale1 + cens,
+                             FUN = mean)
+  purrr::walk(.x = seq_len(NROW(sDFAgg)),
+              .f = \(idx) expect_equal(sDFAgg$censDiff[idx], expected = 0,
+                                       tolerance = sDFAgg$cens[idx]/5))
   for (i in seq_len(NROW(sDFAgg))) {
-    expect_equal(sDFAgg$censDiff[i], expected = 0, tolerance = sDFAgg$cens[i]/17 + exp(-(sDFAgg$shape1[i]*7.1)))
-  }
+    expect_equal(sDFAgg$censDiff[i], expected = 0,
+                 tolerance = sDFAgg$cens[i]/17 + exp(-(sDFAgg$shape1[i]*7.1)))
+  }#rof
 })

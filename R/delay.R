@@ -207,30 +207,67 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 
   stopifnot(all(is.finite(delay1), is.finite(rate1)))
 
+  stopifnot(is.numeric(n))
+  n <- if (length(n) > 1) {
+    length(n)
+  } else {
+    trunc(n)
+  }
+  if (n == 0) {
+    return(numeric(0L))
+  }
+  stopifnot(length(n) == 1, n > 0)
+
   if (!is.numeric(cens) || length(cens) > 1L) {
-    stop("cens= is expected proportion of right censored observations!", call. = FALSE)
+    stop("cens= is expected proportion of right censored observations!",
+         call. = FALSE)
   }
 
   if (!is.finite(cens) || cens >= 1 || cens < 0) {
-    stop("cens= argument invalid!", call. = FALSE)
+    stop("cens= argument is invalid!",
+         call. = FALSE)
   }
 
   # single phase
   # check for easy case: only a single delay
   if (is.null(delay2)) {
     if (!is.null(rate2)) {
-      warning("Argument rate2= is ignored, as argument delay2= is not set.", call. = FALSE)
+      warning("Argument rate2= is ignored, as argument delay2= is not set.",
+              call. = FALSE)
     }
 
     evTime <- delay1 + stats::rexp(n = n, rate = rate1)
     if (near(cens, 0)) {
       return(evTime)
     } else {
-      # independent uniform censoring process U(0, Z) where Z is chosen as to give expected proportion of right-censoring
-      censTime <- stats::runif(n = n, max = (delay1 + 1/rate1)/cens)
+      # independent uniform censoring process U(delay1, Z) where Z is chosen
+      #+as to give expected proportion of right-censoring
+      censTime <- stats::runif(n = n,
+                               min = delay1,
+                               max = delay1 + 1/(rate1 * cens))
+      censIdx <- which(censTime < evTime)
+
+      # result: element-wise minimum of both processes
+      res <- evTime
       evStatus <- rep_len(1, length.out = n)
-      evStatus[which(censTime < evTime)] <- 0
-      return(Surv(evTime, event = evStatus, type = "right"))
+
+      # avoid having too many censorings by chance
+      if (length(censIdx) > 0) {
+        maxNbrCens <- if (cens == 1) {
+          n
+        } else {
+          min(n-1, round(n * cens, digits = 0))
+        }
+        maxNbrCens <- max(1, maxNbrCens)
+        maxNbrCens <- min(maxNbrCens, length(censIdx))
+        censIdx <- censIdx[seq_len(maxNbrCens)]
+
+        #res <- pmin.int(evTime, censTime)
+        res[censIdx] <- censTime[censIdx]
+        evStatus[censIdx] <- 0
+      }#fi
+
+      return(Surv(res, event = evStatus, type = "right"))
     }
   }
 
@@ -250,19 +287,23 @@ rexp_delayed <- function(n, delay1 = 0, rate1 = 1, delay2 = NULL, rate2 = NULL, 
 
   # check delay constraint
   if (delay1 >= delay2) {
-    stop("First delay phase must antedate the second delay phase!", call. = FALSE)
+    stop("First delay phase must antedate the second delay phase!",
+         call. = FALSE)
   }
 
   if (is.null(rate2)) {
-    stop("Argument rate2= is null but a finite numeric argument is needed!", call. = FALSE)
+    stop("Argument rate2= is null but a finite numeric argument is needed!",
+         call. = FALSE)
   }
 
   if (!is.finite(delay2) || !is.finite(rate2)) {
-    stop("Please provide finite numeric arguments for delay2= and rate2=!")
+    stop("Please provide finite numeric arguments for delay2= and rate2=!",
+         call. = FALSE)
   }
 
   if (is.list(cens) || !near(cens, 0)) {
-    stop("Censoring is not supported for two-phase exponential with delay.", call. = FALSE)
+    stop("Censoring is not supported for two-phase exponential with delay.",
+         call. = FALSE)
   }
 
   # check if rate changes noticeably
@@ -556,11 +597,40 @@ qweib_delayed <- function(p, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
 #' @export
 rweib_delayed <- function(n, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 = NULL, scale2 = 1,
                           delay = delay1, shape = shape1, scale = scale1, cens = 0) {
-  if (!missing(delay)) if (missing(delay1)) delay1 <- delay else warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
-  if (!missing(shape)) if (missing(shape1)) shape1 <- shape else warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
-  if (!missing(scale)) if (missing(scale1)) scale1 <- scale else warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
+  if (!missing(delay)) {
+    if (missing(delay1)) {
+      delay1 <- delay
+    } else {
+      warning("Argument delay= is ignored as delay1= is given!", call. = FALSE)
+    }
+  }
+  if (!missing(shape)) {
+    if (missing(shape1)) {
+      shape1 <- shape
+    } else {
+      warning("Argument shape= is ignored as shape1= is given!", call. = FALSE)
+    }
+  }
+  if (!missing(scale)) {
+    if (missing(scale1)) {
+      scale1 <- scale
+    } else {
+      warning("Argument scale= is ignored as scale1= is given!", call. = FALSE)
+    }
+  }
 
   stopifnot(all(is.finite(delay1), is.finite(shape1), is.finite(scale1)))
+
+  stopifnot(is.numeric(n))
+  n <- if (length(n) > 1) {
+    length(n)
+  } else {
+    trunc(n)
+  }
+  if (n == 0) {
+    return(numeric(0L))
+  }
+  stopifnot(length(n) == 1, n > 0)
 
 
   if (!is.numeric(cens) || length(cens) > 1L) {
@@ -582,13 +652,37 @@ rweib_delayed <- function(n, delay1, shape1, scale1 = 1, delay2 = NULL, shape2 =
     if (near(cens, 0)) {
       return(evTime)
     } else {
-      # independent uniform censoring process U(0, Z) where Z is chosen as to give expected proportion of right-censoring
+      # independent uniform censoring process U(alpha, Z)
+      #+where Z is chosen as to give expected proportion of right-censoring
       # with shape1 minute the upper bound of the uniform support explodes and hence few censorings
       #+little bias upward for shape1 parameter helps to prop up censoring level in these cases
-      censTime <- stats::runif(n = n, max = (delay1 + scale1/max(.05, shape1) * gamma(1/max(.05, shape1)))/cens)
+      censTime <- stats::runif(n = n,
+                               min = delay1,
+                               max = delay1 + scale1/(cens * shape1) * gamma(1/shape1))
+      censIdx <- which(censTime < evTime)
+
+      # result: element-wise minimum of both processes
+      res <- evTime
       evStatus <- rep_len(1, length.out = n)
-      evStatus[which(censTime < evTime)] <- 0
-      return(Surv(evTime, event = evStatus, type = "right"))
+
+      # avoid having too many censorings by chance
+      if (length(censIdx) > 0) {
+        maxNbrCens <- if (cens == 1) {
+          n
+        } else {
+          min(n-1, round(n * cens, digits = 0))
+        }
+        maxNbrCens <- max(1, maxNbrCens)
+        maxNbrCens <- min(maxNbrCens, length(censIdx))
+        censIdx <- censIdx[seq_len(maxNbrCens)]
+
+        #res <- pmin.int(evTime, censTime)
+        res[censIdx] <- censTime[censIdx]
+        evStatus[censIdx] <- 0
+      }#fi
+
+
+      return(Surv(res, event = evStatus, type = "right"))
     }
 
   }

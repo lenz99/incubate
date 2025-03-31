@@ -257,38 +257,67 @@ ggplot() + xlim(0, 7) +
 
 
 ## Implementing random right censoring
-The functions for random generation of data `rexp_delayed()` and `rweib_delayed()`
-have an option to produce data under a random right censoring scheme.
-Currently, only random right censoring under a uniform censoring distribution is supported.
-The censoring process $C$ is independent of the event process $X$.
-You provide the desired expected proportion of right censoring π via parameter `cens=`.
-This information determines the upper limit `Z` for the censoring process `U(0,Z)`.
-The expected proportion of censorings is $P(C<X)$. Due to the independence we get
+The functions for random generation of data `rexp_delayed()` and
+`rweib_delayed()` have an option to produce right censored data. Currently, we
+implement random right censoring under a **uniform censoring scheme**, starting
+after the initial delay phase.^[Question is if we allow $C$ to occur during the
+incubation period. If yes and there is a long delay then we will see many
+censored observations during the incubation period which might be odd.
+Therefore, we decided to model the censoring process as $C \sim U(α, Z)$.] The
+censoring process $C$ is independent of the event process $X$. The observed time
+is $\min(X,C)$ and it is an event if and only if $X≤C$, i.e., when the event
+"makes it" before the censoring happens.
+
+You provide the desired expected proportion of right censoring π via parameter
+`cens=`. This information determines the upper limit `Z` for the censoring
+process `U(α,Z)`. The expected proportion of censorings π is $P(C<X)$. 
+We compute this probability as an integral of the density, we start integrating
+after the initial delay.
 \[
 \begin{equation*}
 \begin{split}
-P(C<X) &= ∫_0^∞ ∫_0^x f_{X,C}(x,c)dc dx = ∫_0^∞ ∫_0^x f_X(x) f_C(c) dc dx\\
-  &= ∫_0^∞ f_X(x) · \Big(∫_0^x f_C(c) dc\Big) dx = ∫_0^∞ f_X(x) · F_C(x) dx
+π = P(C<X) &= ∫_α^∞ ∫_α^x f_{X,C}(x,c)dc dx\\
+  &= ∫_α^∞ ∫_α^x f_X(x) f_C(c) dc dx \qquad \text{ (independence) }\\
+  &= ∫_α^∞ f_X(x) · \Big(∫_α^x f_C(c) dc\Big) dx\\
+  &= ∫_α^∞ f_X(x) · F_C(x) dx
 \end{split}
 \end{equation*}
 \]
 
-For a uniform censoring process with lower bound 0 and upper bound $Z$
-we have $F_C(x) = \frac{x-0}{Z-0} = \frac{x}{Z}$.
+For a uniform censoring process with lower bound α and upper bound $Z$
+we have $F_C(x) = \frac{x-α}{Z-α}$.
+<!-- \frac{x}{Z}$. -->
+We make sure to never exceed the specified proportion of right censorings.
+
 
 ### Exponential
-Substituting the density $f_X(x) = 𝟙_{x≥α} · λ \exp(-λ·(x-α))$ and using integration by parts
-we can solve for $Z$:
+Substituting the density $f_X(x) = 𝟙_{x≥α} · λ \exp(-λ·(x-α))$ and using
+integration by parts:
 \[
-π = P(C<X) = \frac{α + λ^{-1}}{Z} \qquad ⇔ \qquad Z = \frac{α + λ^{-1}}{π}
+\begin{equation*}
+\begin{split}
+π = P(C<X) &= ∫_α^∞ f_X(x) · F_C(x) dx\\
+  &= ∫_α^∞ λ \exp(-λ·(x-α)) \frac{x-α}{Z-α} dx\\
+  &= ∫_0^∞ λ \exp(-λ·t) \frac{t}{Z-α} dt\\
+  &= \frac{1}{Z-α} · \Big\{ [-\exp(-λ·t) t]_{t=0}^{t=\infty} - ∫_0^∞ -\exp(-λ·t) dt  \Big\}\\
+  &= \frac{1}{Z-α} · \Big\{ [0-0] + ∫_0^∞ \exp(-λ·t) dt  \Big\}\\
+  &= \frac{1}{Z-α} · \Big[ -\frac{1}{λ} \exp(-λ·t) \Big]_{t=0}^{t=\infty}\\
+  &= \frac{1}{λ (Z-α)}
+\end{split}
+\end{equation*}
 \]
 
-As an example, to draw a random sample from a delayed exponential that on average has 30% right censorings,
-we can use the following call:
+We can solve for $Z$:
+\[
+π λ (Z-α) = 1 \qquad ⇔ \qquad Z-α = \frac{1}{π λ} \qquad ⇔ \qquad Z = α + \frac{1}{πλ}
+\]
+
+As an example, to draw a random sample from a delayed exponential that (on
+average) has 30% right censorings, we can use the following call:
 ```{r}
 #| label: rcens_exp_exmpl
 
-(x <- rexp_delayed(n = 20, delay1 = 3, rate1 = .2, cens = .3))
+(x <- rexp_delayed(n = 24, delay1 = 5, rate1 = .2, cens = .3))
 class(x)
 sum(x[,2] == 0)/length(x)
 ```
@@ -303,9 +332,48 @@ $∫_0^∞ \exp(-a · x^b) dx = \frac{1}{b} a^{-1/b} · Γ(\frac{1}{b})$
 for $a=1$ and $b=k$, the shape parameter,
 we get
 \[
-π = P(C<X) = \frac{α + \frac{σ}{k}·Γ(\frac{1}{k})}{Z} \qquad ⇔ \qquad Z = \frac{α + \frac{σ}{k}·Γ(\frac{1}{k})}{π}
+\begin{equation*}
+\begin{split}
+π = P(C<X) &= ∫_α^∞ f_X(x) · F_C(x) dx\\
+  &= ∫_α^∞ \frac{k}{σ} · (\frac{x-α}{σ})^{k-1} \exp(-(\frac{x-α}{σ})^k) \frac{x-α}{Z-α} dx\\
+  &= ∫_0^∞ \frac{k}{σ} · (\frac{t}{σ})^{k-1} \exp(-(\frac{t}{σ})^k) \frac{t}{Z-α} dt\\
+  &= \frac{k}{σ(Z-α)} · ∫_0^∞ t · \frac{k}{σ} · (\frac{t}{σ})^{k-1} \exp(-(\frac{t}{σ})^k) dt\\
+  &= \frac{k}{σ(Z-α)} · \Big\{ [-t · \frac{σ}{k} · \exp(-(\frac{t}{σ})^k)]_{t=0}^{t=\infty} - ∫_0^∞ -\frac{σ}{k} · \exp(-(\frac{t}{σ})^k) dt  \Big\}\\
+  &= \frac{k}{σ(Z-α)} · \Big\{ [0 - 0] + \frac{σ}{k} ∫_0^∞ \exp(-(\frac{t}{σ})^k) dt \Big\}\\
+  &= \frac{1}{Z-α} · ∫_0^∞ \exp(-(\frac{t}{σ})^k) dt\\
+  &= \frac{σ}{Z-α} · ∫_0^∞ \exp(-u^k) du\\
+  &= \frac{σ}{Z-α} · \frac{1}{k} · Γ(\frac{1}{k})
+\end{split}
+\end{equation*}
 \]
 
+We can solve for $Z$:
+\[
+π · (Z-α) = σ · \frac{1}{k} · Γ(\frac{1}{k}) \qquad ⇔ \qquad
+Z = α + \frac{σ}{π k} · Γ(\frac{1}{k})
+%%% Z = \frac{α + \frac{σ}{k}·Γ(\frac{1}{k})}{π}
+\]
+
+
+As an example, to draw a random sample from a delayed Weibull with different
+shape parameters that (on average) has 30% right censorings, we can use the
+following call:
+```{r}
+#| label: rcens_weibu_exmpl
+#| fig.width: 7
+#| fig.height: 4
+
+(x1 <- rweib_delayed(n = 24, delay1 = 5, scale1 = 3.5, shape1 = 1.7, cens = .3))
+class(x1)
+sum(x1[,2] == 0) / length(x1)
+
+(x2 <- rweib_delayed(n = 24, delay1 = 5, scale1 = 3.5, shape1 = .4, cens = .3))
+sum(x2[,2] == 0) / length(x2)
+
+survival::survfit(c(x1, x2) ~ rep(c("x1","x2"), each = 24)) |> 
+  plot(mark.time=T, conf.int=F, lty = 1:2, col = 1:2)
+  
+```
 
 ## MLEc
 Corrected MLE (MLEc) was proposed by Cheng and Iles (1987). It uses the normal likelihood except for the first observation that is instrumental for the delay estimation. For the first observation MLEc uses the difference in cumulative distribution function between the first two observations.
