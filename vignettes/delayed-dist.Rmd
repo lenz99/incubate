@@ -32,12 +32,12 @@ are the foundational data models in the `incubate`-package.
 
 
 ## Three-parameter Weibull
-The classical 2-parameter Weibull distribution has shape parameter $k>0$ and scale parameter $β>0$.
+The classical 2-parameter Weibull distribution has shape parameter $γ>0$ and scale parameter $β>0$.
 As additional third parameter we use delay $α>0$ and then, density (PDF) and cumulative distribution function (CDF) read, for any $x>0$:
 \[
 \begin{align*}
-f(x) &= \frac{k· (x-α)^{k-1}}{β^k} · \exp(-\big(\frac{x-α}{β}\big)^k)\\
-F(x) &= 1 - \exp(-\big(\frac{x-α}{β}\big)^k) \qquad \text{for } x > α \text{ and 0 otherwise}
+f(x) &= \frac{γ· (x-α)^{γ-1}}{β^γ} · \exp(-\big(\frac{x-α}{β}\big)^γ)\\
+F(x) &= 1 - \exp(-\big(\frac{x-α}{β}\big)^γ) \qquad \text{for } x > α \text{ and 0 otherwise}
 \end{align*}
 \]
 
@@ -45,7 +45,7 @@ If we have a data sample $\mathbf{x}$ of size $n$ and want to apply **maximum
 likelihood (ML)** estimation for parameters we get as log-likelihood function
 
 \[
-l_\mathbf{x}(α, k, β) = n \log(k) - nk \log(β) + (k-1) · ∑_{i=1}^n \log(x_i-α) - β^{-k} · ∑_{i=1}^n (x_i - α)^k
+l_\mathbf{x}(α, γ, β) = n \log(γ) - nγ \log(β) + (γ-1) · ∑_{i=1}^n \log(x_i-α) - β^{-γ} · ∑_{i=1}^n (x_i - α)^γ
 \]
 
 In the presence of **right-censored observations**, the log-likelihood function changes as well.
@@ -58,47 +58,48 @@ Assume, we have in total $n=n_e + n_r$ observations, where
 <!-- labelled as $x_{r_1}, ..., x_{r_{n_r}}$. -->
 
 \begin{multline*}
-l_\mathbf{x}(α, k, β) = n_e \log(k) - n_e k \log(β) + (k-1) · ∑_{i ∈ O} \log(x_i-α) - β^{-k} · ∑_{i ∈ O} (x_i - α)^k\\
-- β^{-k} · ∑_{r ∈ R} (x_r - α)^k
+l_\mathbf{x}(α, γ, β) = n_e \log(γ) - n_e γ \log(β) + (γ-1) · ∑_{i ∈ O} \log(x_i-α) - β^{-γ} · ∑_{i ∈ O} (x_i - α)^γ\\
+- β^{-γ} · ∑_{r ∈ R} (x_r - α)^γ
 \end{multline*}
 
 This simplifies to
 \[
-l_\mathbf{x}(α, k, β) = n_e \log(k) - n_e k \log(β) + (k-1) · ∑_{i ∈ O} \log(x_i-α) - β^{-k} · ∑_{i=1}^n (x_i - α)^k
+l_\mathbf{x}(α, γ, β) = n_e \log(γ) - n_e γ \log(β) + (γ-1) · ∑_{i ∈ O} \log(x_i-α) - β^{-γ} · ∑_{i=1}^n (x_i - α)^γ
 \]
 
 
 One can directly go to (numerically) maximize this log-likelihood function.
 Cousineau (2009) calls this the **iterative approach**.
 
+
 ### Profiling scale parameter β
 We are able to profile out the scale parameter estimate $\hat β$:
-the candidate value for a local extremum with respect to scale β is found be
-taking the 1^st^ derivative and equating to zer0:
+the candidate value for a local extremum with respect to scale β is found
+by taking the 1^st^ derivative and equating to 0:
 \[
-\frac{\partial l}{\partial β}(α, k, β) = -\frac{nk}{β} + k β^{-k-1} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0
+\frac{\partial l}{\partial β}(α, γ, β) = -\frac{nγ}{β} + γ β^{-γ-1} · ∑_{i=1}^n (x_i - α)^γ \overset{!}{=}0
 \]
-Hence (as $k>0$), it must hold
-$-n + β^{-k} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0$
+Hence (as $γ>0$), it must hold
+$-n + β^{-γ} · ∑_{i=1}^n (x_i - α)^γ \overset{!}{=}0$
 and further simplifying,
-$\hat β = \sqrt[k]{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k}$.
+$\hat β = \sqrt[γ]{\frac{1}{n} ∑_{i=1}^n (x_i - α)^γ}$.
 
 With **right-censored observations** present in the data, the result is
 similar:
 
 \[
-\frac{\partial l}{\partial β}(α, k, β) = -\frac{n_e k}{β} + k β^{-k-1} · ∑_{i=1}^n (x_i - α)^k
+\frac{\partial l}{\partial β}(α, γ, β) = -\frac{n_e γ}{β} + γ β^{-γ-1} · ∑_{i=1}^n (x_i - α)^γ
 \overset{!}{=}0
 \]
-Hence (as $k>0$), it must hold
-$-n_e + β^{-k} · ∑_{i=1}^n (x_i - α)^k \overset{!}{=}0$.
+Hence (as $γ>0$), it must hold
+$-n_e + β^{-γ} · ∑_{i=1}^n (x_i - α)^γ \overset{!}{=}0$.
 The solution is
-$\hat β = \sqrt[k]{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k}$, we divide by
+$\hat β = \sqrt[γ]{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^γ}$, we divide by
 the number of events $n_e$ only but we sum over all $x_i$ (observed and
 right-censored).
 
-The only problem is when we have right-censorings earlier than the estimated
-delay α, then we potentially get negative contriubtions to the radicand. It
+The only problem is when we have right-censorings earlier than the (estimated)
+delay α, then we potentially get negative contributions to the radicand. It
 seems appropriate to set these terms to zero.
 
 
@@ -107,20 +108,20 @@ If we substitute the β-estimate into the log-likelihood equation we get a
 simplified function to maximize.
 \[
 \begin{align}
-l^P_{\mathbf{x}}(α, k) &= n \log(k) - n \log(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k) + (k-1) · ∑_{i=1}^n \log(x_i-α) - n\\
-   &= n · \Big[ \log(k) - \log\big(\frac{1}{n} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · \frac{1}{n} ∑_{i=1}^n \log(x_i-α) - 1\Big]
+l^P_{\mathbf{x}}(α, γ) &= n \log(γ) - n \log(\frac{1}{n} ∑_{i=1}^n (x_i - α)^γ) + (γ-1) · ∑_{i=1}^n \log(x_i-α) - n\\
+   &= n · \Big[ \log(γ) - \log\big(\frac{1}{n} ∑_{i=1}^n (x_i - α)^γ\big) + (γ-1) · \frac{1}{n} ∑_{i=1}^n \log(x_i-α) - 1\Big]
 \end{align}
 \]
 
 In the presence of **right-censored observations**, the equation for
-$l^P_{\mathbf{x}}(α, k)$ is similar but different. We have to use the number of
+$l^P_{\mathbf{x}}(α, γ)$ is similar but different. We have to use the number of
 observed event $n_e$ (instead of $n$) in most cases.
-\[
-\begin{align}
-l^P_{\mathbf{x}}(α, k) &= n_e \log(k) - n_e \log\big(\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · ∑_{i∈O} \log(x_i-α) - n_e\\
-   &= n_e · \Big[ \log(k) - \log\big(\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k\big) + (k-1) · \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) - 1\Big]
-\end{align}
-\]
+
+\begin{align*}
+l^P_{\mathbf{x}}(α, γ) &= n_e \log(γ) - n_e \log\big(\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^γ\big) + (γ-1) · ∑_{i∈O} \log(x_i-α) - n_e\\
+   &= n_e · \Big[ \log(γ) - \log\big(\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^γ\big) + (γ-1) · \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) - 1 \Big]
+\end{align*}
+
 The right-censored observations occur both in the simplified log-likelihood as
 well as in the scale parameter estimate $\hat β$.
 
@@ -132,43 +133,42 @@ the **two step approach** (as opposed to the non-profiled iterative approach
 above).
 
 
-Forming the partial derivatives of $l^P(α, k)$ we get:
+Forming the partial derivatives of $l^P(α, γ)$ we get:
 \[
 \begin{aligned}
-\frac{\partial l^P}{\partial α}(α, k) &= n · \Big[ \frac{\frac{1}{n} ∑_{i=1}^n k (x_i - α)^{k-1}}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
-  &= k · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} - (k-1) · ∑_{i=1}^n \frac{1}{x_i-α}\\
-\frac{\partial l^P}{\partial k}(α, k) &= n · \Big[ \frac{1}{k} - \frac{\frac{1}{n} ∑_i \log(x_i-α) · (x_i-α)^k}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]\\
-  &= \frac{n}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^k} + ∑_{i=1}^n \log(x_i-α)
+\frac{\partial l^P}{\partial α}(α, γ) &= n · \Big[ \frac{\frac{1}{n} ∑_{i=1}^n γ (x_i - α)^{γ-1}}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^γ} - (γ-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
+  &= γ · \frac{∑_{i=1}^n (x_i - α)^{γ-1}}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^γ} - (γ-1) · ∑_{i=1}^n \frac{1}{x_i-α}\\
+\frac{\partial l^P}{\partial γ}(α, γ) &= n · \Big[ \frac{1}{γ} - \frac{\frac{1}{n} ∑_i \log(x_i-α) · (x_i-α)^γ}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^γ} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]\\
+  &= \frac{n}{γ} - \frac{∑_i \log(x_i-α) · (x_i-α)^γ}{\frac{1}{n} ∑_{i=1}^n (x_i - α)^γ} + ∑_{i=1}^n \log(x_i-α)
 \end{aligned}
 \]
 
 
 In the presence of **right-censored observations**, the derivatives become:
-\[
-\begin{aligned}
-\frac{\partial l^P}{\partial α}(α, k) &= n_e · \Big[ \frac{\frac{1}{n_e} ∑_{i=1}^n k (x_i - α)^{k-1}}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n_e} ∑_{i∈O} \frac{1}{x_i-α}\Big]\\
-  &= k · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{\frac{1}{n_e}∑_{i=1}^n (x_i - α)^k} - (k-1) · ∑_{i∈O} \frac{1}{x_i-α}\\
-\frac{\partial l^P}{\partial k}(α, k) &= n_e · \Big[ \frac{1}{k} - \frac{\frac{1}{n_e} ∑_{i=1}^n \log(x_i-α) · (x_i-α)^k}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k} + \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) \Big]\\
-  &= \frac{n_e}{k} - \frac{∑_{i=1}^n\log(x_i-α) · (x_i-α)^k}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^k} + ∑_{i∈O} \log(x_i-α)
-\end{aligned}
-\]
+
+\begin{align*}
+\frac{\partial l^P}{\partial α}(α, γ) &= n_e · \Big[ \frac{\frac{1}{n_e} ∑_{i=1}^n γ (x_i - α)^{γ-1}}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^γ} - (γ-1) · \frac{1}{n_e} ∑_{i∈O} \frac{1}{x_i-α}\Big]\\
+  &= γ · \frac{∑_{i=1}^n (x_i - α)^{γ-1}}{\frac{1}{n_e}∑_{i=1}^n (x_i - α)^γ} - (γ-1) · ∑_{i∈O} \frac{1}{x_i-α}\\
+\frac{\partial l^P}{\partial γ}(α, γ) &= n_e · \Big[ \frac{1}{γ} - \frac{\frac{1}{n_e} ∑_{i=1}^n \log(x_i-α) · (x_i-α)^γ}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^γ} + \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) \Big]\\
+  &= \frac{n_e}{γ} - \frac{∑_{i=1}^n\log(x_i-α) · (x_i-α)^γ}{\frac{1}{n_e} ∑_{i=1}^n (x_i - α)^γ} + ∑_{i∈O} \log(x_i-α)
+\end{align*}
 
 
-### Local extrema candidates
-Setting these two partial derivatives to zer0 we get equations for candidate
-solutions of local extrema:
+### Score equations: local extrema candidates
+Setting these two partial derivatives to 0 we get the **score equations** that
+lead to candidate points for local extrema:
 
 * from delay α
-\[
-\begin{aligned}
-\frac{k}{k-1} · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α} &= 0\\
-\frac{k}{k-1} - \frac{1}{n} \big(∑_{i=1}^n \frac{1}{x_i-α}\big) · \frac{∑_{i=1}^n (x_i - α)^k}{∑_{i=1}^n (x_i - α)^{k-1}} &= 0
-\end{aligned}
-\]
 
-* from shape $k$
+\begin{align*}
+\frac{γ}{γ-1} · \frac{∑_{i=1}^n (x_i - α)^{γ-1}}{∑_{i=1}^n (x_i - α)^γ} - \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α} &= 0\\
+\frac{γ}{γ-1} - \frac{1}{n} \big(∑_{i=1}^n \frac{1}{x_i-α}\big) · \frac{∑_{i=1}^n (x_i - α)^γ}{∑_{i=1}^n (x_i - α)^{γ-1}} &= 0
+\end{align*}
+
+
+* from shape $γ>0$
 \[
-\frac{1}{k} - \frac{∑_{i=1}^n \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) = 0
+\frac{1}{γ} - \frac{∑_{i=1}^n \log(x_i-α) · (x_i-α)^γ}{∑_{i=1}^n (x_i - α)^γ} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) = 0
 \]
 
 
@@ -176,12 +176,12 @@ In the presence of **right-censored observations**, the solution equations are:
 
 * from delay α
 \[
-\frac{k}{k-1} - \frac{1}{n_e} \big(∑_{i∈O} \frac{1}{x_i-α}\big) · \frac{∑_{i=1}^n (x_i - α)^k}{∑_{i=1}^n (x_i - α)^{k-1}} = 0
+\frac{γ}{γ-1} - \frac{1}{n_e} \big(∑_{i∈O} \frac{1}{x_i-α}\big) · \frac{∑_{i=1}^n (x_i - α)^γ}{∑_{i=1}^n (x_i - α)^{γ-1}} = 0
 \]
 
-* from shape $k$
+* from shape $γ>0$
 \[
-\frac{1}{k} - \frac{∑_{i=1}^n \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) = 0
+\frac{1}{γ} - \frac{∑_{i=1}^n \log(x_i-α) · (x_i-α)^γ}{∑_{i=1}^n (x_i - α)^γ} + \frac{1}{n_e} ∑_{i∈O} \log(x_i-α) = 0
 \]
 
 
@@ -189,26 +189,26 @@ In the presence of **right-censored observations**, the solution equations are:
 Cousineau (2009) proposes a slightly varied equation to solve for the parameter
 estimates. The scale parameter β gets estimated using a weighting factor $W_1$,
 \[
-\hat β = \sqrt[k]{\frac{1}{n} ∑_{i=1}^n \frac{(x_i - α)^k}{W_1}}
+\hat β = \sqrt[γ]{\frac{1}{n} ∑_{i=1}^n \frac{(x_i - α)^γ}{W_1}}
 \]
 
 For the remaining parameters, we modify the partial derivatives equations of the
 profiled log-likelihood function. It appears to come from the following
 partial derivatives of a modified log-likelihood function, where $W_1$, $W_2$
-and $W_3(k)$ are seen as weights that depend on sample size $n$.
+and $W_3(γ)$ are seen as weights that depend on sample size $n$.
 <!-- XXX Not 100% sure, though! Re-think here! -->
 Actually, these weights are random variables that ultimately depend on the true
-parameter α and $k$ but we treat $W_1$ and $W_2$ as fixed for given $n$ and we
-model $W_3$ as function of shape $k$ for given $n$.
+parameter α and $γ$ but we treat $W_1$ and $W_2$ as fixed for given $n$ and we
+model $W_3$ as function of shape $γ$ for given $n$.
 
 \[
 \begin{aligned}
-\frac{\partial l_w^{P}}{\partial α}(α, k) &= n · \Big[ W_3(k) · (k-1) · \frac{∑_{i=1}^n (x_i - α)^{k-1}}{∑_{i=1}^n (x_i - α)^k} - (k-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
-\frac{\partial l_w^{P}}{\partial k}(α, k) &= n · \Big[ \frac{W_2}{k} - \frac{∑_i \log(x_i-α) · (x_i-α)^k}{∑_{i=1}^n (x_i - α)^k} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]
+\frac{\partial l_w^{P}}{\partial α}(α, γ) &= n · \Big[ W_3(γ) · (γ-1) · \frac{∑_{i=1}^n (x_i - α)^{γ-1}}{∑_{i=1}^n (x_i - α)^γ} - (γ-1) · \frac{1}{n} ∑_{i=1}^n \frac{1}{x_i-α}\Big]\\
+\frac{\partial l_w^{P}}{\partial γ}(α, γ) &= n · \Big[ \frac{W_2}{γ} - \frac{∑_i \log(x_i-α) · (x_i-α)^γ}{∑_{i=1}^n (x_i - α)^γ} + \frac{1}{n} ∑_{i=1}^n \log(x_i-α) \Big]
 \end{aligned}
 \]
 
-Compared to the MLE-equations (partial derivative equation for delay), we see that $W_3(k)$ takes the role of $\frac{k}{k-1}$.
+Compared to the MLE-equations (partial derivative equation for delay), we see that $W_3(γ)$ takes the role of $\frac{γ}{γ-1}$.
 
 
 
@@ -325,33 +325,33 @@ sum(x[,2] == 0)/length(x)
 
 ### Weibull
 The density of delayed Weibull is
-$f_X(x) = 𝟙_{x≥α} · \frac{k}{σ} · (\frac{x-α}{σ})^{k-1} \exp(-(\frac{x-α}{σ})^k)$
-with shape parameter $k$ and scale parameter $σ$.
+$f_X(x) = 𝟙_{x≥α} · \frac{γ}{σ} · (\frac{x-α}{σ})^{γ-1} \exp(-(\frac{x-α}{σ})^γ)$
+with shape parameter $γ$ and scale parameter $σ$.
 Then, using integration by parts and using
 $∫_0^∞ \exp(-a · x^b) dx = \frac{1}{b} a^{-1/b} · Γ(\frac{1}{b})$
-for $a=1$ and $b=k$, the shape parameter,
+for $a=1$ and $b=γ$, the shape parameter,
 we get
 \[
 \begin{equation*}
 \begin{split}
 π = P(C<X) &= ∫_α^∞ f_X(x) · F_C(x) dx\\
-  &= ∫_α^∞ \frac{k}{σ} · (\frac{x-α}{σ})^{k-1} \exp(-(\frac{x-α}{σ})^k) \frac{x-α}{Z-α} dx\\
-  &= ∫_0^∞ \frac{k}{σ} · (\frac{t}{σ})^{k-1} \exp(-(\frac{t}{σ})^k) \frac{t}{Z-α} dt\\
-  &= \frac{k}{σ(Z-α)} · ∫_0^∞ t · \frac{k}{σ} · (\frac{t}{σ})^{k-1} \exp(-(\frac{t}{σ})^k) dt\\
-  &= \frac{k}{σ(Z-α)} · \Big\{ [-t · \frac{σ}{k} · \exp(-(\frac{t}{σ})^k)]_{t=0}^{t=\infty} - ∫_0^∞ -\frac{σ}{k} · \exp(-(\frac{t}{σ})^k) dt  \Big\}\\
-  &= \frac{k}{σ(Z-α)} · \Big\{ [0 - 0] + \frac{σ}{k} ∫_0^∞ \exp(-(\frac{t}{σ})^k) dt \Big\}\\
-  &= \frac{1}{Z-α} · ∫_0^∞ \exp(-(\frac{t}{σ})^k) dt\\
-  &= \frac{σ}{Z-α} · ∫_0^∞ \exp(-u^k) du\\
-  &= \frac{σ}{Z-α} · \frac{1}{k} · Γ(\frac{1}{k})
+  &= ∫_α^∞ \frac{γ}{σ} · (\frac{x-α}{σ})^{γ-1} \exp(-(\frac{x-α}{σ})^γ) \frac{x-α}{Z-α} dx\\
+  &= ∫_0^∞ \frac{γ}{σ} · (\frac{t}{σ})^{γ-1} \exp(-(\frac{t}{σ})^γ) \frac{t}{Z-α} dt\\
+  &= \frac{γ}{σ(Z-α)} · ∫_0^∞ t · \frac{γ}{σ} · (\frac{t}{σ})^{γ-1} \exp(-(\frac{t}{σ})^γ) dt\\
+  &= \frac{γ}{σ(Z-α)} · \Big\{ [-t · \frac{σ}{γ} · \exp(-(\frac{t}{σ})^γ)]_{t=0}^{t=\infty} - ∫_0^∞ -\frac{σ}{γ} · \exp(-(\frac{t}{σ})^γ) dt  \Big\}\\
+  &= \frac{γ}{σ(Z-α)} · \Big\{ [0 - 0] + \frac{σ}{γ} ∫_0^∞ \exp(-(\frac{t}{σ})^γ) dt \Big\}\\
+  &= \frac{1}{Z-α} · ∫_0^∞ \exp(-(\frac{t}{σ})^γ) dt\\
+  &= \frac{σ}{Z-α} · ∫_0^∞ \exp(-u^γ) du\\
+  &= \frac{σ}{Z-α} · \frac{1}{γ} · Γ(\frac{1}{γ})
 \end{split}
 \end{equation*}
 \]
 
 We can solve for $Z$:
 \[
-π · (Z-α) = σ · \frac{1}{k} · Γ(\frac{1}{k}) \qquad ⇔ \qquad
-Z = α + \frac{σ}{π k} · Γ(\frac{1}{k})
-%%% Z = \frac{α + \frac{σ}{k}·Γ(\frac{1}{k})}{π}
+π · (Z-α) = σ · \frac{1}{γ} · Γ(\frac{1}{γ}) \qquad ⇔ \qquad
+Z = α + \frac{σ}{π γ} · Γ(\frac{1}{γ})
+%%% Z = \frac{α + \frac{σ}{γ}·Γ(\frac{1}{γ})}{π}
 \]
 
 
@@ -381,14 +381,14 @@ The log-likelihood function becomes, using $z_i := x_i - α$,
 
 \[
 \begin{align}
-l_\mathbf{x}(α, k, β) &= \log(\exp(-(\frac{z_2}{β})^k) - \exp(-(\frac{z_1}{β})^k))
-+ (n-1) \log(k) - (n-1) k \log(β) + (k-1) · ∑_{i=2}^n \log z_i - β^{-k} · ∑_{i=2}^n z_i^k\\
-&= -(\frac{z_1}{β})^k + \log(1-\exp(-\frac{z_2^k - z_1^k}{β^k}) + (n-1) \log(k) - (n-1) k \log(β) + (k-1) · ∑_{i=2}^n \log z_i - β^{-k} · ∑_{i=2}^n z_i^k
+l_\mathbf{x}(α, γ, β) &= \log(\exp(-(\frac{z_2}{β})^γ) - \exp(-(\frac{z_1}{β})^γ))
++ (n-1) \log(γ) - (n-1) γ \log(β) + (γ-1) · ∑_{i=2}^n \log z_i - β^{-γ} · ∑_{i=2}^n z_i^γ\\
+&= -(\frac{z_1}{β})^γ + \log(1-\exp(-\frac{z_2^γ - z_1^γ}{β^γ}) + (n-1) \log(γ) - (n-1) γ \log(β) + (γ-1) · ∑_{i=2}^n \log z_i - β^{-γ} · ∑_{i=2}^n z_i^γ
 \end{align}
 \]
 We could use 1st Taylor approximation to simplify $\log(1+z) = z - \frac{z^2}{2} + \frac{z^3}{3} ∓ ... ≈ z$ for all $z$ close to zero, $|z|<1$:
 \[
-l_\mathbf{x}(α, k, β) ≈ -(\frac{z_1}{β})^k - \exp(-\frac{z_2^k - z_1^k}{β^k}) + (n-1) \log(k) - (n-1) k \log(β) + (k-1) · ∑_{i=2}^n \log z_i - β^{-k} · ∑_{i=2}^n z_i^k
+l_\mathbf{x}(α, γ, β) ≈ -(\frac{z_1}{β})^γ - \exp(-\frac{z_2^γ - z_1^γ}{β^γ}) + (n-1) \log(γ) - (n-1) γ \log(β) + (γ-1) · ∑_{i=2}^n \log z_i - β^{-γ} · ∑_{i=2}^n z_i^γ
 \]
 
 We could use partial derivatives to find local maxima of this approximate log-likelihood.
