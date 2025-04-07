@@ -1,10 +1,13 @@
 # internal MLEw weight functions
 
 
-#' internal MLEw-weights W1 function
+#' Internal MLEw-weights W1 function
 #' W1 for given sample sizes (of one group).
 #' For small `nObs` we use direct results from Monte-Carlo simulation.
-#' For higher `nObs` we use an approximation (based on Wilson-Hilferty transformation)
+#' For higher `nObs` we use an approximation (based on Wilson-Hilferty transformation).
+#'
+#' Note that in R there is the numeric routine stats::qgamma which could also be used
+#' as in `stats::qgamma(p=.5, shape = 10, rate = 10)` for n=10.
 #' @param nObs numeric. number of observations (vectorized)
 #' @returns numeric. W1-value corrsponding to nObs. Same length as nObs
 w1Fint <- function(nObs) {
@@ -32,7 +35,7 @@ w1Fint <- function(nObs) {
 }#fn w1Fint
 
 
-#' internal MLEw weight W2
+#' Internal MLEw weight W2
 #' For given sample size of one group
 #' @param nObs numeric. Sample size (vectorized)
 #' @returns W2 (same size as nObs)

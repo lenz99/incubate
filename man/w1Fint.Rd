@@ -2,10 +2,10 @@
 % Please edit documentation in R/internal_stuff.R
 \name{w1Fint}
 \alias{w1Fint}
-\title{internal MLEw-weights W1 function
+\title{Internal MLEw-weights W1 function
 W1 for given sample sizes (of one group).
 For small \code{nObs} we use direct results from Monte-Carlo simulation.
-For higher \code{nObs} we use an approximation (based on Wilson-Hilferty transformation)}
+For higher \code{nObs} we use an approximation (based on Wilson-Hilferty transformation).}
 \usage{
 w1Fint(nObs)
 }
@@ -16,8 +16,6 @@ w1Fint(nObs)
 numeric. W1-value corrsponding to nObs. Same length as nObs
 }
 \description{
-internal MLEw-weights W1 function
-W1 for given sample sizes (of one group).
-For small \code{nObs} we use direct results from Monte-Carlo simulation.
-For higher \code{nObs} we use an approximation (based on Wilson-Hilferty transformation)
+Note that in R there is the numeric routine stats::qgamma which could also be used
+as in \code{stats::qgamma(p=.5, shape = 10, rate = 10)} for n=10.
 }

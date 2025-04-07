@@ -4,7 +4,7 @@
 #
 # simulate median weights W1, W2 and W3
 # for the weighed MLE approach (Cousineau, 2009)
-# results are stored as list in "MLEw_mcs.rds"
+# results are stored as list in "MLEw_mcs.rds" in the current directory
 ####
 
 # init -----
@@ -124,7 +124,7 @@ stopifnot(is.function(aggFun), "na.rm" %in% formalArgs(aggFun))
 message("Start simulation for W1")
 
 # when 3-param Weibull holds then the mean of z values (where z is Exp(1)) are
-# gamma-distributed with parameter shape n and scale 1/n
+# gamma-distributed with parameter shape n and scale 1/n (=rate n)
 # hence, the mean of W1 is 1 (independently of n)
 W1_mcs <- furrr::future_map_dbl(.x = rlang::set_names(nObs_vctr),
                                 .f = ~ aggFun(stats::rgamma(n=myMCNrep, shape = .x, scale = 1/.x)),

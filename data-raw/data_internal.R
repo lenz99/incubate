@@ -1,8 +1,8 @@
 # mkuhn, 2023-04-11
-# adds MLE-weights table as internal data to package
+# adds MLE-weights table as internal data to package as list 'MLEw_approx'
 #
 # the MLE-weights are established through a Monte-Carlo simulation (MCS),
-# see inst/scripts/simul_MLEweights.R
+# see inst/scripts/simul_MLEweights.R which produces 'MLEw_mcs.rds'
 # Here, we build approximating function based on this MCS.
 # Code to explore which are good/best approximations W1, W2 and W3 are in scratch/MLEw_weights2.R.
 # The package incubate makes use of these functions in MLEw_approx[["fun"]]

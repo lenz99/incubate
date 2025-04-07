@@ -2,7 +2,7 @@
 % Please edit documentation in R/internal_stuff.R
 \name{w2Fint}
 \alias{w2Fint}
-\title{internal MLEw weight W2
+\title{Internal MLEw weight W2
 For given sample size of one group}
 \usage{
 w2Fint(nObs)
@@ -14,6 +14,6 @@ w2Fint(nObs)
 W2 (same size as nObs)
 }
 \description{
-internal MLEw weight W2
+Internal MLEw weight W2
 For given sample size of one group
 }
