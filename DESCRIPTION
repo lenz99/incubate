@@ -48,7 +48,7 @@ Depends:
 Collate: 
     'cpp11.R'
     'data.R'
-    'internal_stuff.R'
+    'helper.R'
     'delay_estimation.R'
     'delay.R'
     'delay_test.R'

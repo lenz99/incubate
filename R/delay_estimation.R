@@ -1,7 +1,7 @@
 #' Make that internal_stuff.R is loaded first
 #' @keywords internal
 #' @noRd
-#' @include internal_stuff.R
+#' @include helper.R
 NULL
 
 #XXX read here

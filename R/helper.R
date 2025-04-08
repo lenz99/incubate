@@ -1,4 +1,4 @@
-# internal MLEw weight functions
+# helper functions MLEw weight functions
 
 
 #' Internal MLEw-weights W1 function
