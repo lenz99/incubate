@@ -19,7 +19,7 @@ w1Fint <- function(nObs) {
   nObs <- pmax.int(1L, nObs)
 
   # nbr of W1 simulation results we use directly
-  W1_MCsim <- MLEw_approx[["MCsim"]][["W1"]]
+  W1_MCsim <- MLEw_approx[["MCsim"]][["W1gamma"]]
 
   nObsIdx_direct <- which(nObs <= length(W1_MCsim))
   nObsIdx_approx <- which(nObs > length(W1_MCsim))

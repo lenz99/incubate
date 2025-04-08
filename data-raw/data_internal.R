@@ -33,7 +33,7 @@ stopifnot(identical(names(MLEw_mcs), c("W12","W3", "settings")),
 
 
 # for which Ns do we use direct numbers
-N_DIRECT <- 50L
+N_DIRECT <- 49L
 # check that we have all data stored for all consecutive nObs starting from 1!
 # we assume this within w1F and w2F below!
 stopifnot(NROW(MLEw_mcs$W12) > N_DIRECT, NROW(MLEw_mcs$W3) > N_DIRECT)
@@ -98,6 +98,8 @@ MLEw_approx <- list(
   # store simulation results for W1 and W2
   MCsim = MLEw_mcs$W12 |>
     dplyr::slice_head(n=N_DIRECT) |>
+    dplyr::mutate(W1gamma = stats::qgamma(p = 0.5, shape = nObs, rate = nObs),
+                  .after = W1) |>
     as.list(),
   MCsim_cousineau2009 = W_cousineau2009
 )

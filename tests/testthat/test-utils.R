@@ -1,5 +1,5 @@
 # mkuhn, 2021-10-11
-# test utility functions of this package
+# test utility/helper functions of this package
 
 test_that("MLEw weight objects", {
   # we consider the package-internal list MLEw_approx
@@ -8,7 +8,13 @@ test_that("MLEw weight objects", {
                expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
   expect_type(MLEw_approx[["MCsim"]], type = "list")
   expect_named(MLEw_approx[["MCsim"]],
-               expected = c("nObs", "W1", "W2"))
+               expected = c("nObs", "W1", "W1gamma", "W2"))
+  # simulation results are close to median of gamma distribution
+  with(MLEw_approx[["MCsim"]],
+       expect_equal(W1, W1gamma,
+                    tolerance = 1e-4)
+  )
+
   # MC results from Cousineau (2009)
   MCsim_cous09 <- MLEw_approx[["MCsim_cousineau2009"]]
   expect_type(MCsim_cous09, type = "list")
