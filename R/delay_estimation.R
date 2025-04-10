@@ -1,4 +1,4 @@
-#' Make that internal_stuff.R is loaded first
+#' Make that utils.R is loaded first
 #' @keywords internal
 #' @noRd
 #' @include utils.R

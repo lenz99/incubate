@@ -2,6 +2,8 @@
 # Utility functions used within this package
 # helper functions MLEw weight functions
 
+
+the <- rlang::new_environment() # package environment
 TOL_NUM <- sqrt(.Machine$double.eps)
 DELAY_MIN <- .Machine$double.eps #.Machine$double.xmin even smaller ##1e-9
 
@@ -289,19 +291,20 @@ w2Fint <- function(nObs) {
 }#fn w2Fint
 
 
+
 #' Internal factory method to get weight function for W3 for a given sample size
 #'
 #' Generally, the weight W3 depends on the sample size and the shape parameter.
 #' The sample size of a group is fixed. Hence, we return a function that returns
 #' W3 for provided shape parameter as argument. If the sample size was used
 #' during the Monte-Carlo simulation study the coefficients of generalized
-#' logistic curve are directly returned. Otherwise a natural cubic spline is fit
-#' is given.
+#' logistic curve are returned directly. Otherwise the coefficients stem from a
+#' natural cubic spline fit based on the MCS.
 #'
-#' We run the cubic spline fit on the fly. This guarantees that the spline
-#' function of the R-version of the current user is used. Drawback is that
-#' performance is not optimal (`w3FFint` is not pre-compiled but run by the
-#' [objFunFactory()] once per group)
+#' We run the cubic spline fit once when the package is loaded. This guarantees
+#' that the spline function of the R-version of the current user is used and
+#' hopefully with good performance. Function `w3FFint` is run repeatedly by the
+#' [objFunFactory()], once per group.
 #' @param nObs sample size for which to return the W3-function
 #' @returns W3-function for the given sample size. The function returns the W3
 #'   weight for the given shape
@@ -334,21 +337,11 @@ w3FFint <- function(nObs) {
     # nObs was not in MC-sim for W3
     # => use interpolation per Richards coefficient
     list(
-      L = stats::spline(x = W3richCoef$nObs,
-                        y = W3richCoef$L,
-                        method = "natural", xout = {nObs})$y,
-      A = stats::spline(x = W3richCoef$nObs,
-                        y = W3richCoef$A,
-                        method = "natural", xout = {nObs})$y,
-      d = stats::spline(x = W3richCoef$nObs,
-                        y = W3richCoef$d,
-                        method = "natural", xout = {nObs})$y,
-      K = stats::spline(x = W3richCoef$nObs,
-                        y = W3richCoef$K,
-                        method = "natural", xout = {nObs})$y,
-      Xi = stats::spline(x = W3richCoef$nObs,
-                         y = W3richCoef$Xi,
-                         method = "natural", xout = {nObs})$y
+      L = the$L(nObs),
+      A = the$A(nObs),
+      d = the$d(nObs),
+      K = the$K(nObs),
+      Xi = the$Xi(nObs)
     )
   }#esle
 

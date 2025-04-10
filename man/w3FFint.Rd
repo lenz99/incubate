@@ -18,12 +18,12 @@ Generally, the weight W3 depends on the sample size and the shape parameter.
 The sample size of a group is fixed. Hence, we return a function that returns
 W3 for provided shape parameter as argument. If the sample size was used
 during the Monte-Carlo simulation study the coefficients of generalized
-logistic curve are directly returned. Otherwise a natural cubic spline is fit
-is given.
+logistic curve are returned directly. Otherwise the coefficients stem from a
+natural cubic spline fit based on the MCS.
 }
 \details{
-We run the cubic spline fit on the fly. This guarantees that the spline
-function of the R-version of the current user is used. Drawback is that
-performance is not optimal (\code{w3FFint} is not pre-compiled but run by the
-\code{\link[=objFunFactory]{objFunFactory()}} once per group)
+We run the cubic spline fit once when the package is loaded. This guarantees
+that the spline function of the R-version of the current user is used and
+hopefully with good performance. Function \code{w3FFint} is run repeatedly by the
+\code{\link[=objFunFactory]{objFunFactory()}}, once per group.
 }

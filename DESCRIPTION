@@ -1,7 +1,7 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.3.0.9094
-Date: 2025-04-08
+Version: 1.3.0.9095
+Date: 2025-04-10
 Authors@R: 
     person(given = "Matthias", family = "Kuhn",
            role = c("aut", "cre", "cph"),
@@ -54,5 +54,6 @@ Collate:
     'delay_test.R'
     'incubate-package.R'
     'integration.R'
+    'zzz.R'
 VignetteBuilder: knitr
 LinkingTo: cpp11
