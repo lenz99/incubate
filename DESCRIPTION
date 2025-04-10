@@ -48,12 +48,11 @@ Depends:
 Collate: 
     'cpp11.R'
     'data.R'
-    'helper.R'
+    'utils.R'
     'delay_estimation.R'
     'delay.R'
     'delay_test.R'
     'incubate-package.R'
     'integration.R'
-    'utils.R'
 VignetteBuilder: knitr
 LinkingTo: cpp11
