@@ -209,7 +209,6 @@ test_that('(restricted) mean survival time of delayed distributions', {
 
   # restricted mean survival can never exceed the restricted time
   #+as survival curve never goes beyond 1, so integral is less than length of time-axis
-  suppressPackageStartupMessages(library("tidyr"))
   purrr::pwalk(.l = tidyr::expand_grid(tPoints, unique(settingDF[,c("delay1", "rates1")])),
                .f = ~expect_lte(mexp_delayed(t = ..1,  delay1 = ..2, rate1 = ..3),
                                 expected = ..1))

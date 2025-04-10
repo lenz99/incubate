@@ -382,7 +382,7 @@ test_that("Parameter extraction and transformation", {
 
 test_that("Handle Surv-objects", {
 
-  library("survival", quietly = TRUE)
+  expect_true(requireNamespace("survival", quietly = TRUE))
 
   # numeric, non-Surv (no ties)
   ti_x <- sort(2 + rpois(17, lambda = 5) + rnorm(17, sd = .1))
@@ -390,13 +390,13 @@ test_that("Handle Surv-objects", {
 
 
   # right-censoring
-  ti_x2 <- Surv(ti_x); ti_y2 <- Surv(ti_y)
-  ti_x2c <- Surv(ti_x, event = sample(c(1, 1, 0), size = length(ti_x), replace = TRUE))
-  ti_y2c <- Surv(ti_y, event = sample(c(1, 1, 0), size = length(ti_y), replace = TRUE))
+  ti_x2 <- survival::Surv(ti_x); ti_y2 <- Surv(ti_y)
+  ti_x2c <- survival::Surv(ti_x, event = sample(c(1, 1, 0), size = length(ti_x), replace = TRUE))
+  ti_y2c <- survival::Surv(ti_y, event = sample(c(1, 1, 0), size = length(ti_y), replace = TRUE))
 
   # interval-censoring
-  ti_x3 <- Surv(ti_x, time2=NA, event = rep_len(1, length(ti_x)), type = "interval")
-  ti_y3 <- Surv(ti_y, time2=NA, event = rep_len(1, length(ti_y)), type = "interval")
+  ti_x3 <- survival::Surv(ti_x, time2=NA, event = rep_len(1, length(ti_x)), type = "interval")
+  ti_y3 <- survival::Surv(ti_y, time2=NA, event = rep_len(1, length(ti_y)), type = "interval")
 
 
 
@@ -422,12 +422,12 @@ test_that("Handle Surv-objects", {
 
 test_that("Censored response", {
 
-  library("survival", quietly = TRUE)
+  expect_true(requireNamespace("survival", quietly = TRUE))
 
   local({
     # early right censorings can lead to negative obs_c => which explodes in log()
     # data stem from rweib_delayed(n=17, delay1=5, shape1 = 1.2, scale1=2.3, cens=.35)
-    xr <- Surv(c(5.30, 5.67, 5.74, 5.77, 5.83, 6.13, 6.28, 6.61, 6.89,
+    xr <- survival::Surv(c(5.30, 5.67, 5.74, 5.77, 5.83, 6.13, 6.28, 6.61, 6.89,
                  7.03, 7.23, 7.94, 8.13, 9.89, 10.84, 11.50, 15.19),
                event = c(0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1))
 

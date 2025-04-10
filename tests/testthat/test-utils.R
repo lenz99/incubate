@@ -119,26 +119,24 @@ test_that("Richards's generalized logistic function", {
               .f = function(nam) expect_type(MLEw_approx[["fun"]][[nam]], "closure"))
 
   myN <- sample(x = seq.int(from = 2, to = 1000), size = 1)
-  myShapes <- sample(x = seq.int(from = .05, to = 25, by = .05), size = 5)
+  # negative log shapes
+  myNLShapes <- -log(sample(x = seq.int(from = .05, to = 25, by = .05), size = 5))
   # some parameters values
-  startL <- list(A = .01,
-                 K = log1p(log(2*myN)),
-                 Q = .01 + abs(stats::rnorm(n=1, mean = 2, sd = .1)),
-                 B = .01 + abs(stats::rnorm(n=1, mean = 1.5, sd = .1)),
-                 nu = .01 + abs(stats::rnorm(n=1, mean = .75, sd = .1)))
+  startL <- list(L = .1 + stats::runif(n=1, min=-.1, max = .2),
+                 A = log1p(log(2*myN)),
+                 d = log(myN + 7),
+                 K = .5 + stats::rnorm(n=1, sd = .1),
+                 Xi = .1 + stats::rnorm(n=1, sd = .2))
 
   # test gradient function
-  all.equal(purrr::map(.x = myShapes,
-                       .f = ~numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
-                                            x = as.numeric(startL), xVal = .x)) |>
-              # convert to single matrix, columns = nbr of parameters
-              unlist() |> matrix(ncol = 5, byrow = TRUE),
-
-            #current=
-            MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
-                                         xVal = myShapes),
+  expect_equal(MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
+                                            xVal = myNLShapes),
+               expected = purrr::map(.x = myNLShapes,
+                                     .f = function(.x) numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
+                                                          x = as.numeric(startL), xVal = .x)) |>
+                 # convert to single matrix, columns = nbr of parameters
+                 unlist() |> matrix(ncol = 5, byrow = TRUE),
             tolerance = 1e-7)
-
 })
 
 
