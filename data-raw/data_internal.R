@@ -21,6 +21,7 @@ library("splines")
 #library("matrixStats", warn.conflicts = FALSE)
 
 
+# start from directory "data-raw/"
 FNAME <- "MLEw_mcs.rds"
 stopifnot(file.exists(FNAME))
 #(load(FNAME))
@@ -90,7 +91,9 @@ W_cousineau2009 <- local({
 
 # build internal data -----------------------------------------------------
 
-#MLEw_approx is exported as internal data!
+message("Start with building approximations for the weights!")
+
+#MLEw_approx is exported as internal data in the end!
 
 # MLEw_mcs is not exported in its entirety to internal data.
 # Instead, we save only relevant bits for MLEw-approximation
@@ -106,8 +109,6 @@ MLEw_approx <- list(
 
 
 
-
-message("Start with building approximations for the weights!")
 
 # approximation W2 --------------------------------------------------------
 
@@ -170,42 +171,45 @@ if (rlang::is_interactive()) {
 
 # Generalized logistic function
 # (due to Richards, 1957)
+# in the unified formulation (Tjorve, 2010)
 genLogisticF <- function(theta, xVal) {
   theta <- as.numeric(theta)
   stopifnot(length(theta) == 5)
 
-  A <- theta[1]
-  K <- theta[2]
-  Q <- theta[3]
-  B <- theta[4]
-  nu <- theta[5]
+  L <- theta[1]  #lower asymp
+  A <- theta[2]  #upper asymp
+  d <- theta[3]  #inflection value is (L + (A-L) * d^(1/(1-d)))
+  K <- theta[4]  #actual relative growth rate (slope at infl point is (A-L)*K)
+  Xi <- theta[5] #inflection point (x-value)
 
-  A + (K - A) / (1 + Q * exp(-B * xVal))**(1/nu)
+  L + (A - L) * (1 + (d-1) * exp(-K * (xVal - Xi)/d^(d/(1-d))))^(1/(1-d))
 }
 
 genLogisticJ <- function(theta, xVal) {
-  #cat("theta:", paste(theta, sep = ","), "\n")
-  #cat(class(theta), "\n")
   theta <- as.numeric(theta)
 
   stopifnot(is.numeric(xVal))
   nObs <- length(xVal)
 
   stopifnot(is.numeric(theta), length(theta) == 5)
-  #theta <- rlang::set_names(theta, nm = c("A", "K", "Q", "B", "nu"))
-  A <- theta[1]
-  K <- theta[2]
-  Q <- theta[3]
-  B <- theta[4]
-  nu <- theta[5]
+  L <- theta[1]  #lower asymp
+  A <- theta[2]  #upper asymp
+  d <- theta[3]  #inflection value is (Ad^(1/(1-d)))
+  K <- theta[4]  #actual relative growth rate (slope at infl point is AK)
+  Xi <- theta[5] #inflection point (x-value)
+
+
+  dExpV <- d^(d/(1-d))
+  expV <- exp(-K * (xVal - Xi)/dExpV)
+  bracV <- 1 + (d-1) * expV
 
   # return
   cbind(
-    1 - (1 + Q * exp(-B*xVal))^(-1/nu), #A
-    (1 + Q * exp(-B*xVal))^(-1/nu), #K
-    -(K-A) * exp(-B * xVal) / (nu * (1+Q * exp(-B * xVal))^(1 + 1/nu)), #Q
-    (K-A) * xVal * Q * exp(-B * xVal) / (nu * (1+Q * exp(-B * xVal))^(1 + 1/nu)), #B
-    (K-A) * log1p(Q * exp(-B * xVal)) / (nu^2 * (1 + Q * exp(-B * xVal))^(1/nu)) #nu
+    1 - bracV^(1/(1-d)), #L
+    bracV^(1/(1-d)), #A
+    (A-L) *  bracV^(1/(1-d)) * 1/(1-d) * (1/(1-d) * log(bracV) + expV * (K * (xVal - Xi)/dExpV * (- 1/(1-d) * log(d) - 1) + 1)/bracV), #d
+    (A-L) *  bracV^(d/(1-d)) * expV *(xVal - Xi) / dExpV, #K
+    -(A-L) * bracV^(d/(1-d)) * expV * K / dExpV #Xi
   )
 }
 
@@ -228,11 +232,11 @@ myShapes <- stats::rlnorm(n=5, meanlog = .51, sdlog = 2)
 stopifnot(length(myN) == 1)
 
 # some parameters values
-startL <- list(A = .01,
-               K = log1p(log(2*myN)),
-               Q = .01 + abs(stats::rnorm(n=1, mean = 2, sd = .1)),
-               B = .01 + abs(stats::rnorm(n=1, mean = 1.5, sd = .1)),
-               nu = .01 + abs(stats::rnorm(n=1, mean = .75, sd = .1)))
+startL <- list(L = .01,
+               A = log1p(log(2*myN)),
+               d = 3.5+stats::rnorm(n=1, mean = .2, sd = .1),
+               K = .01 + abs(stats::rnorm(n=1, mean = .5, sd = .1)),
+               Xi = stats::rnorm(n=1, mean = -1, sd = .1))
 
 # test gradient function
 all.equal(purrr::map(.x = myShapes,
@@ -244,7 +248,8 @@ all.equal(purrr::map(.x = myShapes,
           #current=
           MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
                                        xVal = myShapes),
-          tolerance = 1e-7)
+          tolerance = 1e-7) |>
+  stopifnot()
 
 
 
@@ -268,8 +273,9 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
                               gsl_nls(fn = MLEw_approx$fun$genLogisticF,
                                       jac = MLEw_approx$fun$genLogisticJ,
                                       y = W3i$lp1lW3, xVal = W3i$nlshape,
-                                      start = list(A = 0.01, K = log1p(log(2*{n_})), Q = 2, B = 1.5, nu = .75),
-                                      lower = c(A = -.25, K = .25, Q = 1e-3, B = -Inf, nu = 1e-3),
+                                      start = list(L = 0, A = log1p(log(2*{n_})),
+                                                   d = max(2,log({n_})), K = .5, Xi = 0),
+                                      lower = c(L = -.1, A = .2, d = 2, K = .2, Xi = -10),
                                       ##weights = sqrt(W3i$shape),
                                       control = gsl_nls_control(maxiter = ITER_MAX))
                             })
@@ -297,7 +303,7 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
         geom_point(mapping = aes(y = lp1lW3_pred), size = .5, col = "darkred") +
         geom_line(mapping = aes(y = lp1lW3_pred), col = "darkred") +
         scale_x_log10() + #scale_y_log10() +
-        labs(title = paste("W3 as function of shape | n = ", myN)) |
+        labs(title = paste("W3 as function of shape || n = ", myN)) |
 
         # Bland-Altman
         ggplot(data = W3i,
@@ -339,6 +345,7 @@ if (rlang::is_interactive()) {
     # walk across parameters
     purrr::iwalk(MLEw_approx[["coef"]][["W3_richards"]][-1L],
                  .f = ~plot(x = nObs_v, y = .x, log = "x",
+                            type = "p", pch = 16, cex = 0.5,
                             ylab = .y, main = paste("parameter", .y)))
     par(opar)
   })
@@ -350,7 +357,7 @@ if (rlang::is_interactive()) {
 
 
 # # interpolation spline
-# # I would need predict.XXX from splines-package below
+# # this would require predict.XXX from splines-package below
 # MLEw_approx[["coef"]][["W3_richards_ips"]] <- with(data = MLEw_approx[["coef"]][["W3_richards"]],
 #                                                     expr = list(A =  splines::interpSpline(A ~ nObs),
 #                                                                 K =  splines::interpSpline(K ~ nObs),

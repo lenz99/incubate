@@ -10,16 +10,20 @@ w3FFint(nObs)
 \item{nObs}{sample size for which to return the W3-function}
 }
 \value{
-W3-function for the given sample size. The function returns the W3 weight for the given shape
+W3-function for the given sample size. The function returns the W3
+weight for the given shape
 }
 \description{
 Generally, the weight W3 depends on the sample size and the shape parameter.
 The sample size of a group is fixed. Hence, we return a function that returns
-W3 for provided shape parameter as argument. If the sample size occured
+W3 for provided shape parameter as argument. If the sample size was used
 during the Monte-Carlo simulation study the coefficients of generalized
 logistic curve are directly returned. Otherwise a natural cubic spline is fit
-on the fly. This guarantees that the spline function of the R-version of the
-current user is used. Drawback is that performance is maybe not optimal
-(\code{w3FFint} is not precompiled but run by the \code{\link[=objFunFactory]{objFunFactory()}} once per
-group)
+is given.
+}
+\details{
+We run the cubic spline fit on the fly. This guarantees that the spline
+function of the R-version of the current user is used. Drawback is that
+performance is not optimal (\code{w3FFint} is not pre-compiled but run by the
+\code{\link[=objFunFactory]{objFunFactory()}} once per group)
 }

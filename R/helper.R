@@ -69,57 +69,64 @@ w2Fint <- function(nObs) {
 #'
 #' Generally, the weight W3 depends on the sample size and the shape parameter.
 #' The sample size of a group is fixed. Hence, we return a function that returns
-#' W3 for provided shape parameter as argument. If the sample size occured
+#' W3 for provided shape parameter as argument. If the sample size was used
 #' during the Monte-Carlo simulation study the coefficients of generalized
 #' logistic curve are directly returned. Otherwise a natural cubic spline is fit
-#' on the fly. This guarantees that the spline function of the R-version of the
-#' current user is used. Drawback is that performance is maybe not optimal
-#' (`w3FFint` is not precompiled but run by the [objFunFactory()] once per
-#' group)
+#' is given.
+#'
+#' We run the cubic spline fit on the fly. This guarantees that the spline
+#' function of the R-version of the current user is used. Drawback is that
+#' performance is not optimal (`w3FFint` is not pre-compiled but run by the
+#' [objFunFactory()] once per group)
 #' @param nObs sample size for which to return the W3-function
-#' @returns W3-function for the given sample size. The function returns the W3 weight for the given shape
+#' @returns W3-function for the given sample size. The function returns the W3
+#'   weight for the given shape
 w3FFint <- function(nObs) {
 
-  if (missing(nObs) || length(nObs) != 1L || !is.numeric(nObs) || !is.finite(nObs)) {
-    stop("Please provide the single number of observations within group!", call. = FALSE)
-  }
+  if (missing(nObs) || length(nObs) != 1L ||
+      !is.numeric(nObs) || !is.finite(nObs)) {
+    stop("Please provide a single sample size (for one group)!",
+         call. = FALSE)
+  }#fi
 
   # catch all for n = 1 (or even n negative)
-  if (nObs < 2L) return(function(k) 1)
+  if (nObs < 2L) {
+    return(function(k) 1)
+  }
 
-  # get coefficients for a Richards' generalized logistic function
+  # get coefficients for a Richards' generalized logistic function (unified parametrization)
   # if we have fit the parameter nObs directly we use this Richards fit
   #+otherwise, we rely on the spline approximation for each parameter intrapolating the given nObs
   W3richCoef <- MLEw_approx[["coef"]][["W3_richards"]]
-  approx_W3_names <- c("A", "K", "Q", "B", "nu")
-  stopifnot(is.data.frame(W3richCoef), all(c("nObs", approx_W3_names) %in% names(W3richCoef)))
+  approx_W3_names <- c("L", "A", "d", "K", "Xi")
+  stopifnot(is.data.frame(W3richCoef),
+            all(c("nObs", approx_W3_names) %in% names(W3richCoef)))
   approx_W3_ind <- which(W3richCoef$nObs == {nObs})
 
   # check for match in W3_richards
   approx_W3_coefs <- if (length(approx_W3_ind) == 1L) {
     W3richCoef[approx_W3_ind, approx_W3_names]
   } else {
-    # nObs was not in MC-sim for W3, use interpolation per Richards coefficient
+    # nObs was not in MC-sim for W3
+    # => use interpolation per Richards coefficient
     list(
+      L = stats::spline(x = W3richCoef$nObs,
+                        y = W3richCoef$L,
+                        method = "natural", xout = {nObs})$y,
       A = stats::spline(x = W3richCoef$nObs,
                         y = W3richCoef$A,
+                        method = "natural", xout = {nObs})$y,
+      d = stats::spline(x = W3richCoef$nObs,
+                        y = W3richCoef$d,
                         method = "natural", xout = {nObs})$y,
       K = stats::spline(x = W3richCoef$nObs,
                         y = W3richCoef$K,
                         method = "natural", xout = {nObs})$y,
-      Q = stats::spline(x = W3richCoef$nObs,
-                        y = W3richCoef$Q,
-                        method = "natural", xout = {nObs})$y,
-      B = stats::spline(x = W3richCoef$nObs,
-                        y = W3richCoef$B,
-                        method = "natural", xout = {nObs})$y,
-      nu = stats::spline(x = W3richCoef$nObs,
-                         y = W3richCoef$nu,
+      Xi = stats::spline(x = W3richCoef$nObs,
+                         y = W3richCoef$Xi,
                          method = "natural", xout = {nObs})$y
     )
-
-  } #esle
-
+  }#esle
 
   # W3 as fn of shape k
   # @param k shape
