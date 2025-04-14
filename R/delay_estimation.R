@@ -666,7 +666,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  #+ for minimal shape there is a linear dependence on nObs:
                  ##df <- tibble(nObs = seq_len(501)) |> rowwise() |> mutate(W3_minShape = MLEw_approx$fun$w3FF(nObs = {nObs})(1e-7))
                  ##summary(lm(W3_minShape ~ nObs, data = df)) #==> regression line is: 0.229066 + 1.427202 * nObs
-                 #XXX approxfun is potentially unsafe (as it relies on current R version, but it is more safe since R v3.0.0)
+                 # approxfun relies on current R version (more robust since R v3.0.0),
+                 #+but less of an issue as this code runs at run-time within the user's R session
                  stats::approxfun(x = c(1e-7, W3_cous09$shape[W3_cous09$n == nObs], 1e3),
                                   y = c(0.229066 + 1.427202 * nObs, W3_cous09$value[W3_cous09$n == nObs], 1),
                                   ties = "ordered", rule = 2)

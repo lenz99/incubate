@@ -1,10 +1,10 @@
 # mkuhn, 2025-04-10
-# zzz.R to be run last typically
+# zzz.R to be run last within the package code
 
 .onLoad <- function(libname, pkgname) {
   #cat("Creating spline functions!\n")
-  # build spline functions in current run-time session
-  # (as splinefun is not 100% portable betw different R-versions)
+  # build spline functions in current run-time session of user
+  #+(as splinefun is not 100% portable betw different R-versions)
   rlang::env_bind(the,
                   L = stats::splinefun(x = MLEw_approx$coef$W3_richards$nObs,
                                        y = MLEw_approx$coef$W3_richards$L,

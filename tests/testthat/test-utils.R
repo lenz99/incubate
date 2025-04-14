@@ -76,10 +76,14 @@ test_that("MLEw weight objects", {
   # agreement here is not as high: W3 is more challenging, in particular for small shape
   #+our median is based on higher sample size in our MC-sim
   shapes <- seq.int(0.5, 2.5, by=.5)
-  expect_equal(w3FFint(6)(shapes),  expected = c( 5.631, 2.808, 2.004, 1.669, 1.492), tolerance = 5e-2)
-  expect_equal(w3FFint(11)(shapes), expected = c( 9.319, 3.462, 2.207, 1.774, 1.555), tolerance = 4e-2)
-  expect_equal(w3FFint(12)(shapes), expected = c(10.051, 3.560, 2.239, 1.782, 1.565), tolerance = 3e-2)
-  expect_equal(w3FFint(16)(shapes), expected = c(12.743, 3.854, 2.324, 1.820, 1.586), tolerance = 2e-2)
+  expect_equal(w3FFint(6)(shapes),  expected = c( 5.631, 2.808, 2.004, 1.669, 1.492),
+               tolerance = 5e-2)
+  expect_equal(w3FFint(11)(shapes), expected = c( 9.319, 3.462, 2.207, 1.774, 1.555),
+               tolerance = 4e-2)
+  expect_equal(w3FFint(12)(shapes), expected = c(10.051, 3.560, 2.239, 1.782, 1.565),
+               tolerance = 3e-2)
+  expect_equal(w3FFint(16)(shapes), expected = c(12.743, 3.854, 2.324, 1.820, 1.586),
+               tolerance = 2e-2)
 
   # W3 for neighbouring nObs and some shapes
   # we use also fractional nObs to test if the spline interpolation of coefficients works properly
@@ -103,6 +107,20 @@ test_that("MLEw weight objects", {
                apply(MARGIN = 2, FUN = min, simplify = TRUE) |>
                min(),
              expected = 0)
+
+  # W3 function gradient
+  w3Fn6 <- w3FFint(nObs = 6)
+  expect_type(w3Fn6, type = "closure")
+  expect_named(formals(w3Fn6), "k")
+  expect_named(attributes(w3Fn6), expected = c("srcref", "gradient"))
+  w3Fn6_gr <- attr(w3Fn6, which = "gradient", exact = TRUE)
+  expect_type(w3Fn6_gr, type = "closure")
+  expect_named(formals(w3Fn6_gr), "k")
+
+  xVals <- c(.1, .5, sqrt(unique(stats::rpois(n=3, lambda = 3.5))))
+  expect_equal(object = w3Fn6_gr(xVals),
+               expected = numDeriv::grad(w3Fn6, x = xVals),
+               tolerance = 1e-7)
 })
 
 
@@ -113,7 +131,8 @@ test_that("Richards's generalized logistic function", {
   expect_named(MLEw_approx,
                expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
 
-  expect_named(MLEw_approx[["fun"]], expected = c("genLogisticF", "genLogisticJ"))
+  expect_named(MLEw_approx[["fun"]],
+               expected = c("genLogisticF", "genLogisticD", "genLogisticJ"))
   # MLEw_approx[["fun"]] contains only functions
   purrr::walk(.x = names(MLEw_approx[["fun"]]),
               .f = function(nam) expect_type(MLEw_approx[["fun"]][[nam]], "closure"))
@@ -122,20 +141,26 @@ test_that("Richards's generalized logistic function", {
   # negative log shapes
   myNLShapes <- -log(sample(x = seq.int(from = .05, to = 25, by = .05), size = 5))
   # some parameters values
-  startL <- list(L = .1 + stats::runif(n=1, min=-.1, max = .2),
-                 A = log1p(log(2*myN)),
-                 d = log(myN + 7),
-                 K = .5 + stats::rnorm(n=1, sd = .1),
-                 Xi = .1 + stats::rnorm(n=1, sd = .2))
+  startL <- c(L = .1 + stats::runif(n=1, min=-.1, max = .2),
+              A = log1p(log(2*myN)),
+              d = log(myN + 7),
+              K = .5 + stats::rnorm(n=1, sd = .1),
+              Xi = .1 + stats::rnorm(n=1, sd = .2))
 
-  # test gradient function
-  expect_equal(MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
-                                            xVal = myNLShapes),
+  # test 1st derivative (for k)
+  expect_equal(MLEw_approx$fun$genLogisticD(xVal = myNLShapes, theta = startL),
+               expected = numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
+                                         x = myNLShapes, theta = startL),
+               tolerance = 1e-7)
+
+  # test gradient function (for parameters)
+  expect_equal(MLEw_approx$fun$genLogisticJ(theta = startL, xVal = myNLShapes),
                expected = purrr::map(.x = myNLShapes,
                                      .f = function(.x) numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
-                                                          x = as.numeric(startL), xVal = .x)) |>
+                                                          x = startL, xVal = .x)) |>
                  # convert to single matrix, columns = nbr of parameters
-                 unlist() |> matrix(ncol = 5, byrow = TRUE),
+                 unlist() |> matrix(ncol = 5, byrow = TRUE,
+                                    dimnames = list(NULL, c("L", "A", "d", "K", "Xi"))),
             tolerance = 1e-7)
 })
 

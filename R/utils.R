@@ -307,8 +307,7 @@ w2Fint <- function(nObs) {
 #' hopefully with good performance. Function `w3FFint` is run repeatedly by the
 #' [objFunFactory()], once per group.
 #' @param nObs sample size for which to return the W3-function
-#' @returns W3-function for the given sample size. The function returns the W3
-#'   weight for the given shape
+#' @returns W3-function for the given sample size. It is a function of shape.
 w3FFint <- function(nObs) {
 
   if (missing(nObs) || length(nObs) != 1L ||
@@ -348,9 +347,8 @@ w3FFint <- function(nObs) {
 
   # W3 as fn of shape k
   # @param k shape
-  # @return: W3 (same length as k)
-  # XXX add gradient to this function as attribute?
-  function(k) {
+  # @returns W3 (same length as k)
+  w3F <- function(k) {
 
     # undo the transformation:
     #+x (predictor) as neg. log(shape)
@@ -358,9 +356,20 @@ w3FFint <- function(nObs) {
     exp(expm1(MLEw_approx$fun$genLogisticF(theta = approx_W3_coefs,
                                            xVal = -log(k))))
 
-    # evalq(expr = A + (K - A) / (1 + Q * k**-B)**(1/nu),
+    # alternative:
+    # evalq(expr = L + (A - L) * (1 + (d-1) * exp(-K * (-log(k) - Xi)/d^(d/(1-d))))^(1/(1-d)),
     #       envir = as.list(approx_W3_coefs),
     #       enclos = rlang::current_env())
   }#fn
 
+  # add gradient as attribute
+  attr(w3F, "gradient") <- function(k) {
+    -1/k * w3F(k) *
+      exp(MLEw_approx$fun$genLogisticF(theta = approx_W3_coefs,
+                                       xVal = -log(k))) *
+      MLEw_approx$fun$genLogisticD(xVal = -log(k),
+                                   theta = approx_W3_coefs)
+  }#fn gradient
+
+  w3F
 }#fn w3FFint

@@ -10,8 +10,7 @@ w3FFint(nObs)
 \item{nObs}{sample size for which to return the W3-function}
 }
 \value{
-W3-function for the given sample size. The function returns the W3
-weight for the given shape
+W3-function for the given sample size. It is a function of shape.
 }
 \description{
 Generally, the weight W3 depends on the sample size and the shape parameter.

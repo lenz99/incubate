@@ -198,35 +198,57 @@ genLogisticF <- function(theta, xVal) {
   L + (A - L) * (1 + (d-1) * exp(-K * (xVal - Xi)/d^(d/(1-d))))^(1/(1-d))
 }
 
+# Derivative of generalized logistic Richards function
+# as function of x-value (for given parameters theta)
+genLogisticD <- function(xVal, theta) {
+  theta <- as.numeric(theta)
+  stopifnot(length(theta) == 5)
+
+  L <- theta[1]  #lower asymp
+  A <- theta[2]  #upper asymp
+  d <- theta[3]  #inflection value is (L + (A-L) * d^(1/(1-d)))
+  K <- theta[4]  #actual relative growth rate (slope at infl point is (A-L)*K)
+  Xi <- theta[5] #inflection point (x-value)
+
+  dExpV <- d^(d/(1-d))
+  expV <- exp(-K * (xVal - Xi)/dExpV)
+
+  (A-L) * (1 + (d-1) * expV)^(d/(1-d)) * expV * K / dExpV
+}#fn
+
+# Gradient of generalized logistic Richards function
+# as function of parameters (for given x value)
+# using unified parametrization (Tjorve)
+# Is used for fitting Richards function to data
 genLogisticJ <- function(theta, xVal) {
   theta <- as.numeric(theta)
-
-  stopifnot(is.numeric(xVal))
-  nObs <- length(xVal)
-
   stopifnot(is.numeric(theta), length(theta) == 5)
+
   L <- theta[1]  #lower asymp
   A <- theta[2]  #upper asymp
   d <- theta[3]  #inflection value is (Ad^(1/(1-d)))
   K <- theta[4]  #actual relative growth rate (slope at infl point is AK)
   Xi <- theta[5] #inflection point (x-value)
 
+  stopifnot(is.numeric(xVal))
+  nObs <- length(xVal)
 
   dExpV <- d^(d/(1-d))
   expV <- exp(-K * (xVal - Xi)/dExpV)
   bracV <- 1 + (d-1) * expV
 
-  # return
+  # return gradient: nObs x 5 matrix
   cbind(
-    1 - bracV^(1/(1-d)), #L
-    bracV^(1/(1-d)), #A
-    (A-L) *  bracV^(1/(1-d)) * 1/(1-d) * (1/(1-d) * log(bracV) + expV * (K * (xVal - Xi)/dExpV * (- 1/(1-d) * log(d) - 1) + 1)/bracV), #d
-    (A-L) *  bracV^(d/(1-d)) * expV *(xVal - Xi) / dExpV, #K
-    -(A-L) * bracV^(d/(1-d)) * expV * K / dExpV #Xi
+    L = 1 - bracV^(1/(1-d)), #L
+    A = bracV^(1/(1-d)),   #A
+    d = (A-L) *  bracV^(1/(1-d)) * 1/(1-d) * (1/(1-d) * log(bracV) + expV * (K * (xVal - Xi)/dExpV * (- 1/(1-d) * log(d) - 1) + 1)/bracV), #d
+    K = (A-L) *  bracV^(d/(1-d)) * expV *(xVal - Xi) / dExpV, #K
+    Xi = -(A-L) * bracV^(d/(1-d)) * expV * K / dExpV #Xi
   )
-}
+}#fn grad
 
 MLEw_approx$fun <- list(genLogisticF = genLogisticF,
+                        genLogisticD = genLogisticD,
                         genLogisticJ = genLogisticJ)
 
 
@@ -248,6 +270,7 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
                               W3i <- W3 |>
                                 dplyr::filter(nObs == {n_})
                               stopifnot(NROW(W3i) > 5)
+
                               gsl_nls(fn = MLEw_approx$fun$genLogisticF,
                                       jac = MLEw_approx$fun$genLogisticJ,
                                       y = W3i$lp1lW3, xVal = W3i$nlshape,
@@ -279,8 +302,9 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
 
 # test jacobian for some sample size nObs
 myN <- sample(unique(W3$nObs), size = 1)
-myShapes <- stats::rlnorm(n=5, meanlog = .51, sdlog = 2)
 stopifnot(length(myN) == 1)
+myShapes <- stats::rlnorm(n=7, meanlog = .51, sdlog = 2) |>
+  sort()
 
 
 # some parameters values
@@ -290,19 +314,28 @@ startL <- list(L = .01,
                K = .01 + abs(stats::rnorm(n=1, mean = .5, sd = .1)),
                Xi = stats::rnorm(n=1, mean = -1, sd = .1))
 
-# test gradient function
+# test gradient function (partial derivatives of parameters)
 all.equal(purrr::map(.x = myShapes,
                      .f = ~numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
                                           x = as.numeric(startL), xVal = .x)) |>
             # convert to single matrix, columns = nbr of parameters
-            unlist() |> matrix(ncol = 5, byrow = TRUE),
+            unlist() |> matrix(ncol = 5, byrow = TRUE,
+                               dimnames = list(NULL, c("L", "A", "d", "K", "Xi"))),
 
           #current=
           MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
                                        xVal = myShapes),
           tolerance = 1e-7) |>
+  isTRUE() |>
   stopifnot()
 
+all.equal(
+  numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
+                 x = myShapes, theta = startL),
+  MLEw_approx$fun$genLogisticD(xVal = myShapes, theta = startL),
+  tolerance = 1e-7
+) |> isTRUE() |>
+  stopifnot()
 
 if (rlang::is_interactive()) {
 
