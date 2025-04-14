@@ -33,6 +33,18 @@ stopifnot(identical(names(MLEw_mcs), c("W12","W3", "settings")),
           is.data.frame(MLEw_mcs$W12), is.data.frame(MLEw_mcs$W3))
 
 
+W3 <- MLEw_mcs$W3 |>
+  dplyr::filter(nObs > 1) |>
+  dplyr::mutate(
+    lshape = log(shape),
+    nlshape = -lshape,
+    nlp1shape = -log1p(shape),
+    lW3 = log(W3),
+    llW3 = log(lW3),
+    lp1lW3 = log1p(lW3))
+
+
+
 # for which Ns do we use direct numbers
 N_DIRECT <- 49L
 # check that we have all data stored for all consecutive nObs starting from 1!
@@ -42,7 +54,8 @@ stopifnot(identical(MLEw_mcs$W12$nObs[seq_len(N_DIRECT)], seq_len(N_DIRECT)))
 stopifnot(identical(MLEw_mcs$W3 |>
                       dplyr::distinct(nObs) |>
                       dplyr::slice_head(n=N_DIRECT) |>
-                      dplyr::pull(nObs), seq_len(N_DIRECT)))
+                      dplyr::pull(nObs),
+                    seq_len(N_DIRECT)))
 
 
 # read in weights from publication of Cousineau (2009):
@@ -216,41 +229,6 @@ genLogisticJ <- function(theta, xVal) {
 MLEw_approx$fun <- list(genLogisticF = genLogisticF,
                         genLogisticJ = genLogisticJ)
 
-W3 <- MLEw_mcs$W3 |>
-  dplyr::filter(nObs > 1) |>
-  dplyr::mutate(
-    lshape = log(shape),
-    nlshape = -lshape,
-    nlp1shape = -log1p(shape),
-    lW3 = log(W3),
-    llW3 = log(lW3),
-    lp1lW3 = log1p(lW3))
-
-# test jacobian for some sample size nObs
-myN <- sample(unique(W3$nObs), size = 1)
-myShapes <- stats::rlnorm(n=5, meanlog = .51, sdlog = 2)
-stopifnot(length(myN) == 1)
-
-# some parameters values
-startL <- list(L = .01,
-               A = log1p(log(2*myN)),
-               d = 3.5+stats::rnorm(n=1, mean = .2, sd = .1),
-               K = .01 + abs(stats::rnorm(n=1, mean = .5, sd = .1)),
-               Xi = stats::rnorm(n=1, mean = -1, sd = .1))
-
-# test gradient function
-all.equal(purrr::map(.x = myShapes,
-                     .f = ~numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
-                                          x = as.numeric(startL), xVal = .x)) |>
-            # convert to single matrix, columns = nbr of parameters
-            unlist() |> matrix(ncol = 5, byrow = TRUE),
-
-          #current=
-          MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
-                                       xVal = myShapes),
-          tolerance = 1e-7) |>
-  stopifnot()
-
 
 
 # check that we do not need too many iterations (sign for difficult/bad fit?!)
@@ -259,7 +237,7 @@ ITER_MAX <- 97
 MLEw_approx[["coef"]][["W3_richards"]] <- local({
 
   #we do not fix A=0 on lp1lW3 scale (even though it might be true)
-  #+because it restricts the Richards fit too much?!
+  #+because we want best fit and not too many restrictions for the Richards fit
 
   # for each sample size nObs we fit
   # Richards' generalized logistic function (as function of shape)
@@ -285,37 +263,6 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
   stopifnot(all(purrr::map_dbl(fm_W3_indiv, .f = list("convInfo", "nEval", "f")) < ITER_MAX))
 
 
-  if (rlang::is_interactive()) {
-
-    # W3 approaches 1 for high shape values
-    #+hence, log1p(W3) => 0
-    local({
-      # reuse previous myN
-      stopifnot(exists("myN"), is.finite(myN))
-
-      W3i <- W3 |>
-        dplyr::filter(nObs == {{myN}}) |>
-        dplyr::mutate(lp1lW3_pred = predict(fm_W3_indiv[[as.character(myN)]]))
-
-      ggplot(data = W3i,
-             mapping = aes(x = shape, y = lp1lW3)) +
-        geom_point() + #geom_line() +
-        geom_point(mapping = aes(y = lp1lW3_pred), size = .5, col = "darkred") +
-        geom_line(mapping = aes(y = lp1lW3_pred), col = "darkred") +
-        scale_x_log10() + #scale_y_log10() +
-        labs(title = paste("W3 as function of shape || n = ", myN)) |
-
-        # Bland-Altman
-        ggplot(data = W3i,
-               mapping = aes(x = W3, y = lp1lW3-lp1lW3_pred)) +
-        geom_hline(yintercept = 0, col = "grey", linetype = "dashed") +
-        geom_point() +
-        scale_x_log10()
-
-    })
-  }#fi interactive
-
-
   # gather coefficients of individual generalized logistic functions per nObs
   # residual std. dev increases with nObs
   purrr::map(fm_W3_indiv, .f = coef) |>
@@ -326,20 +273,42 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
     dplyr::relocate(nObs)
 })
 
-# check
+
+
+# checking ----------------------------------------------------------------
+
+# test jacobian for some sample size nObs
+myN <- sample(unique(W3$nObs), size = 1)
+myShapes <- stats::rlnorm(n=5, meanlog = .51, sdlog = 2)
+stopifnot(length(myN) == 1)
+
+
+# some parameters values
+startL <- list(L = .01,
+               A = log1p(log(2*myN)),
+               d = 3.5+stats::rnorm(n=1, mean = .2, sd = .1),
+               K = .01 + abs(stats::rnorm(n=1, mean = .5, sd = .1)),
+               Xi = stats::rnorm(n=1, mean = -1, sd = .1))
+
+# test gradient function
+all.equal(purrr::map(.x = myShapes,
+                     .f = ~numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
+                                          x = as.numeric(startL), xVal = .x)) |>
+            # convert to single matrix, columns = nbr of parameters
+            unlist() |> matrix(ncol = 5, byrow = TRUE),
+
+          #current=
+          MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
+                                       xVal = myShapes),
+          tolerance = 1e-7) |>
+  stopifnot()
+
+
 if (rlang::is_interactive()) {
 
-  # look at model error for Richards logistic models
-  ggplot(data = MLEw_approx[["coef"]][["W3_richards"]],
-         mapping = aes(x = nObs, y = resStdDev)) +
-    geom_point() +
-    labs(title = "Residual std. deviation") +
-    scale_x_log10() +
-    scale_y_log10()
-
+  # check how parameters depend on nObs
+  # regular pattern desired so that we can approximate this
   local({
-    # check how parameters depend on nObs
-    # regular pattern desired so that we can approximate this
     nObs_v <- MLEw_approx[["coef"]][["W3_richards"]]$nObs
     opar <- par(mfrow = c(2,3))
     # walk across parameters
@@ -349,86 +318,52 @@ if (rlang::is_interactive()) {
                             ylab = .y, main = paste("parameter", .y)))
     par(opar)
   })
+
+  # focus on std. dev.
+  # look at model error for Richards logistic models
+  ggplot(data = MLEw_approx[["coef"]][["W3_richards"]],
+         mapping = aes(x = nObs, y = resStdDev)) +
+    geom_point() +
+    labs(title = "Residual std. deviation") +
+    scale_x_log10() +
+    scale_y_log10()
+
+
+  # W3 approaches 1 for high shape values
+  #+hence, log1p(W3) => 0
+  local({
+    # reuse previous myN
+    stopifnot(exists("myN"), is.finite(myN))
+
+    myTheta <- MLEw_approx$coef$W3_richards |>
+      dplyr::filter(nObs == myN) |>
+      dplyr::select(!c(nObs, resStdDev)) |>
+      unlist()
+
+    W3i <- W3 |>
+      dplyr::filter(nObs == {{myN}}) |>
+      #dplyr::mutate(lp1lW3_pred = predict(fm_W3_indiv[[as.character(myN)]]))
+      dplyr::mutate(lp1lW3_pred = MLEw_approx$fun$genLogisticF(theta = myTheta, xVal = nlshape))
+
+    ggplot(data = W3i,
+           mapping = aes(x = shape, y = lp1lW3)) +
+      geom_point() + #geom_line() +
+      geom_point(mapping = aes(y = lp1lW3_pred), size = .5, col = "darkred") +
+      geom_line(mapping = aes(y = lp1lW3_pred), col = "darkred") +
+      scale_x_log10() + #scale_y_log10() +
+      labs(title = paste("W3 as function of shape || n = ", myN)) |
+
+      # Bland-Altman
+      ggplot(data = W3i,
+             mapping = aes(x = W3, y = lp1lW3-lp1lW3_pred)) +
+      geom_hline(yintercept = 0, col = "grey", linetype = "dashed") +
+      geom_point() +
+      scale_x_log10()
+
+  })
 } #fi interactive
 
 
-
-
-
-
-# # interpolation spline
-# # this would require predict.XXX from splines-package below
-# MLEw_approx[["coef"]][["W3_richards_ips"]] <- with(data = MLEw_approx[["coef"]][["W3_richards"]],
-#                                                     expr = list(A =  splines::interpSpline(A ~ nObs),
-#                                                                 K =  splines::interpSpline(K ~ nObs),
-#                                                                 Q =  splines::interpSpline(Q ~ nObs),
-#                                                                 B =  splines::interpSpline(B ~ nObs),
-#                                                                 nu = splines::interpSpline(nu ~ nObs)))
-#
-#
-# if (rlang::is_interactive()) {
-#   nObs_interp <- sort(unique(c(MLEw_approx[["coef"]][["W3_richards"]]$nObs[-seq_len(17)],
-#                                5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000)))
-#
-#   ggplot(data = MLEw_approx[["coef"]][["W3_richards"]],
-#          mapping = aes(x = nObs, y = A)) +
-#     geom_point() +
-#     geom_line(data = as_tibble(predict(MLEw_approx[["coef"]][["W3_richards_ips"]][["A"]], x = nObs_interp)),
-#               mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
-#     #  geom_line(data = dat_sp2, mapping = aes(x = x, y = y), col = "blue") +
-#     #  geom_line(data = dat_sp3, mapping = aes(x = x, y = y), col = "darkgreen") +
-#     scale_x_log10() +
-#     #scale_y_log10() +
-#     labs(title = "Parameter A")
-#
-#   ggplot(data = MLEw_approx[["coef"]][["W3_richards"]],
-#          mapping = aes(x = nObs, y = K)) +
-#     geom_point() +
-#     geom_line(data = as_tibble(predict(MLEw_approx[["coef"]][["W3_richards_ips"]][["K"]], x = nObs_interp)),
-#               mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
-#     scale_x_log10() +
-#     scale_y_log10() +
-#     labs(title = "Parameter K")
-#
-#   ggplot(MLEw_approx[["coef"]][["W3_richards"]],
-#          mapping = aes(x = nObs, y = B)) +
-#     geom_point() +
-#     geom_line(data = as_tibble(predict(MLEw_approx[["coef"]][["W3_richards_ips"]][["B"]], x = nObs_interp)),
-#               mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
-#     #  geom_line(data = dat_sp2, mapping = aes(x = x, y = y), col = "blue") +
-#     #  geom_line(data = dat_sp3, mapping = aes(x = x, y = y), col = "darkgreen") +
-#     scale_x_log10() +
-#     #scale_y_log10() +
-#     labs(title = "Parameter B")
-#
-#   ggplot(MLEw_approx[["coef"]][["W3_richards"]],
-#          mapping = aes(x = nObs, y = Q)) +
-#     geom_point() +
-#     geom_line(data = as_tibble(predict(MLEw_approx[["coef"]][["W3_richards_ips"]][["Q"]], x = nObs_interp)) %>%
-#                 # avoid negative values
-#                 mutate(y = pmax.int(sqrt(.Machine$double.eps), y)),
-#               mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
-#     scale_x_log10() +
-#     #scale_y_log10() +
-#     labs(title = "Parameter Q")
-#
-#   ggplot(MLEw_approx[["coef"]][["W3_richards"]],
-#          mapping = aes(x = nObs, y = nu)) +
-#     geom_point() +
-#     geom_line(data = as_tibble(predict(MLEw_approx[["coef"]][["W3_richards_ips"]][["nu"]], x = nObs_interp)),
-#               mapping = aes(x = x, y = y), col = "blue", linetype = "dashed") +
-#     scale_x_log10() +
-#     #scale_y_log10() +
-#     labs(title = "Parameter nu")
-# } #fi
-
-
-
-# # append weight functions
-# MLEw_approx$fun <- append(MLEw_approx$fun,
-#                           values = list(w1F = w1F,
-#                                         w2F = w2F,
-#                                         w3FF = w3FF))
 
 
 
