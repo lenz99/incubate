@@ -2,10 +2,11 @@
 # Utility functions used within this package
 # helper functions MLEw weight functions
 
-
-the <- rlang::new_environment() # package environment
-TOL_NUM <- sqrt(.Machine$double.eps)
-DELAY_MIN <- .Machine$double.eps #.Machine$double.xmin even smaller ##1e-9
+#' Make that aaa.R is loaded first
+#' @keywords internal
+#' @noRd
+#' @include aaa.R
+NULL
 
 #' Format a number as percentage.
 #'

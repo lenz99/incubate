@@ -1,4 +1,5 @@
-# zzz.R
+# mkuhn, 2025-04-10
+# zzz.R to be run last typically
 
 .onLoad <- function(libname, pkgname) {
   #cat("Creating spline functions!\n")
