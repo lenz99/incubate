@@ -1,11 +1,14 @@
-# incubate 1.3.0.9081
+# incubate 1.3.0.9098
 * allow for random right-censoring
-* MLEw: bugfix in weight approximation (relevant for W3)
-* MLEw: weight functions as non-exported functions (and not as internal data)
-* criterion= as character option, use MLEc as standard criterion for MLEw method (as it has no own likelihood function)
+* weighted MLE (MLEw)
+    * bugfix in weight approximation (relevant for W3)
+    * weight functions as non-exported functions (and not as internal data)
+    * use MLEc as standard criterion for MLEw method (as it has no own likelihood function)
+* objective function has `criterion=` as character option
 * implement S3-function `logLik`
-* implement delayed normal distribution
-* delay_test: use name LRT (instead of LR) for likelihood ratio tests
+* delayed normal distribution as new statistical model
+* `delay_test`: use name LRT (instead of LR) for likelihood ratio tests
+* new data long2017 from melanoma clinical trial
 
 # incubate 1.3.0
 * implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter

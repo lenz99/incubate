@@ -1,6 +1,10 @@
+# publication data examples
+# different data samples where a 3-parameter Weibull model is plausible
+# some of these data are artificially, some might be real data
+
 # Apparently artificial example from
 # Howard Rockette, "Maximum Likelihood Estimation with the Weibull Model"  (1974)
-publication_examples <- c(3.1, 4.6, 5.6, 6.8)
+rockette <- c(3.1, 4.6, 5.6, 6.8)
 
 
 # maximum flood level (in millions of cubic feet per second)
@@ -42,4 +46,5 @@ graphite <- sort(
     31.53, 33.28, 34.15, 35.03, 35.90, 40.28,
     31.53, 33.28, 34.15, 35.03, 36.20))
 
-usethis::use_data(publication_examples, fatigue, susquehanna, pollution, graphite, overwrite = TRUE)
+
+usethis::use_data(rockette, fatigue, susquehanna, pollution, graphite, overwrite = TRUE)
