@@ -5,6 +5,7 @@
 \alias{stankovic}
 \title{Survival of mice with glioma under different treatments}
 \format{
+A data frame with 45 rows and 5 variables:
 \describe{
 \item{Figure}{The figure in the publication where the data is shown}
 \item{Time}{Survival in days}
@@ -24,6 +25,7 @@ This data set stems from an animal experiment described in Stankovic (2018).
 In particular, the data in question is shown in Figure 6J and 6K.
 }
 \details{
-The data were read directly from the survival plots in the publication with the help of Plot Digitizer, version 2.6.9.
+The data were read directly from the survival plots in the publication with
+the help of Plot Digitizer, version 2.6.9.
 }
 \keyword{datasets}

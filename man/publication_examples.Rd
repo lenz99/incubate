@@ -8,7 +8,7 @@
 \alias{susquehanna}
 \alias{pollution}
 \alias{graphite}
-\title{Small data sets from different publications}
+\title{Small data sets from miscellaneous publications}
 \format{
 An object of class \code{numeric} of length 4.
 

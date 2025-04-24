@@ -4,9 +4,10 @@
 #' In particular, the data in question is shown in Figure 6J and 6K.
 #'
 #' @details
-#' The data were read directly from the survival plots in the publication with the help of Plot Digitizer, version 2.6.9.
+#' The data were read directly from the survival plots in the publication with
+#' the help of Plot Digitizer, version 2.6.9.
 #'
-#' @format
+#' @format A data frame with 45 rows and 5 variables:
 #' \describe{
 #'   \item{Figure}{The figure in the publication where the data is shown}
 #'   \item{Time}{Survival in days}
@@ -18,7 +19,32 @@
 "stankovic"
 
 
-#' Small data sets from different publications
+#' Relapse-free survival of melanoma patients under adjuvant treatment
+#'
+#' Data stem from a double-blind, placebo-controlled, phase 3 trial
+#' where 870 patients with completely resected, stage III melanoma with BRAF V600E or V600K mutations
+#' were randomly assigned to receive oral dabrafenib plus trametinib (combination therapy, 438 patients)
+#' or two matched placebo tablets (432 patients) for 12 months.
+#'
+#' @details
+#' The data were digitized by Sean Devlin from the survival plot Fig 1A in the
+#' publication. Therefore, the data given here are **not** a 100% faithful
+#' representation of the original published data and some deviations are to be
+#' expected.
+#'
+#' @format A data frame with 870 rows and 4 variables:
+#' \describe{
+#'   \item{ID}{artificially generated patient ID}
+#'   \item{time}{Time to relapse-free survival in months}
+#'   \item{status}{Status of observation, encoded as 0 for right-censoring vs 1 for RFS-event}
+#'   \item{trtmt}{Treatment group: Dabrafenib+Trametinib vs Placebo}
+#' }
+#' @source Long GV, Hauschild A, Santinami M, et al. Adjuvant Dabrafenib plus Trametinib in Stage III BRAF-Mutated Melanoma. N Engl J Med. 2017;377(19):1813-1823. doi:10.1056/NEJMoa1708539
+#' @source Devlin SM and O'Quigley J, The nph2ph-transform: applications to the statistical analysis of completed clinical trials, arXiv:2407.18905, 2024. doi:10.48550/arXiv.2407.18905.
+"long2017"
+
+
+#' Small data sets from miscellaneous publications
 #'
 #' @description
 #' Most data sets come from publications about parameter estimation in Weibull models.

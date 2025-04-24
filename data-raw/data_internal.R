@@ -329,6 +329,7 @@ all.equal(purrr::map(.x = myShapes,
   isTRUE() |>
   stopifnot()
 
+# test derivative for x (for fixed parameters)
 all.equal(
   numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
                  x = myShapes, theta = startL),
@@ -336,6 +337,7 @@ all.equal(
   tolerance = 1e-7
 ) |> isTRUE() |>
   stopifnot()
+
 
 if (rlang::is_interactive()) {
 

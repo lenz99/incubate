@@ -364,6 +364,7 @@ w3FFint <- function(nObs) {
 
   # add gradient as attribute
   attr(w3F, "gradient") <- function(k) {
+    # chain rule applies: exp(exp(f(-log(k)))-1)
     -1/k * w3F(k) *
       exp(MLEw_approx$fun$genLogisticF(theta = approx_W3_coefs,
                                        xVal = -log(k))) *
