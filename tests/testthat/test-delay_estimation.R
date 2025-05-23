@@ -1184,6 +1184,7 @@ test_that("Fit delayed Weibull", {
                expected = fd_wbc_mlen$objFun(pars = cousPar_mle2, isOrig = TRUE, criterion = "MLEn"),
                tolerance = .0005)
 
+
   # MLEw
 
   # weights from Cousineau (2009)
@@ -1194,24 +1195,30 @@ test_that("Fit delayed Weibull", {
   expect_true(fd_wbc_mlew0$optimizer$profiled)
   expect_equal(coef(fd_wbc_mlew0), expected = cousPar_mlew, tolerance = .15)
 
+  # compare optimization function to be minimized:
+  #+the value reached by the incubate package with the weights from Cousineau (2009) is lower than the value from the published fit
   expect_lte(fd_wbc_mlew0$optimizer$valOpt,
-             expected = fd_wbc_mlew0$objFun(c(delay1=cousPar_mlew[["delay1"]], shape1=log(cousPar_mlew[["shape1"]])),
-                                            isOrig = FALSE))
+             expected = fd_wbc_mlew0$objFun(rlang::env_get(rlang::fn_env(fd_wbc_mlew0$objFun), "extractPars")(parV = cousPar_mlew, isOpt = FALSE, transform = TRUE)))
   # but corrected neg. log-likelihood criterion is in fact quite similar
   expect_equal(fd_wbc_mlew0$criterion,
                expected = fd_wbc_mlew0$objFun(pars = cousPar_mlew, isOrig = TRUE, criterion = "MLEc"),
                tolerance = 0.05)
 
+  # Cousineau GH weights
+  fd_wbc_mlew0GH <- delay_model(x = cousEx, distribution = "weib", method = "MLEw",
+                              control = list(profiled = TRUE, MLEw_weight = "cousineauGH"))
+  expect_identical(fd_wbc_mlew0GH$optimizer$convergence, expected = 0L)
+  expect_type(fd_wbc_mlew0GH$optimizer$methodOpt, type = "character")
+  expect_true(fd_wbc_mlew0GH$optimizer$profiled)
+  # weights Cousineau 2009 vs Cousineau GH
+  #+coefficient estimates differ only little
+  expect_equal(coef(fd_wbc_mlew0GH), expected = coef(fd_wbc_mlew0), tolerance = .1)
+
+
   # weights from our own bigger MC-simulation
   fd_wbc_mlew1 <- delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
-                              control = list(profiled = TRUE))
-  # wrongly specified control option triggers warning
-  expect_warning(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
-                             control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")), regexp = "Unknown names.+control list")
-  # wrongly named arguments are ignored!
-  expect_identical(suppressWarnings(coef(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
-                                                     control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")))),
-                   expected = coef(fd_wbc_mlew1))
+                              control = list(profiled = TRUE, MLEw_weight = "sdist_median"))
+
   expect_identical(fd_wbc_mlew1$optimizer$convergence, expected = 0L)
   expect_identical(fd_wbc_mlew1$optimizer$methodOpt, expected = "L-BFGS-B")
   expect_true(fd_wbc_mlew1$optimizer$profiled)
@@ -1225,10 +1232,18 @@ test_that("Fit delayed Weibull", {
                expected = fd_wbc_mlew1$objFun(pars = cousPar_mlew, isOrig = TRUE, criterion = "MLEn"),
                tolerance = 0.05)
 
-  # weights (cousineau or our own MC-sim) matter
+  # weights (cousineau2009 or our own MC-sim) matter
   expect_gt(abs(coef(fd_wbc_mlew1)[1] - coef(fd_wbc_mlew0)[1]), expected = 1.5) #delay1 estimate
   expect_gt(abs(coef(fd_wbc_mlew1)[2] - coef(fd_wbc_mlew0)[2]), expected = .025) #shape1 estimate
   expect_gt(abs(coef(fd_wbc_mlew1)[3] - coef(fd_wbc_mlew0)[3]), expected = 1.5) #scale1 estimate
+
+  # wrongly specified control option triggers warning
+  expect_warning(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
+                             control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")), regexp = "Unknown names.+control list")
+  # wrongly named arguments are ignored and still give model fit with results!
+  expect_identical(suppressWarnings(coef(delay_model(x = cousEx, distribution = "weibu", method = "MLEw",
+                                                     control = list(profiled = TRUE, MLEw_weightxx = "cousineau2009")))),
+                   expected = coef(fd_wbc_mlew1))
 
 
   # simulate data set with true shape > 1

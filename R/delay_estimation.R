@@ -559,7 +559,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       # We count all events because it is used to get scale parameter (and in this formula we already correct for censorings),
       #+e.g., nObs = length(x), even when there is cens$n$x[["any"]]
       # @param method By which method to calculate weights W1? 'sample' will use the mean of the provided sample of z-values, sdist_median uses the median of the sampling distribution (MC-sim)
-      w1F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineau2009")) {
+      w1F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineauGH", "cousineau2009")) {
         method <- match.arg(method)
 
         stopifnot(is.numeric(nObs))
@@ -572,6 +572,15 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                sdist_median = {
                  # Use results of own MC-simulation
                  w1Fint(nObs)
+               },
+               cousineauGH = {
+                 W1_cousGH <- MLEw_approx$MCsim_cousineauGH[MLEw_approx$MCsim_cousineauGH$type == "W1" &
+                                                              MLEw_approx$MCsim_cousineauGH$location == "J",]
+                 if (!all(nObs %in% W1_cousGH$n)) {
+                   stop("W1-weights from Cousineau (GH) are not available for all requested sample group size n.",
+                        call. = FALSE)
+                 }
+                 W1_cousGH$value[W1_cousGH$n %in% nObs]
                },
                cousineau2009 = {
                  #+cf. Cousineau's simulation results for median of W1's sampling distribution
@@ -597,7 +606,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       }#fn w1F
 
 
-      w2F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineau2009")) {
+      w2F <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineauGH", "cousineau2009")) {
         method <- match.arg(method)
 
         stopifnot(is.numeric(nObs))
@@ -611,6 +620,15 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  # W2-approximation via asymptotic regression model SSasymp on log(n):
                  # We hence model: W2 = 1 + (R0 - 1) * n^(-r)
                  w2Fint(nObs)
+               },
+               cousineauGH = {
+                 W2_cousGH <- MLEw_approx$MCsim_cousineauGH[MLEw_approx$MCsim_cousineauGH$type == "W2" &
+                                                              MLEw_approx$MCsim_cousineauGH$location == "J",]
+                 if (!all(nObs %in% W2_cousGH$n)) {
+                   stop("W2-weights from Cousineau (GH) are not available for all requested sample group size n.",
+                        call. = FALSE)
+                 }
+                 W2_cousGH$value[W2_cousGH$n %in% nObs]
                },
                cousineau2009 = {
                  # MC-simulation on W2 for n=1..16
@@ -639,7 +657,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       # parameter.
       # @returns W3 as function of shape k for given n. The function is *not*
       #   vectorized in argument k
-      w3FF <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineau2009")) {
+      w3FF <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineauGH", "cousineau2009")) {
 
         # catch all for n = 1
         stopifnot(is.numeric(nObs))
@@ -656,6 +674,36 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                sdist_median = {
                  w3FFint(nObs)
                },
+               cousineauGH = {
+                 W3_cousGH <- MLEw_approx$MCsim_cousineauGH[MLEw_approx$MCsim_cousineauGH$type == "W3" &
+                                                              MLEw_approx$MCsim_cousineauGH$location == "J",]
+                 if (!nObs %in% W3_cousGH$n) {
+                   stop("W3-weights from Cousineau (GH) are not available for requested sample group size n.",
+                        call. = FALSE)
+                 }#fi
+
+                 #focus on requested n
+                 W3_cousGH <- W3_cousGH[W3_cousGH$n == nObs,]
+
+                 # use approximation function with linear interpolation:
+                 #we add points for extreme shape:
+                 # n==1 is already dealt with above!
+                 ##df <- tibble(nObs = 2:89) |>
+                 ##rowwise() |>
+                 ##mutate(W3_minShape = w3FFint(nObs = {nObs})(1e-7)) |>
+                 ##ungroup()
+                 #==> regression line for W3 for tiny shape
+                 ##summary(lm(W3_minShape ~ nObs, data = df))
+                 ##-0.228954 + 1.434439 * nObs
+                 ##nlme::gls(W3_minShape ~ nObs, data = df, correlation = nlme::corAR1(.4))
+                 #= -0.43907 + 1.43505 * nObs
+                 stats::approxfun(x = c(1e-4, W3_cousGH$shape, 50),
+                                  y = c(-0.439 + 1.435 * nObs, W3_cousGH$value, 1),
+                                  method = "linear", ties = "ordered",
+                                  # safe to extrapolate on even more extreme
+                                  # shape parameters on both sides
+                                  rule = 2)
+               },
                cousineau2009 = {
                  W3_cous09 <- MLEw_approx$MCsim_cousineau2009[MLEw_approx$MCsim_cousineau2009$type == "W3" &
                                                                  MLEw_approx$MCsim_cousineau2009$location == "J",]
@@ -664,6 +712,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                         call. = FALSE)
                  }#fi
 
+                 #focus on requested n
                  W3_cous09 <- W3_cous09[W3_cous09$n == nObs,]
 
                  # use approximation function with linear interpolation:
@@ -685,7 +734,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  # stats::approxfun relies on current R version
                  # (but its code is more robust since R v3.0.0)
                  # no issue here as this code runs at run-time within the user's R session
-                 stats::approxfun(x = c(1e-4, W3_cous09$shape, 40),
+                 stats::approxfun(x = c(1e-4, W3_cous09$shape, 50),
                                   y = c(-0.439 + 1.435 * nObs, W3_cous09$value, 1),
                                   method = "linear", ties = "ordered",
                                   # safe to extrapolate on even more extreme
@@ -889,7 +938,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
   #
   # The transformed parameters are used within optimization.
   # It does not use parameter names.
-  # The transformation helps to ensure side-conditions (e.g. log-transformation ensures non-negativity of original parameter)
+  # The transformation ensures side-conditions (e.g. log-transformation ensures non-negativity of original parameter)
   # @param parV1 parameter vector for a single group
   # @param obs1 numeric. Can be used for transformation of first parameter delay1
   # @param inverse logical. `inverse=TRUE` takes optimization parameters back to original parameters
@@ -1687,7 +1736,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
     # request a specific criterion?
     isCrit <- !is.null(criterion) && is.character(criterion) && nzchar(criterion[[1]])
     methodSelected <- if (isCrit) {
-      # MLEw has no own likelihood function: use MLEc
+      # MLEw has no own likelihood function: use MLEc instead
       if (criterion[[1]] == "MLEw") "MLEc" else criterion[[1]]
     } else {
       # if no criterion is requested use optimization for inherent method

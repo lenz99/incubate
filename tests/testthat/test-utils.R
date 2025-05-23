@@ -5,7 +5,7 @@ test_that("MLEw weight objects", {
   # we consider the package-internal list MLEw_approx
   expect_true(exists("MLEw_approx"))
   expect_named(MLEw_approx,
-               expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
+               expected = c("MCsim", "MCsim_cousineau2009", "MCsim_cousineauGH", "coef", "fun"))
   expect_type(MLEw_approx[["MCsim"]], type = "list")
   expect_named(MLEw_approx[["MCsim"]],
                expected = c("nObs", "W1", "W1gamma", "W2"))
@@ -45,6 +45,45 @@ test_that("MLEw weight objects", {
     expect_equal(value[type == "W3" & location == "J" & shape == 0.5 & n %in% c(3, 5, 15)], expected = c(3.081, 4.806, 12.069))
     expect_equal(value[type == "W3" & location == "G" & shape == 1.5 & n %in% c(2, 7, 13)], expected = c(1.524, 2.184, 2.403))
   })
+
+  # MC results from Cousineau (2009)
+  MCsim_cousGH <- MLEw_approx[["MCsim_cousineauGH"]]
+  expect_type(MCsim_cousGH, type = "list")
+  expect_named(MCsim_cousGH,
+               expected = c("type", "location", "n", "shape", "value"))
+  # we have a location J
+  expect_true("J" %in% MCsim_cousGH$location)
+  # range of shape
+  expect_equal(min(MCsim_cousGH$shape, na.rm = TRUE), expected = 0.1)
+  expect_equal(max(MCsim_cousGH$shape, na.rm = TRUE), expected = 5.0)
+  # W3 is ordered for shape (ascending) per given n
+  purrr::walk(.x = unique(MCsim_cousGH$n[MCsim_cousGH$type == "W3"]),
+              .f = \(nObs) {
+                shapes <- MCsim_cousGH$shape[MCsim_cousGH$type == "W3" &
+                                               MCsim_cousGH$location == "J" &
+                                               MCsim_cousGH$n == nObs]
+                # shapes are increasing
+                expect_equal(shapes, seq.int(from = .1, to = 5.0, by = .1))
+              })
+  with(MCsim_cousGH, {
+    # see <https://github.com/dcousin3/wMLE> weights files
+    # W1
+    expect_equal(value[type == "W1" & location == "J" & n %in% c(3, 15, 35)],
+                 expected = c(0.8920774880443304, 0.9778152771433289, 0.9904665402384888))
+    expect_equal(value[type == "W1" & location == "G" & n %in% c(2, 18, 65)],
+                 expected = c(0.7625930582854074334, 0.97251232790835328476, 0.992397831076367396186))
+    # W2
+    expect_equal(value[type == "W2" & location == "J" & n %in% c(3, 26)],
+                 expected = c(0.5184046467893484, 0.942983924204849))
+    expect_equal(value[type == "W2" & location == "G" & n %in% c(2, 80)],
+                 expected = c(0.1616905964032776532, 0.97742105623729829933))
+    # W3
+    expect_equal(value[type == "W3" & location == "J" & shape == 0.5 & n %in% c(3, 5, 15)],
+                 expected = c(3.083128646237427, 4.830973130538364, 12.113435707789740))
+    expect_equal(value[type == "W3" & location == "G" & shape == 1.5 & n %in% c(2, 7)],
+                 expected = c(1.518931457913954, 2.185921790685063))
+  })
+
 
   expect_named(MLEw_approx[["coef"]], expected = c("W2", "W3_richards"))
 
@@ -128,8 +167,6 @@ test_that("Richards's generalized logistic function", {
 
   # we consider the package-internal list MLEw_approx
   expect_true(exists("MLEw_approx"))
-  expect_named(MLEw_approx,
-               expected = c("MCsim", "MCsim_cousineau2009", "coef", "fun"))
 
   expect_named(MLEw_approx[["fun"]],
                expected = c("genLogisticF", "genLogisticD", "genLogisticJ"))

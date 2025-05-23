@@ -932,8 +932,10 @@ buildDist <- function(distribution) {
 #' @param transformed logical(1). For `type='param'`, do we need parameter names transformed (as used inside the optimization function?)
 #' @return selected distribution function or parameter names
 #' @include delay_estimation.R
-getDist <- function(distribution = c("exponential", "weibull", "normal"), type = c("cdf", "prob", "density", "random", "param"),
-                    twoPhase = FALSE, twoGroup = FALSE, bind = NULL, profiled = FALSE, transformed = FALSE) {
+getDist <- function(distribution = c("exponential", "weibull", "normal"),
+                    type = c("cdf", "prob", "density", "random", "param"),
+                    twoPhase = FALSE, twoGroup = FALSE, bind = NULL,
+                    profiled = FALSE, transformed = FALSE) {
   distribution <- match.arg(distribution)
   type <- match.arg(type)
 

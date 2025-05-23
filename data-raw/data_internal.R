@@ -103,6 +103,55 @@ W_cousineau2009 <- local({
 })
 
 
+# weights from Cousineau's github project wMLE
+# see <https://github.com/dcousin3/wMLE>
+W_cousineauGH <- local({
+  dplyr::bind_rows(
+    # J-based weights
+    read.delim(file = "MLEw_cousineauGH_J1.tsv", header = FALSE,
+               col.names = c("n", "value")) |>
+      dplyr::mutate(type = "W1", location = "J", shape = NA),
+
+    read.delim(file = "MLEw_cousineauGH_J2.tsv", header = FALSE,
+               col.names = c("n", "value")) |>
+      dplyr::mutate(type = "W2", location = "J", shape = NA),
+
+    read.delim(file = "MLEw_cousineauGH_J3.tsv", header = FALSE,
+               col.names = c("n", "shape", "value")) |>
+      dplyr::mutate(type = "W3", location = "J"),
+
+    # G-based weights
+    read.delim(file = "MLEw_cousineauGH_G1.tsv", header = FALSE,
+               col.names = c("n", "value")) |>
+      dplyr::mutate(type = "W1", location = "G", shape = NA),
+
+    read.delim(file = "MLEw_cousineauGH_G2.tsv", header = FALSE,
+               col.names = c("n", "value")) |>
+      dplyr::mutate(type = "W2", location = "G", shape = NA),
+
+    read.delim(file = "MLEw_cousineauGH_G3.tsv", header = FALSE,
+               col.names = c("n", "shape", "value")) |>
+      dplyr::mutate(type = "W3", location = "G")
+  ) |>
+    tibble::as_tibble() |>
+    dplyr::relocate(type, location, n, shape, value)
+})
+
+
+# check consistency betw MLEw-weights from Cousineau (paper vs GH)
+local({
+  W_cousineau <- dplyr::inner_join(x = W_cousineau2009,
+                                   y = W_cousineauGH,
+                                   by = join_by(type, location, n, shape),
+                                   suffix = c(".2009", ".GH")) |>
+    dplyr::mutate(vdiff = value.GH - value.2009)
+
+  with(W_cousineau, {
+    stopifnot(all(abs(vdiff) < .15))
+    stopifnot(mean(abs(vdiff)) < .01)
+    stopifnot(median(abs(vdiff)) < .003)
+    })
+})
 
 
 # build internal data -----------------------------------------------------
@@ -120,7 +169,8 @@ MLEw_approx <- list(
     dplyr::mutate(W1gamma = stats::qgamma(p = 0.5, shape = nObs, rate = nObs),
                   .after = W1) |>
     as.list(),
-  MCsim_cousineau2009 = W_cousineau2009
+  MCsim_cousineau2009 = W_cousineau2009,
+  MCsim_cousineauGH = W_cousineauGH
 )
 
 
