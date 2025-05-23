@@ -21,15 +21,18 @@
 
 #' Relapse-free survival of melanoma patients under adjuvant treatment
 #'
-#' Data stem from a double-blind, placebo-controlled, phase 3 trial
-#' where 870 patients with completely resected, stage III melanoma with BRAF V600E or V600K mutations
-#' were randomly assigned to receive oral dabrafenib plus trametinib (combination therapy, 438 patients)
-#' or two matched placebo tablets (432 patients) for 12 months.
+#' Data stem from a double-blind, placebo-controlled phase 3 trial where n=870
+#' patients with completely resected, stage III melanoma with BRAF V600E or
+#' V600K mutations were randomly assigned to receive oral dabrafenib plus
+#' trametinib (combination therapy, 438 patients) or two matched placebo tablets
+#' (432 patients) for 12 months.
 #'
 #' @details
-#' The data were digitized by Sean Devlin from the survival plot Fig 1A in the
-#' publication. Therefore, the data given here are **not** a 100% faithful
-#' representation of the original published data and some deviations are to be
+#' Unfortunately, the data set of the clinical trial is not publicly available.
+#' Instead, the data were digitized by Sean Devlin based on the published
+#' survival plot (see Fig 1A in the original publication of the trial results).
+#' Therefore, the data given here do **not** claim to be a 100% faithful
+#' representation of the clinical trial. Some deviations are to be
 #' expected.
 #'
 #' @format A data frame with 870 rows and 4 variables:

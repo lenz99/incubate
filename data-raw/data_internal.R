@@ -21,6 +21,7 @@ library("splines")
 #library("matrixStats", warn.conflicts = FALSE)
 
 
+# read in results of MCSS on MLEw-weights
 # start from directory "data-raw/"
 FNAME <- "MLEw_mcs.rds"
 stopifnot(file.exists(FNAME))
@@ -102,6 +103,8 @@ W_cousineau2009 <- local({
 })
 
 
+
+
 # build internal data -----------------------------------------------------
 
 message("Start with building approximations for the weights!")
@@ -126,13 +129,17 @@ MLEw_approx <- list(
 # approximation W2 --------------------------------------------------------
 
 # asymptotic regression model: cf. SSasymp model on log(nObs)
-# starting at nObs = 2 (as nObs = 1 is off).
+#+starting at nObs = 2 (as nObs = 1 is off).
+#+using log-rate lr instead of rate r ensures that we have a positive rate
+#+by means of exp(lr)
 fm_W2 <- gsl_nls(W2 ~ 1 + (R0 - 1) * nObs**-exp(lr),
                  start = list(R0 = -.25, lr = -.01),
                  data = MLEw_mcs$W12, subset = nObs > 1)
 
+
 # check model fit
-if (!fm_W2$convInfo$isConv || fm_W2$convInfo$stopCode != 0 || fm_W2$convInfo$nEval[["f"]] > 27 || deviance(fm_W2) > 1e-3) {
+if (!fm_W2$convInfo$isConv || fm_W2$convInfo$stopCode != 0 ||
+    fm_W2$convInfo$nEval[["f"]] > 27 || deviance(fm_W2) > 1e-3) {
   stop("Model fit for W2 is bad!")
 }
 
@@ -148,20 +155,17 @@ MLEw_approx$coef <- list(
 
 
 
-
-
-
 if (rlang::is_interactive()) {
   plDatW2 <- MLEw_mcs$W12 |>
-    dplyr::filter(nObs > 1) |>
-    dplyr::mutate(W2mod = predict(fm_W2))
+    # including nObs == 1 (where model was not trained on this observation)
+    dplyr::mutate(W2mod = predict(fm_W2, newdata = MLEw_mcs$W12))
 
   ggplot(data = plDatW2,
          mapping = aes(x = nObs, y = W2)) +
     geom_point(alpha = .57, col = "lightgrey", size = 2) + #geom_line() +
     geom_point(mapping = aes(y = W2mod), size = .5, col = "darkred", alpha = .2) +
     geom_line(mapping = aes(y = W2mod), col = "darkred", alpha = .1, linetype = "dotted") +
-    geom_vline(xintercept = N_DIRECT, col = "darkgrey") +
+    geom_vline(xintercept = N_DIRECT, col = "darkgrey", linetype = "dashed") +
     scale_x_log10() +
     labs(title = "W2: median of MC-sim and fitted W2-function",
          subtitle = "Modell: darkred") |
@@ -172,7 +176,8 @@ if (rlang::is_interactive()) {
     geom_point() +
     geom_hline(yintercept = 0, col = "darkgrey") +
     #scale_y_sqrt() +
-    labs(title = "Bias of modelled W2 vs MC-simulation (median)",
+    labs(y = expression("Bias " * b[n] == hat(W[2])(n)-W[2](n)),
+         title = "Bias of modelled W2 vs MC-simulation (median)",
          subtitle = paste("beyond n =", N_DIRECT))
 } #fi
 

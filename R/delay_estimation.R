@@ -635,8 +635,10 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       }#nf w2F
 
 
-      # factory for w3 function that gives the W3-weight for the given shape parameter.
-      #+The returned W3-function is *not* vectorized in argument k
+      # Factory for w3 function that gives the W3-weight for the given shape
+      # parameter.
+      # @returns W3 as function of shape k for given n. The function is *not*
+      #   vectorized in argument k
       w3FF <- function(nObs, z, method = c("sdist_median", "sample", "hybrid", "cousineau2009")) {
 
         # catch all for n = 1
@@ -658,19 +660,37 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  W3_cous09 <- MLEw_approx$MCsim_cousineau2009[MLEw_approx$MCsim_cousineau2009$type == "W3" &
                                                                  MLEw_approx$MCsim_cousineau2009$location == "J",]
                  if (!nObs %in% W3_cous09$n) {
-                   stop("W3-weights from Cousineau are not available for requested sample group size n.", call. = FALSE)
-                 }
+                   stop("W3-weights from Cousineau (2009) are not available for requested sample group size n.",
+                        call. = FALSE)
+                 }#fi
 
-                 # use approximation function with linear interpolation: we add points for extreme shape:
+                 W3_cous09 <- W3_cous09[W3_cous09$n == nObs,]
+
+                 # use approximation function with linear interpolation:
+                 #we add points for extreme shape:
                  #+ for huge shape W3 approaches 1
-                 #+ for minimal shape there is a linear dependence on nObs:
-                 ##df <- tibble(nObs = seq_len(501)) |> rowwise() |> mutate(W3_minShape = MLEw_approx$fun$w3FF(nObs = {nObs})(1e-7))
-                 ##summary(lm(W3_minShape ~ nObs, data = df)) #==> regression line is: 0.229066 + 1.427202 * nObs
-                 # approxfun relies on current R version (more robust since R v3.0.0),
-                 #+but less of an issue as this code runs at run-time within the user's R session
-                 stats::approxfun(x = c(1e-7, W3_cous09$shape[W3_cous09$n == nObs], 1e3),
-                                  y = c(0.229066 + 1.427202 * nObs, W3_cous09$value[W3_cous09$n == nObs], 1),
-                                  ties = "ordered", rule = 2)
+                 #+ for minimal shape there is a linear dependence on nObs
+                 # n==1 is already dealt with above!
+                 ##df <- tibble(nObs = 2:89) |>
+                 ##rowwise() |>
+                 ##mutate(W3_minShape = w3FFint(nObs = {nObs})(1e-7)) |>
+                 ##ungroup()
+                 #==> regression line for W3 for tiny shape
+                 ##summary(lm(W3_minShape ~ nObs, data = df))
+                 ##-0.228954 + 1.434439 * nObs
+                 ##nlme::gls(W3_minShape ~ nObs, data = df, correlation = nlme::corAR1(.4))
+                 #= -0.43907 + 1.43505 * nObs
+
+                 # function of shape by linear interpolation
+                 # stats::approxfun relies on current R version
+                 # (but its code is more robust since R v3.0.0)
+                 # no issue here as this code runs at run-time within the user's R session
+                 stats::approxfun(x = c(1e-4, W3_cous09$shape, 40),
+                                  y = c(-0.439 + 1.435 * nObs, W3_cous09$value, 1),
+                                  method = "linear", ties = "ordered",
+                                  # safe to extrapolate on even more extreme
+                                  # shape parameters on both sides
+                                  rule = 2)
                },
                sample = function(k) {
                  stopifnot(is.numeric(k), length(k) == 1)
@@ -681,7 +701,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
                  # calculate mean from sdist_median and sample
                  (w3FFint(nObs)(k) + w1F(nObs = nObs, z=z, method = method) * if (log(k) < -5) 1 else if (k==1) mean(1/z) else sum(1/z^(1/k)) / sum(z^((k-1)/k)))/2
                },
-               stop("This method for W3 approximation is not handled here!", call. = FALSE)
+               stop("This method for W3 approximation is not handled here!",
+                    call. = FALSE)
         )
       }#nf w3FF
 
