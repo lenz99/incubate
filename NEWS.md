@@ -8,7 +8,9 @@
 * implement S3-function `logLik`
 * delayed normal distribution as new statistical model
 * `delay_test`: use name LRT (instead of LR) for likelihood ratio tests
-* new data long2017 from melanoma clinical trial
+* new data sets:
+    * data set `long2017` from melanoma clinical trial
+    * data set `measles_sailer` with serial times of measles 
 
 # incubate 1.3.0
 * implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter

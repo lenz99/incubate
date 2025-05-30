@@ -47,4 +47,5 @@ graphite <- sort(
     31.53, 33.28, 34.15, 35.03, 36.20))
 
 
-usethis::use_data(rockette, fatigue, susquehanna, pollution, graphite, overwrite = TRUE)
+usethis::use_data(rockette, fatigue, susquehanna, pollution, graphite,
+                  overwrite = TRUE)

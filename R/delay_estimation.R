@@ -4,13 +4,6 @@
 #' @include utils.R
 NULL
 
-#XXX read here
-#+ **neXt**
-#+ ~1/~ use logit-based transformation for delay1: it will enforce non-negativity of delay1. then we do not need lower bound to avoid non-negative.
-#+ 2/ make transformations easier (not via matrices and functions stored but to be implemented more directly)
-#+ 3/ work on rootSolve way to implement MLEw. There we would check that we have indeed local maximum of MLEw
-#+ 4/ check that censorings are implemented correctly
-#+ 5/ write up MS1
 
 #' Factory method for objective function
 #'
@@ -1637,7 +1630,8 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       # h: return object
       h <- rep_len(-1, length.out = length(obs))
 
-      # n.event is generally not integer for type=interval/left. It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
+      # n.event is generally not integer for type=interval/left.
+      #+It is increased by a fraction (depending on number of events) and sums to nbr of events+1 (per group)
       # floor(n.event + n.censor) == n
       stopifnot(sum(as.integer(kmFit$n.event[ind_evKM]),
                     if (twoGroup) kmFit$n.censor[c(-1,1)[[1L+(group == "x")]] * seq_len(kmFit$strata[[1L]])] else kmFit$n.censor) == kmFit$n[[if (group == "x") 1L else 2L]])
@@ -1650,25 +1644,34 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       if (length(ind_hrcens)) {
         ind_hobs <- which(h>0)
         # interpolate values for all censored observations
-        h[ind_hrcens] <- stats::approx(x = c(0L, ind_hobs, length(obs)+1L), y = c(0L, h[ind_hobs], 1L),
-                                       method = "linear", ties = "ordered", # x-values are already ordered!
+        h[ind_hrcens] <- stats::approx(x = c(0L, ind_hobs, length(obs)+1L),
+                                       y = c(0L, h[ind_hobs], 1L),
+                                       method = "linear",
+                                       # x-values are already ordered!
+                                       ties = "ordered",
                                        yleft = NA, yright = NA,
                                        # values where to interpolate
                                        xout = ind_hrcens)$y
-      } #fi hrcens
+      }#fi hrcens
 
       diff(c(0L, h, 1L))
 
     }#esle !isSurv
 
     # check for ties to fix cumDiffs for observed event times
-    tig <- tieInfo[[group]] # tie info group (tig)
+    # tig: tie info group
+    tig <- tieInfo[[group]]
     nTigs <- NROW(tig[["tieGrp"]])
 
-    if (nTigs) {
-      stopifnot(all(cumDiffs[tig[["cumDiffInd"]]] == 0)) # all spacings for tied observed event times are 0
+    if (nTigs > 0) {
+      # all spacings for tied observed event times are 0
+      stopifnot(all(cumDiffs[tig[["cumDiffInd"]]] == 0))
 
-      obsVals <- if (!isSurv) obs[tig$tieGrp[, "startInd"]] else obs[tig$tieGrp[, "startInd"], 1L]
+      obsVals <- if (!isSurv) {
+        obs[tig$tieGrp[, "startInd"]]
+      } else {
+        obs[tig$tieGrp[, "startInd"], 1L]
+      }
 
       cumDiffs[tig[["cumDiffInd"]]] <- switch(
         ties.,
@@ -1680,9 +1683,11 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
             #tig$tieGrp[, "len"]-1L # number of repeats per tie group
             times = tig$tieGrp[, "len"]-1L)
         },
-        # "equispaced" for CDF-backtransformed using given parameters, then equispaced spacings across tie groups
-        # we keep using a standard density strategy for fitting, but can request another tie-strategy for evaluating the MPSE-criterion,
-        #e.g., for Moran's test
+        # "equispaced" for CDF-backtransformed using given (fitted!) parameters,
+        #+then equispaced spacings across tie groups
+        # we keep using a standard density strategy for fitting,
+        # but can request another tie-strategy for evaluating the MPSE-criterion
+        # e.g., for Moran's test
         equispaced = {
           # per tie group, assume tied observations are maximally spread (within rounding radius).
           # Two reasons why this leads to bigger cumDiffs (=smaller criterion/Moran's test statistic = conservative)

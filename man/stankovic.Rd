@@ -3,7 +3,7 @@
 \docType{data}
 \name{stankovic}
 \alias{stankovic}
-\title{Survival of mice with glioma under different treatments}
+\title{Survival time of mice with glioma under different treatments}
 \format{
 A data frame with 45 rows and 5 variables:
 \describe{

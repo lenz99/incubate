@@ -1,4 +1,4 @@
-#' Survival of mice with glioma under different treatments
+#' Survival time of mice with glioma under different treatments
 #'
 #' This data set stems from an animal experiment described in Stankovic (2018).
 #' In particular, the data in question is shown in Figure 6J and 6K.
@@ -17,6 +17,50 @@
 #' }
 #' @source Dudvarski Stankovic N, Bicker F, Keller S, et al. EGFL7 enhances surface expression of integrin a5b1 to promote angiogenesis in malignant brain tumors. EMBO Mol Med. 2018;10(9):e8420. doi:10.15252/emmm.201708420 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6127886/
 "stankovic"
+
+
+#' Serial interval times for measles during a long journey on a sailing vessel
+#'
+#' Measles broke out during a sailing ship passage from England to Australia
+#' involving six persons on the ship. Serial interval times, i.e., the time of
+#' clinical onset between successive cases in a chain of transmission, were
+#' recorded. The interval times for the first three cases was not observed
+#' completely as they brought measles on board.
+#'
+#' @details
+#' In 1829, the British sailing vessel HMS America carried 176 prisoners from
+#' England to New South Wales, Australia. Alexander Stewart, the ship surgeon,
+#' recorded cases of measles during the passage in his medical journal.
+#' The journey started on 4 March 1829. A guard, who embarked from Chatham
+#' (England), was the first measles case when the ship berthed at Woolwich
+#' (England) on 28 March 1829. The measles began affecting children of the
+#' guards on 31 March 1829 and spreading to some of the soldiers, later.
+#'
+#' In the medical journal, it is not clearly said if clinical onset is
+#' defined as fever or rash. The first generation of measles on the sailer
+#' comprises three cases for which we assume the minimum serial interval time
+#' for measles which is generally estimated to be six days (for both,
+#' fever-to-fever and for rash-to-rash).
+#'
+#' @format A data frame with 6 rows and 4 variables:
+#' \describe{
+#'   \item{generation}{Disease generation on sailer}
+#'   \item{symptomOnset}{Days of first symptoms since the start of the journey}
+#'   \item{serialInterval}{Days between successive cases in chain of
+#'   transmission, from symptom to symptom}
+#'   \item{status}{Status indicator for serial interval time: 0 right-censored
+#'   vs 1 for observed}
+#' }
+#' @references Paterson BJ, Kirk MD, Cameron AS, et al. Historical data and
+#'   modern methods reveal insights in measles epidemiology, BMJ Open
+#'   2013;3:e002033. doi:10.1136/bmjopen-2012-002033
+#' @references Fine PE. The interval between successive cases of an infectious
+#'   disease. Am J Epidemiol. 2003;158(11):1039-1047. doi:10.1093/aje/kwg251
+#' @source Records of the Admiralty, Naval Forces, Royal Marines, Coastguard,
+#'   and related bodies, ADM 101/2/3,
+#'   <https://discovery.nationalarchives.gov.uk/details/r/C4106406>
+"measles_sailer"
+
 
 
 #' Relapse-free survival of melanoma patients under adjuvant treatment
@@ -45,6 +89,7 @@
 #' @source Long GV, Hauschild A, Santinami M, et al. Adjuvant Dabrafenib plus Trametinib in Stage III BRAF-Mutated Melanoma. N Engl J Med. 2017;377(19):1813-1823. doi:10.1056/NEJMoa1708539
 #' @source Devlin SM and O'Quigley J, The nph2ph-transform: applications to the statistical analysis of completed clinical trials, arXiv:2407.18905, 2024. doi:10.48550/arXiv.2407.18905.
 "long2017"
+
 
 
 #' Small data sets from miscellaneous publications
