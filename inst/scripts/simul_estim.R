@@ -11,7 +11,8 @@ version_inc <- packageVersion("incubate")
 # minimal version check:
 # v1.3.0.9084 fix likelihood for data with right-censored observations (mkuhn, 2025-01-20)
 # v1.3.0.9092 fix in rexp_delayed and rweib_delayed with cens= (mkuhn, 2025-03-31)
-stopifnot(version_inc >= "1.3.0.9092")
+# v1.3.0.9101 added cousineauGH weights
+stopifnot(version_inc >= "1.3.0.9101")
 cat('(incubate v', toString(version_inc), ')\n', sep = "")
 
 library("tibble")
@@ -226,11 +227,18 @@ doMCSim <- function(DGPsetting, N_mcrep) {
                                   "MLEn", TRUE, NA_character_,
                                   "MLEw", TRUE, "sdist_median")
 
-  # Cousineau-weights are only available for n<=16
+  # Cousineau2009-weights are only available for n<=16
   if (nObs <= 16) {
     estimMethods <- estimMethods |>
       tibble::add_case(method = "MLEw", profiled = TRUE,
                        weight = "cousineau2009")
+  }#fi
+
+  # CousineauGH-weights are only available for n<=100
+  if (nObs <= 100) {
+    estimMethods <- estimMethods |>
+      tibble::add_case(method = "MLEw", profiled = TRUE,
+                       weight = "cousineauGH")
   }#fi
   estimMethods <- estimMethods |>
     dplyr::mutate(software = "incubate", .before = 1) |>

@@ -386,9 +386,12 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
             # check that there are two distinct values
             if (anyNA(firstTwoRanks)) {
               if (l < length(obs)) next
-              if (method %in% c("MPSE", "MLEc")) stop("At least two different distinct observation values per group required!", call. = FALSE)
+              if (method %in% c("MPSE", "MLEc")) {
+                stop("At least two different distinct observation values per group required!",
+                     call. = FALSE)
+              }#fi method
               #else warning("Only a single unique distinct observation value in a group.", call. = FALSE)
-            }#fi
+            }#fi anyNA
 
             ind_obs1 <- which(obs_r == firstTwoRanks[1L])
             ind_next <- which(obs_r == firstTwoRanks[2L])
@@ -398,7 +401,7 @@ objFunFactory <- function(x, y = NULL, distO, method = c("MPSE", "MLEn", "MLEc",
       } #esle (non-Surv)
 
       list(inds_obs1 = ind_obs1, ind_next = ind_next)
-    }
+    }#fn forefrontIndF
 
     purrr::compact(list(x = forefrontIndF(group = "x"), y = if (twoGroup) forefrontIndF(group = "y")))
   })#indForefront
