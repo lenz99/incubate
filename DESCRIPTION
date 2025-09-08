@@ -1,7 +1,7 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.3.0.9101
-Date: 2025-05-30
+Version: 1.3.0.9102
+Date: 2025-09-08
 Authors@R:
     person(given = "Matthias", family = "Kuhn",
            role = c("aut", "cre", "cph"),
@@ -41,7 +41,7 @@ Suggests:
 URL: https://gitlab.com/imb-dev/incubate/
 BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Config/testthat/edition: 3
 Depends:
     R (>= 3.5.0)

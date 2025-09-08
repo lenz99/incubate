@@ -67,7 +67,7 @@ if (any(c('help', 'h') %in% names(cmdArgs))) {
   cat('  --help\t print this help\n')
   cat('  --print\t show scenarios to simulate and exit.\n')
   cat('  --resultsDir=\t specify the directory where to put the result files. Defaults to the directory where Rscript is executed.\n')
-  cat('  --n=\t\t sample size number to use in the simulation. By default (n=-1) only smallest sample size is used. n=0 will use all forseen values of n.\n')
+  cat('  --n=\t\t sample size number to use in the simulation. By default (n=-1) only a single small sample size is used. n=0 will use a whole set of preconfigured sample size values.\n')
   cat('  --cens\t apply also random right-censoring during the simulation study\n')
   cat('  --slice=\t if given, pick only this number of first scenarios for simulations. If negative, scenarios are taken from the tail.\n')
   cat('  --seed=\t if given, set random seed at the start of the script. Default depends on current date-time.\n')
@@ -84,6 +84,10 @@ stopifnot(is.character(myResultsDir), dir.exists(myResultsDir),
 
 myWorkers <- cmdArgs[["workers"]]
 stopifnot(is.numeric(myWorkers), length(myWorkers) == 1L, myWorkers >= 1L)
+if (myWorkers > 1L && !requireNamespace("future.callr", quietly = TRUE)) {
+  cat("Please install package future.callr to have parallel computing work!\n")
+  myWorkers <- 1L
+}
 USE_FUTURE <- myWorkers > 1L
 
 myChnkSize <- cmdArgs[["chnkSize"]]
@@ -117,18 +121,21 @@ if (mySeed > 0L) {
 }
 
 # choose sample sizes: is there a specific sample size given?
-nVctr <- if (myN > 0) {
-  myN
-} else {
-  # sample sizes from Cousineau: 8, 16, 32
-  c(8, 16, 32, 50) #10, 15, 20, 50) ## 100  8, 12, 20, 75
-}
+# default (myN=-1) is to use only a small sample size:
+#+it gives nice power curves for chosen difference difference in delay
+nVctr <- switch(EXPR = paste0("S",sign(myN)),
+                `S-1` = 8,
+                S0 = c(8, 16, 32, 50),
+                S1 = myN,
+                stop("Unexpected input for --n"))
+
+stopifnot(is.numeric(nVctr), all(nVctr > 0))
 
 simSetting <- tidyr::expand_grid(nObs = nVctr,
                                  delay = DELAY_V,
                                  #scale as nuisance parameter
                                  scale = 100, #c(5, 10), #c(1, 2, 5),
-                                 #shape from cousienau
+                                 #shape taken from Cousineau
                                  shape = c(.5, 1, 1.5, 2, 2.5),
                                  #cens = 0: all observed (=no censoring)
                                  cens = c(0, 0.1, 0.2, 0.3)
@@ -137,19 +144,13 @@ simSetting <- tidyr::expand_grid(nObs = nVctr,
 # sanity/health checks
 simSetting <- simSetting |>
   # enough expected number of observations
-  dplyr::filter(cens >= 0, cens < 1, nObs * (1-cens) > 5)
+  dplyr::filter(cens >= 0, cens < 1,
+                nObs * (1-cens) > 5)
 
 # default: no censoring (cens = 0)
 if (!myCens) {
   simSetting <- simSetting |>
     dplyr::slice_min(cens)
-}
-
-# default is to use only the smallest sample size
-# (this n is typically used in presentations as it gives nice power curves for chosen difference difference in delay)
-if (myN < 0) {
-  simSetting <- simSetting |>
-    dplyr::slice_min(nObs)
 }
 
 
@@ -213,7 +214,6 @@ if (USE_FUTURE) {
 doMCSim <- function(DGPsetting, N_mcrep) {
   # settings from the environment:
   stopifnot(length(N_mcrep) == 1, is.numeric(N_mcrep), N_mcrep >= 1)
-
   stopifnot(is.numeric(DGPsetting), length(DGPsetting) == 5L)
 
   nObs <- DGPsetting[[1]]
