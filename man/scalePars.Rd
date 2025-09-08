@@ -4,7 +4,7 @@
 \alias{scalePars}
 \title{Calculate parameter scaling for optimization routine.}
 \usage{
-scalePars(parV, lowerB = 1e-05, upperB = 1e+05)
+scalePars(parV, lowerB = 0.00001, upperB = 100000)
 }
 \arguments{
 \item{parV}{named numeric parameter vector for optimization}

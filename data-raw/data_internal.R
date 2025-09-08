@@ -8,18 +8,18 @@
 # The package incubate makes use of these functions in MLEw_approx[["fun"]]
 ####
 
-
 # init --------------------------------------------------------------------
 
 library("usethis")
 
 library("dplyr")
+library("ggplot2")
 library("patchwork")
 
 library("gslnls")
 library("splines")
+library("numDeriv")
 #library("matrixStats", warn.conflicts = FALSE)
-
 
 # read in results of MCSS on MLEw-weights
 # start from directory "data-raw/"
@@ -30,8 +30,11 @@ MLEw_mcs <- readRDS(FNAME)
 
 
 stopifnot(is.list(MLEw_mcs))
-stopifnot(identical(names(MLEw_mcs), c("W12","W3", "settings")),
-          is.data.frame(MLEw_mcs$W12), is.data.frame(MLEw_mcs$W3))
+stopifnot(
+  identical(names(MLEw_mcs), c("W12", "W3", "settings")),
+  is.data.frame(MLEw_mcs$W12),
+  is.data.frame(MLEw_mcs$W3)
+)
 
 
 W3 <- MLEw_mcs$W3 |>
@@ -42,8 +45,8 @@ W3 <- MLEw_mcs$W3 |>
     nlp1shape = -log1p(shape),
     lW3 = log(W3),
     llW3 = log(lW3),
-    lp1lW3 = log1p(lW3))
-
+    lp1lW3 = log1p(lW3)
+  )
 
 
 # for which Ns do we use direct numbers
@@ -52,11 +55,13 @@ N_DIRECT <- 49L
 # we assume this within w1F and w2F below!
 stopifnot(NROW(MLEw_mcs$W12) > N_DIRECT, NROW(MLEw_mcs$W3) > N_DIRECT)
 stopifnot(identical(MLEw_mcs$W12$nObs[seq_len(N_DIRECT)], seq_len(N_DIRECT)))
-stopifnot(identical(MLEw_mcs$W3 |>
-                      dplyr::distinct(nObs) |>
-                      dplyr::slice_head(n=N_DIRECT) |>
-                      dplyr::pull(nObs),
-                    seq_len(N_DIRECT)))
+stopifnot(identical(
+  MLEw_mcs$W3 |>
+    dplyr::distinct(nObs) |>
+    dplyr::slice_head(n = N_DIRECT) |>
+    dplyr::pull(nObs),
+  seq_len(N_DIRECT)
+))
 
 
 # read in weights from publication of Cousineau (2009):
@@ -71,33 +76,60 @@ W_cousineau2009 <- local({
 
   W1_mcss <- strsplit(W1_mcss_str, split = " ", fixed = TRUE)[[1]] |>
     as.numeric() |>
-    matrix(ncol = 4, byrow = TRUE, dimnames = list(1:16, c("n", "E", "G", "J"))) |>
+    matrix(
+      ncol = 4,
+      byrow = TRUE,
+      dimnames = list(1:16, c("n", "E", "G", "J"))
+    ) |>
     as.data.frame() |>
-    tidyr::pivot_longer(cols = c(E, G, J), names_to = "location", values_to = "value") |>
+    tidyr::pivot_longer(
+      cols = c(E, G, J),
+      names_to = "location",
+      values_to = "value"
+    ) |>
     dplyr::mutate(shape = NA_real_, .before = value) |>
     dplyr::relocate(location)
 
-
   W2_mcss <- strsplit(W2_mcss_str, split = " ", fixed = TRUE)[[1]] |>
     as.numeric() |>
-    matrix(ncol = 4, byrow = TRUE, dimnames = list(1:16, c("n", "E", "G", "J"))) |>
+    matrix(
+      ncol = 4,
+      byrow = TRUE,
+      dimnames = list(1:16, c("n", "E", "G", "J"))
+    ) |>
     as.data.frame() |>
-    tidyr::pivot_longer(cols = c(E, G, J), names_to = "location", values_to = "value") |>
+    tidyr::pivot_longer(
+      cols = c(E, G, J),
+      names_to = "location",
+      values_to = "value"
+    ) |>
     dplyr::mutate(shape = NA_real_, .before = value) |>
     dplyr::relocate(location)
 
   W3_mcss <- strsplit(W3_mcss_str, split = " ", fixed = TRUE)[[1]] |>
     as.numeric() |>
-    matrix(ncol = 6, byrow = TRUE, dimnames = list(paste0(rep(c("E", "G", "J"), each = 16), rep.int(1:16, times = 3)),
-                                                   c("n", paste("shape", c(0.5, 1, 1.5, 2, 2.5), sep = "_")))) |>
+    matrix(
+      ncol = 6,
+      byrow = TRUE,
+      dimnames = list(
+        paste0(rep(c("E", "G", "J"), each = 16), rep.int(1:16, times = 3)),
+        c("n", paste("shape", c(0.5, 1, 1.5, 2, 2.5), sep = "_"))
+      )
+    ) |>
     as.data.frame() |>
     tibble::rownames_to_column(var = "rown") |>
-    dplyr::mutate(location = stringr::str_sub(rown, end = 1), .before = n,
-                  rown = NULL) |>
-    tidyr::pivot_longer(cols = starts_with("shape_"),
-                        names_to = "shape", names_prefix = "^shape_", names_transform = as.numeric,
-                        values_to = "value")
-
+    dplyr::mutate(
+      location = stringr::str_sub(rown, end = 1),
+      .before = n,
+      rown = NULL
+    ) |>
+    tidyr::pivot_longer(
+      cols = starts_with("shape_"),
+      names_to = "shape",
+      names_prefix = "^shape_",
+      names_transform = as.numeric,
+      values_to = "value"
+    )
 
   dplyr::bind_rows(list(W1 = W1_mcss, W2 = W2_mcss, W3 = W3_mcss), .id = "type")
 })
@@ -108,29 +140,47 @@ W_cousineau2009 <- local({
 W_cousineauGH <- local({
   dplyr::bind_rows(
     # J-based weights
-    read.delim(file = "MLEw_cousineauGH_J1.tsv", header = FALSE,
-               col.names = c("n", "value")) |>
+    read.delim(
+      file = "MLEw_cousineauGH_J1.tsv",
+      header = FALSE,
+      col.names = c("n", "value")
+    ) |>
       dplyr::mutate(type = "W1", location = "J", shape = NA),
 
-    read.delim(file = "MLEw_cousineauGH_J2.tsv", header = FALSE,
-               col.names = c("n", "value")) |>
+    read.delim(
+      file = "MLEw_cousineauGH_J2.tsv",
+      header = FALSE,
+      col.names = c("n", "value")
+    ) |>
       dplyr::mutate(type = "W2", location = "J", shape = NA),
 
-    read.delim(file = "MLEw_cousineauGH_J3.tsv", header = FALSE,
-               col.names = c("n", "shape", "value")) |>
+    read.delim(
+      file = "MLEw_cousineauGH_J3.tsv",
+      header = FALSE,
+      col.names = c("n", "shape", "value")
+    ) |>
       dplyr::mutate(type = "W3", location = "J"),
 
     # G-based weights
-    read.delim(file = "MLEw_cousineauGH_G1.tsv", header = FALSE,
-               col.names = c("n", "value")) |>
+    read.delim(
+      file = "MLEw_cousineauGH_G1.tsv",
+      header = FALSE,
+      col.names = c("n", "value")
+    ) |>
       dplyr::mutate(type = "W1", location = "G", shape = NA),
 
-    read.delim(file = "MLEw_cousineauGH_G2.tsv", header = FALSE,
-               col.names = c("n", "value")) |>
+    read.delim(
+      file = "MLEw_cousineauGH_G2.tsv",
+      header = FALSE,
+      col.names = c("n", "value")
+    ) |>
       dplyr::mutate(type = "W2", location = "G", shape = NA),
 
-    read.delim(file = "MLEw_cousineauGH_G3.tsv", header = FALSE,
-               col.names = c("n", "shape", "value")) |>
+    read.delim(
+      file = "MLEw_cousineauGH_G3.tsv",
+      header = FALSE,
+      col.names = c("n", "shape", "value")
+    ) |>
       dplyr::mutate(type = "W3", location = "G")
   ) |>
     tibble::as_tibble() |>
@@ -140,17 +190,19 @@ W_cousineauGH <- local({
 
 # check consistency betw MLEw-weights from Cousineau (paper vs GH)
 local({
-  W_cousineau <- dplyr::inner_join(x = W_cousineau2009,
-                                   y = W_cousineauGH,
-                                   by = join_by(type, location, n, shape),
-                                   suffix = c(".2009", ".GH")) |>
+  W_cousineau <- dplyr::inner_join(
+    x = W_cousineau2009,
+    y = W_cousineauGH,
+    by = join_by(type, location, n, shape),
+    suffix = c(".2009", ".GH")
+  ) |>
     dplyr::mutate(vdiff = value.GH - value.2009)
 
   with(W_cousineau, {
     stopifnot(all(abs(vdiff) < .15))
     stopifnot(mean(abs(vdiff)) < .01)
     stopifnot(median(abs(vdiff)) < .003)
-    })
+  })
 })
 
 
@@ -165,15 +217,15 @@ message("Start with building approximations for the weights!")
 MLEw_approx <- list(
   # store simulation results for W1 and W2
   MCsim = MLEw_mcs$W12 |>
-    dplyr::slice_head(n=N_DIRECT) |>
-    dplyr::mutate(W1gamma = stats::qgamma(p = 0.5, shape = nObs, rate = nObs),
-                  .after = W1) |>
+    dplyr::slice_head(n = N_DIRECT) |>
+    dplyr::mutate(
+      W1gamma = stats::qgamma(p = 0.5, shape = nObs, rate = nObs),
+      .after = W1
+    ) |>
     as.list(),
   MCsim_cousineau2009 = W_cousineau2009,
   MCsim_cousineauGH = W_cousineauGH
 )
-
-
 
 
 # approximation W2 --------------------------------------------------------
@@ -182,14 +234,21 @@ MLEw_approx <- list(
 #+starting at nObs = 2 (as nObs = 1 is off).
 #+using log-rate lr instead of rate r ensures that we have a positive rate
 #+by means of exp(lr)
-fm_W2 <- gsl_nls(W2 ~ 1 + (R0 - 1) * nObs**-exp(lr),
-                 start = list(R0 = -.25, lr = -.01),
-                 data = MLEw_mcs$W12, subset = nObs > 1)
+fm_W2 <- gslnls::gsl_nls(
+  W2 ~ 1 + (R0 - 1) * nObs**-exp(lr),
+  start = list(R0 = -.25, lr = -.01),
+  data = MLEw_mcs$W12,
+  subset = nObs > 1
+)
 
 
 # check model fit
-if (!fm_W2$convInfo$isConv || fm_W2$convInfo$stopCode != 0 ||
-    fm_W2$convInfo$nEval[["f"]] > 27 || deviance(fm_W2) > 1e-3) {
+if (
+  !fm_W2$convInfo$isConv ||
+    fm_W2$convInfo$stopCode != 0 ||
+    fm_W2$convInfo$nEval[["f"]] > 27 ||
+    deviance(fm_W2) > 1e-3
+) {
   stop("Model fit for W2 is bad!")
 }
 
@@ -197,12 +256,8 @@ if (!fm_W2$convInfo$isConv || fm_W2$convInfo$stopCode != 0 ||
 # add coef for W2-approximation
 MLEw_approx$coef <- list(
   #was c(R0 = -0.44193638, -exp(-0.00624712316)
-  W2 = c(R0 = coef(fm_W2)[[1L]],
-         negRate = -exp(coef(fm_W2)[[2L]]))
+  W2 = c(R0 = coef(fm_W2)[[1L]], negRate = -exp(coef(fm_W2)[[2L]]))
 )
-
-
-
 
 
 if (rlang::is_interactive()) {
@@ -210,32 +265,43 @@ if (rlang::is_interactive()) {
     # including nObs == 1 (where model was not trained on this observation)
     dplyr::mutate(W2mod = predict(fm_W2, newdata = MLEw_mcs$W12))
 
-  ggplot(data = plDatW2,
-         mapping = aes(x = nObs, y = W2)) +
+  ggplot(data = plDatW2, mapping = aes(x = nObs, y = W2)) +
     geom_point(alpha = .57, col = "lightgrey", size = 2) + #geom_line() +
-    geom_point(mapping = aes(y = W2mod), size = .5, col = "darkred", alpha = .2) +
-    geom_line(mapping = aes(y = W2mod), col = "darkred", alpha = .1, linetype = "dotted") +
+    geom_point(
+      mapping = aes(y = W2mod),
+      size = .5,
+      col = "darkred",
+      alpha = .2
+    ) +
+    geom_line(
+      mapping = aes(y = W2mod),
+      col = "darkred",
+      alpha = .1,
+      linetype = "dotted"
+    ) +
     geom_vline(xintercept = N_DIRECT, col = "darkgrey", linetype = "dashed") +
     scale_x_log10() +
-    labs(title = "W2: median of MC-sim and fitted W2-function",
-         subtitle = "Modell: darkred") |
+    labs(
+      title = "W2: median of MC-sim and fitted W2-function",
+      subtitle = "Modell: darkred"
+    ) |
 
-
-    ggplot(data = plDatW2 |> dplyr::filter(nObs > N_DIRECT),
-           mapping = aes(x = W2, y = W2mod-W2)) +
-    geom_point() +
-    geom_hline(yintercept = 0, col = "darkgrey") +
-    #scale_y_sqrt() +
-    labs(y = expression("Bias " * b[n] == hat(W[2])(n)-W[2](n)),
-         title = "Bias of modelled W2 vs MC-simulation (median)",
-         subtitle = paste("beyond n =", N_DIRECT))
+    ggplot(
+      data = plDatW2 |> dplyr::filter(nObs > N_DIRECT),
+      mapping = aes(x = W2, y = W2mod - W2)
+    ) +
+      geom_point() +
+      geom_hline(yintercept = 0, col = "darkgrey") +
+      #scale_y_sqrt() +
+      labs(
+        y = expression("Bias " * b[n] == hat(W[2])(n) - W[2](n)),
+        title = "Bias of modelled W2 vs MC-simulation (median)",
+        subtitle = paste("beyond n =", N_DIRECT)
+      )
 } #fi
 
 
-
-
 # approximation W3 --------------------------------------------------------
-
 
 # Generalized logistic function
 # (due to Richards, 1957)
@@ -244,13 +310,15 @@ genLogisticF <- function(theta, xVal) {
   theta <- as.numeric(theta)
   stopifnot(length(theta) == 5)
 
-  L <- theta[1]  #lower asymp
-  A <- theta[2]  #upper asymp
-  d <- theta[3]  #inflection value is (L + (A-L) * d^(1/(1-d)))
-  K <- theta[4]  #actual relative growth rate (slope at infl point is (A-L)*K)
+  L <- theta[1] #lower asymp
+  A <- theta[2] #upper asymp
+  d <- theta[3] #inflection value is (L + (A-L) * d^(1/(1-d)))
+  K <- theta[4] #actual relative growth rate (slope at infl point is (A-L)*K)
   Xi <- theta[5] #inflection point (x-value)
 
-  L + (A - L) * (1 + (d-1) * exp(-K * (xVal - Xi)/d^(d/(1-d))))^(1/(1-d))
+  L +
+    (A - L) *
+      (1 + (d - 1) * exp(-K * (xVal - Xi) / d^(d / (1 - d))))^(1 / (1 - d))
 }
 
 # Derivative of generalized logistic Richards function
@@ -259,17 +327,17 @@ genLogisticD <- function(xVal, theta) {
   theta <- as.numeric(theta)
   stopifnot(length(theta) == 5)
 
-  L <- theta[1]  #lower asymp
-  A <- theta[2]  #upper asymp
-  d <- theta[3]  #inflection value is (L + (A-L) * d^(1/(1-d)))
-  K <- theta[4]  #actual relative growth rate (slope at infl point is (A-L)*K)
+  L <- theta[1] #lower asymp
+  A <- theta[2] #upper asymp
+  d <- theta[3] #inflection value is (L + (A-L) * d^(1/(1-d)))
+  K <- theta[4] #actual relative growth rate (slope at infl point is (A-L)*K)
   Xi <- theta[5] #inflection point (x-value)
 
-  dExpV <- d^(d/(1-d))
-  expV <- exp(-K * (xVal - Xi)/dExpV)
+  dExpV <- d^(d / (1 - d))
+  expV <- exp(-K * (xVal - Xi) / dExpV)
 
-  (A-L) * (1 + (d-1) * expV)^(d/(1-d)) * expV * K / dExpV
-}#fn
+  (A - L) * (1 + (d - 1) * expV)^(d / (1 - d)) * expV * K / dExpV
+} #fn
 
 # Gradient of generalized logistic Richards function
 # as function of parameters (for given x value)
@@ -279,40 +347,49 @@ genLogisticJ <- function(theta, xVal) {
   theta <- as.numeric(theta)
   stopifnot(is.numeric(theta), length(theta) == 5)
 
-  L <- theta[1]  #lower asymp
-  A <- theta[2]  #upper asymp
-  d <- theta[3]  #inflection value is (Ad^(1/(1-d)))
-  K <- theta[4]  #actual relative growth rate (slope at infl point is AK)
+  L <- theta[1] #lower asymp
+  A <- theta[2] #upper asymp
+  d <- theta[3] #inflection value is (Ad^(1/(1-d)))
+  K <- theta[4] #actual relative growth rate (slope at infl point is AK)
   Xi <- theta[5] #inflection point (x-value)
 
   stopifnot(is.numeric(xVal))
   nObs <- length(xVal)
 
-  dExpV <- d^(d/(1-d))
-  expV <- exp(-K * (xVal - Xi)/dExpV)
-  bracV <- 1 + (d-1) * expV
+  dExpV <- d^(d / (1 - d))
+  expV <- exp(-K * (xVal - Xi) / dExpV)
+  bracV <- 1 + (d - 1) * expV
 
   # return gradient: nObs x 5 matrix
   cbind(
-    L = 1 - bracV^(1/(1-d)), #L
-    A = bracV^(1/(1-d)),   #A
-    d = (A-L) *  bracV^(1/(1-d)) * 1/(1-d) * (1/(1-d) * log(bracV) + expV * (K * (xVal - Xi)/dExpV * (- 1/(1-d) * log(d) - 1) + 1)/bracV), #d
-    K = (A-L) *  bracV^(d/(1-d)) * expV *(xVal - Xi) / dExpV, #K
-    Xi = -(A-L) * bracV^(d/(1-d)) * expV * K / dExpV #Xi
+    L = 1 - bracV^(1 / (1 - d)), #L
+    A = bracV^(1 / (1 - d)), #A
+    d = (A - L) *
+      bracV^(1 / (1 - d)) *
+      1 /
+      (1 - d) *
+      (1 /
+        (1 - d) *
+        log(bracV) +
+        expV *
+          (K * (xVal - Xi) / dExpV * (-1 / (1 - d) * log(d) - 1) + 1) /
+          bracV), #d
+    K = (A - L) * bracV^(d / (1 - d)) * expV * (xVal - Xi) / dExpV, #K
+    Xi = -(A - L) * bracV^(d / (1 - d)) * expV * K / dExpV #Xi
   )
-}#fn grad
+} #fn grad
 
-MLEw_approx$fun <- list(genLogisticF = genLogisticF,
-                        genLogisticD = genLogisticD,
-                        genLogisticJ = genLogisticJ)
-
+MLEw_approx$fun <- list(
+  genLogisticF = genLogisticF,
+  genLogisticD = genLogisticD,
+  genLogisticJ = genLogisticJ
+)
 
 
 # check that we do not need too many iterations (sign for difficult/bad fit?!)
 ITER_MAX <- 97
 
 MLEw_approx[["coef"]][["W3_richards"]] <- local({
-
   #we do not fix A=0 on lp1lW3 scale (even though it might be true)
   #+because we want best fit and not too many restrictions for the Richards fit
 
@@ -320,37 +397,64 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
   # Richards' generalized logistic function (as function of shape)
   # This way we can estimate W3 for each shape value for those nObs
   #+that we have simulated in .MLEw_mcs$W3
-  fm_W3_indiv <- purrr::map(.x = rlang::set_names(unique(W3$nObs)),
-                            .f = function(n_) {
-                              W3i <- W3 |>
-                                dplyr::filter(nObs == {n_})
-                              stopifnot(NROW(W3i) > 5)
+  fm_W3_indiv <- purrr::map(
+    .x = rlang::set_names(unique(W3$nObs)),
+    .f = function(n_) {
+      W3i <- W3 |>
+        dplyr::filter(
+          nObs ==
+            {
+              n_
+            }
+        )
+      stopifnot(NROW(W3i) > 5)
 
-                              gsl_nls(fn = MLEw_approx$fun$genLogisticF,
-                                      jac = MLEw_approx$fun$genLogisticJ,
-                                      y = W3i$lp1lW3, xVal = W3i$nlshape,
-                                      start = list(L = 0, A = log1p(log(2*{n_})),
-                                                   d = max(2,log({n_})), K = .5, Xi = 0),
-                                      lower = c(L = -.1, A = .2, d = 2, K = .2, Xi = -10),
-                                      ##weights = sqrt(W3i$shape),
-                                      control = gsl_nls_control(maxiter = ITER_MAX))
-                            })
+      gsl_nls(
+        fn = MLEw_approx$fun$genLogisticF,
+        jac = MLEw_approx$fun$genLogisticJ,
+        y = W3i$lp1lW3,
+        xVal = W3i$nlshape,
+        start = list(
+          L = 0,
+          A = log1p(log(
+            2 *
+              {
+                n_
+              }
+          )),
+          d = max(
+            2,
+            log({
+              n_
+            })
+          ),
+          K = .5,
+          Xi = 0
+        ),
+        lower = c(L = -.1, A = .2, d = 2, K = .2, Xi = -10),
+        ##weights = sqrt(W3i$shape),
+        control = gsl_nls_control(maxiter = ITER_MAX)
+      )
+    }
+  )
 
   # check convergence for each model
   stopifnot(all(purrr::map_lgl(fm_W3_indiv, .f = list("convInfo", "isConv"))))
-  stopifnot(all(purrr::map_dbl(fm_W3_indiv, .f = list("convInfo", "nEval", "f")) < ITER_MAX))
-
+  stopifnot(all(
+    purrr::map_dbl(fm_W3_indiv, .f = list("convInfo", "nEval", "f")) < ITER_MAX
+  ))
 
   # gather coefficients of individual generalized logistic functions per nObs
   # residual std. dev increases with nObs
   purrr::map(fm_W3_indiv, .f = coef) |>
     purrr::list_transpose(simplify = TRUE) |>
     as_tibble() |>
-    dplyr::mutate(nObs = as.numeric(names(fm_W3_indiv)),
-                  resStdDev = purrr::map_dbl(fm_W3_indiv, .f = stats::sigma)) |>
+    dplyr::mutate(
+      nObs = as.numeric(names(fm_W3_indiv)),
+      resStdDev = purrr::map_dbl(fm_W3_indiv, .f = stats::sigma)
+    ) |>
     dplyr::relocate(nObs)
 })
-
 
 
 # checking ----------------------------------------------------------------
@@ -358,66 +462,91 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
 # test jacobian for some sample size nObs
 myN <- sample(unique(W3$nObs), size = 1)
 stopifnot(length(myN) == 1)
-myShapes <- stats::rlnorm(n=7, meanlog = .51, sdlog = 2) |>
+myShapes <- stats::rlnorm(n = 7, meanlog = .51, sdlog = 2) |>
   sort()
 
 
 # some parameters values
-startL <- list(L = .01,
-               A = log1p(log(2*myN)),
-               d = 3.5+stats::rnorm(n=1, mean = .2, sd = .1),
-               K = .01 + abs(stats::rnorm(n=1, mean = .5, sd = .1)),
-               Xi = stats::rnorm(n=1, mean = -1, sd = .1))
+startL <- list(
+  L = .01,
+  A = log1p(log(2 * myN)),
+  d = 3.5 + stats::rnorm(n = 1, mean = .2, sd = .1),
+  K = .01 + abs(stats::rnorm(n = 1, mean = .5, sd = .1)),
+  Xi = stats::rnorm(n = 1, mean = -1, sd = .1)
+)
 
 # test gradient function (partial derivatives of parameters)
-all.equal(purrr::map(.x = myShapes,
-                     .f = ~numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
-                                          x = as.numeric(startL), xVal = .x)) |>
-            # convert to single matrix, columns = nbr of parameters
-            unlist() |> matrix(ncol = 5, byrow = TRUE,
-                               dimnames = list(NULL, c("L", "A", "d", "K", "Xi"))),
+all.equal(
+  purrr::map(
+    .x = myShapes,
+    .f = ~ numDeriv::grad(
+      func = MLEw_approx$fun$genLogisticF,
+      x = as.numeric(startL),
+      xVal = .x
+    )
+  ) |>
+    # convert to single matrix, columns = nbr of parameters
+    unlist() |>
+    matrix(
+      ncol = 5,
+      byrow = TRUE,
+      dimnames = list(NULL, c("L", "A", "d", "K", "Xi"))
+    ),
 
-          #current=
-          MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL),
-                                       xVal = myShapes),
-          tolerance = 1e-7) |>
+  #current=
+  MLEw_approx$fun$genLogisticJ(theta = as.numeric(startL), xVal = myShapes),
+  tolerance = 1e-7
+) |>
   isTRUE() |>
   stopifnot()
 
 # test derivative for x (for fixed parameters)
 all.equal(
-  numDeriv::grad(func = MLEw_approx$fun$genLogisticF,
-                 x = myShapes, theta = startL),
+  numDeriv::grad(
+    func = MLEw_approx$fun$genLogisticF,
+    x = myShapes,
+    theta = startL
+  ),
   MLEw_approx$fun$genLogisticD(xVal = myShapes, theta = startL),
   tolerance = 1e-7
-) |> isTRUE() |>
+) |>
+  isTRUE() |>
   stopifnot()
 
 
 if (rlang::is_interactive()) {
-
   # check how parameters depend on nObs
   # regular pattern desired so that we can approximate this
   local({
     nObs_v <- MLEw_approx[["coef"]][["W3_richards"]]$nObs
-    opar <- par(mfrow = c(2,3))
+    opar <- par(mfrow = c(2, 3))
     # walk across parameters
-    purrr::iwalk(MLEw_approx[["coef"]][["W3_richards"]][-1L],
-                 .f = ~plot(x = nObs_v, y = .x, log = "x",
-                            type = "p", pch = 16, cex = 0.5,
-                            ylab = .y, main = paste("parameter", .y)))
+    purrr::iwalk(
+      MLEw_approx[["coef"]][["W3_richards"]][-1L],
+      .f = ~ plot(
+        x = nObs_v,
+        y = .x,
+        log = "x",
+        type = "p",
+        pch = 16,
+        cex = 0.5,
+        ylab = .y,
+        main = paste("parameter", .y)
+      )
+    )
     par(opar)
   })
 
   # focus on std. dev.
   # look at model error for Richards logistic models
-  ggplot(data = MLEw_approx[["coef"]][["W3_richards"]],
-         mapping = aes(x = nObs, y = resStdDev)) +
+  ggplot(
+    data = MLEw_approx[["coef"]][["W3_richards"]],
+    mapping = aes(x = nObs, y = resStdDev)
+  ) +
     geom_point() +
     labs(title = "Residual std. deviation") +
     scale_x_log10() +
     scale_y_log10()
-
 
   # W3 approaches 1 for high shape values
   #+hence, log1p(W3) => 0
@@ -431,12 +560,16 @@ if (rlang::is_interactive()) {
       unlist()
 
     W3i <- W3 |>
-      dplyr::filter(nObs == {{myN}}) |>
+      dplyr::filter(nObs == {{ myN }}) |>
       #dplyr::mutate(lp1lW3_pred = predict(fm_W3_indiv[[as.character(myN)]]))
-      dplyr::mutate(lp1lW3_pred = MLEw_approx$fun$genLogisticF(theta = myTheta, xVal = nlshape))
+      dplyr::mutate(
+        lp1lW3_pred = MLEw_approx$fun$genLogisticF(
+          theta = myTheta,
+          xVal = nlshape
+        )
+      )
 
-    ggplot(data = W3i,
-           mapping = aes(x = shape, y = lp1lW3)) +
+    ggplot(data = W3i, mapping = aes(x = shape, y = lp1lW3)) +
       geom_point() + #geom_line() +
       geom_point(mapping = aes(y = lp1lW3_pred), size = .5, col = "darkred") +
       geom_line(mapping = aes(y = lp1lW3_pred), col = "darkred") +
@@ -444,17 +577,12 @@ if (rlang::is_interactive()) {
       labs(title = paste("W3 as function of shape || n = ", myN)) |
 
       # Bland-Altman
-      ggplot(data = W3i,
-             mapping = aes(x = W3, y = lp1lW3-lp1lW3_pred)) +
-      geom_hline(yintercept = 0, col = "grey", linetype = "dashed") +
-      geom_point() +
-      scale_x_log10()
-
+      ggplot(data = W3i, mapping = aes(x = W3, y = lp1lW3 - lp1lW3_pred)) +
+        geom_hline(yintercept = 0, col = "grey", linetype = "dashed") +
+        geom_point() +
+        scale_x_log10()
   })
 } #fi interactive
-
-
-
 
 
 # save as internal data ---------------------------------------------------
@@ -465,6 +593,5 @@ usethis::use_data(MLEw_approx, internal = TRUE, overwrite = TRUE)
 
 
 message("~~ Fine ~~")
-
 
 #q(save = "no")

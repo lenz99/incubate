@@ -16,13 +16,36 @@
 # Paterson BJ, Kirk MD, Cameron AS, et al. BMJ Open 2013;3:e002033. doi:10.1136/bmjopen-2012-002033
 # ADM 101/2/3 <https://discovery.nationalarchives.gov.uk/browse/r/h/C4106406>
 #+or <https://discovery.nationalarchives.gov.uk/details/r/C4106406>
-measles_sailer <- tribble(~generation, ~symptomOnset, ~serialInterval, ~status,
-                          1, 24, 6, 0,
-                          1, 27, 6, 0,
-                          1, 27, 6, 0,
-                          2, 43, 16, 1,
-                          3, 54, 11, 1,
-                          4, 65, 11, 1)
+measles_sailer <- tribble(
+  ~generation,
+  ~symptomOnset,
+  ~serialInterval,
+  ~status,
+  1,
+  24,
+  6,
+  0,
+  1,
+  27,
+  6,
+  0,
+  1,
+  27,
+  6,
+  0,
+  2,
+  43,
+  16,
+  1,
+  3,
+  54,
+  11,
+  1,
+  4,
+  65,
+  11,
+  1
+)
 
 # save data in package
 usethis::use_data(measles_sailer, overwrite = TRUE)

@@ -16,7 +16,7 @@ estimRoundingError(
 
 \item{roundDigits}{integer. Which level of rounding to test? Negative numbers round to corresponding powers of 10}
 
-\item{maxObs}{integer. How many observations to consider at most? If the provided sample has more observations a sub-sample is used.}
+\item{n_obs}{integer. How many observations to consider at most? If the provided sample has more observations a sub-sample is used.}
 }
 \value{
 estimated rounding error

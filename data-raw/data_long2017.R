@@ -14,24 +14,36 @@ try(setwd('data-raw/'), silent = FALSE)
 
 FNAME <- "digitized_data_Long_2017.csv"
 stopifnot(file.exists(FNAME))
-long2017 <- readr::read_csv(file = FNAME,
-                            col_names = TRUE, col_types = cols(
-                              ID = col_character(),
-                              time = col_double(),
-                              event = col_double(),
-                              trtmt_nmbr = col_skip(),
-                              trtmt = col_character()
-                            )) |>
-  dplyr::mutate(trtmt = dplyr::case_match(trtmt,
-                                          "dabrafenib" ~ "Dabrafenib+Trametinib",
-                                          .default = trtmt, .ptype = "X")) |>
+long2017 <- readr::read_csv(
+  file = FNAME,
+  col_names = TRUE,
+  col_types = cols(
+    ID = col_character(),
+    time = col_double(),
+    event = col_double(),
+    trtmt_nmbr = col_skip(),
+    trtmt = col_character()
+  )
+) |>
+  dplyr::mutate(
+    trtmt = dplyr::case_match(
+      trtmt,
+      "dabrafenib" ~ "Dabrafenib+Trametinib",
+      .default = trtmt,
+      .ptype = "X"
+    )
+  ) |>
   dplyr::rename(status = event)
 
 # check data
 kmfit_long2017 <- survfit(Surv(time, status) ~ trtmt, data = long2017)
 # KM-survival plot
-plot(kmfit_long2017, mark.time = TRUE, main = "Relapse Free Survival",
-     sub = "Long (2017):\nAdjuvant Dabrafenib plus Trametinib\nin Stage III BRAF-Mutated Melanoma")
+plot(
+  kmfit_long2017,
+  mark.time = TRUE,
+  main = "Relapse Free Survival",
+  sub = "Long (2017):\nAdjuvant Dabrafenib plus Trametinib\nin Stage III BRAF-Mutated Melanoma"
+)
 
 # Long (2017) reports:
 # The estimated rates of relapse-free survival were
@@ -46,7 +58,7 @@ plot(kmfit_long2017, mark.time = TRUE, main = "Relapse Free Survival",
 # As of the data cutoff at a median of 2.8 years of follow‐up,
 # disease recurrence or death had been reported in 166 of 438 patients (38%) in the combination‐therapy group
 # and in 248 of 432 patients (57%) in the placebo group.
-summary(kmfit_long2017, times = c(1, 2, 2.8,3)*12, scale = 12)
+summary(kmfit_long2017, times = c(1, 2, 2.8, 3) * 12, scale = 12)
 
 
 # save data in package

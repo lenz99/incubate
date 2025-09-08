@@ -62,7 +62,6 @@
 "measles_sailer"
 
 
-
 #' Relapse-free survival of melanoma patients under adjuvant treatment
 #'
 #' Data stem from a double-blind, placebo-controlled phase 3 trial where n=870
@@ -89,7 +88,6 @@
 #' @source Long GV, Hauschild A, Santinami M, et al. Adjuvant Dabrafenib plus Trametinib in Stage III BRAF-Mutated Melanoma. N Engl J Med. 2017;377(19):1813-1823. doi:10.1056/NEJMoa1708539
 #' @source Devlin SM and O'Quigley J, The nph2ph-transform: applications to the statistical analysis of completed clinical trials, arXiv:2407.18905, 2024. doi:10.48550/arXiv.2407.18905.
 "long2017"
-
 
 
 #' Small data sets from miscellaneous publications

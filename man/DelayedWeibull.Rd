@@ -112,6 +112,8 @@ positive.}
 
 \item{log.p}{logical. P-value on log-scale?}
 
+\item{grad}{logical. Should the gradient be calculated at the given quantile values (and not the cumulative probabilities)?}
+
 \item{p}{A numeric vector of probabilities.}
 
 \item{n}{integer. Number of random observations requested.}

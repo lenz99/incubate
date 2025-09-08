@@ -13,6 +13,19 @@ buildControl(
   ties = "density"
 )
 }
+\arguments{
+\item{verbose}{numeric. Degree of verbosity. Default value 0 means no extra output.}
+
+\item{profiled}{logical. Use objective function based on parameters that are profiled out?}
+
+\item{pen_shape}{logical. Should we penalize high shape parameters?}
+
+\item{MLEw_weight}{character. How to derive the weights?}
+
+\item{MLEw_optim}{character. How to find the optimum? Currently only "min" for minimization is supported.}
+
+\item{ties}{character. How to handle tied observations?}
+}
 \value{
 list. Control settings for fitting routine \code{delay_model}
 }

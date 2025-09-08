@@ -18,6 +18,8 @@ default the coefficients are shown.}
 
 \item{xlim}{numeric. Optionally, limits for the x-axis (time). If unspecified
 starts from 0 to last observation.}
+
+\item{...}{further arguments. Not in use here (it is required for generic plot function)}
 }
 \description{
 The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown

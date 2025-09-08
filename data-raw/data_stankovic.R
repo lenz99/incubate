@@ -14,45 +14,113 @@ try(setwd('data-raw/'), silent = FALSE)
 #' @param fileName file name of CSV-file within current 'data-raw'-folder
 prepSurvData <- function(fileName) {
   fnPath <- file.path(fileName)
-  stopifnot( file.exists(fnPath) )
+  stopifnot(file.exists(fnPath))
 
   dat <- readr::read_csv(fnPath, comment = "#", show_col_types = FALSE) %>%
     mutate(Time = round(Time), r = round(n * Survival)) %>%
     group_by(Group) %>%
     # d: number of events
-    mutate(d=lag(r, default = first(n))-r) %>%
+    mutate(d = lag(r, default = first(n)) - r) %>%
     ungroup
 
-  with(dat,
-       bind_cols(Time=rep.int(Time, times = d),
-                 Status = 1L, # all observations are events
-                 Group = rep.int(Group, times = d),
-                 Colour = rep.int(Colour, times = d)))
+  with(
+    dat,
+    bind_cols(
+      Time = rep.int(Time, times = d),
+      Status = 1L, # all observations are events
+      Group = rep.int(Group, times = d),
+      Colour = rep.int(Colour, times = d)
+    )
+  )
 }
 
 fig6J <- prepSurvData("stankovic_fig6J_U87.csv")
 fig6K <- prepSurvData('stankovic_fig6K_U87.csv')
 
 # visual test
-plot(survfit(Surv(Time, Status) ~ Group, data = fig6J), col = 1:4, main = 'Figure 6J')
-plot(survfit(Surv(Time, Status) ~ Group, data = fig6K), col = 1:3, main = 'Figure 6K')
+plot(
+  survfit(Surv(Time, Status) ~ Group, data = fig6J),
+  col = 1:4,
+  main = 'Figure 6J'
+)
+plot(
+  survfit(Surv(Time, Status) ~ Group, data = fig6K),
+  col = 1:3,
+  main = 'Figure 6K'
+)
 
 # check P-values from figure
 # fig1J
-pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6J, subset = Group %in% c('CTRL', 'Anti-E7'))$chisq, df = 1, lower.tail = F)
-pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6J, subset = Group %in% c('CTRL', 'Anti-VEGF'))$chisq, df = 1, lower.tail = F)
-pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6J, subset = Group %in% c('CTRL', 'Combo'))$chisq, df = 1, lower.tail = F)
+pchisq(
+  survdiff(
+    Surv(Time, Status) ~ Group,
+    data = fig6J,
+    subset = Group %in% c('CTRL', 'Anti-E7')
+  )$chisq,
+  df = 1,
+  lower.tail = F
+)
+pchisq(
+  survdiff(
+    Surv(Time, Status) ~ Group,
+    data = fig6J,
+    subset = Group %in% c('CTRL', 'Anti-VEGF')
+  )$chisq,
+  df = 1,
+  lower.tail = F
+)
+pchisq(
+  survdiff(
+    Surv(Time, Status) ~ Group,
+    data = fig6J,
+    subset = Group %in% c('CTRL', 'Combo')
+  )$chisq,
+  df = 1,
+  lower.tail = F
+)
 # p=0.293. MS Fig1J writes p=0.2!
-pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6J, subset = Group %in% c('Anti-VEGF', 'Combo'))$chisq, df = 1, lower.tail = F)
+pchisq(
+  survdiff(
+    Surv(Time, Status) ~ Group,
+    data = fig6J,
+    subset = Group %in% c('Anti-VEGF', 'Combo')
+  )$chisq,
+  df = 1,
+  lower.tail = F
+)
 
 # fig1K: P-values are roughly OK, but
 #+rounding is incorrect in MS, P-values in MS are generally rounded downwards (to 0).
-pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6K, subset = Group != 'Combo')$chisq, df = 1, lower.tail = F)
-pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6K, subset = Group != 'Anti-VEGF')$chisq, df = 1, lower.tail = F)
-pchisq(survdiff(Surv(Time, Status) ~ Group, data = fig6K, subset = Group != 'TMD')$chisq, df = 1, lower.tail = F)
+pchisq(
+  survdiff(
+    Surv(Time, Status) ~ Group,
+    data = fig6K,
+    subset = Group != 'Combo'
+  )$chisq,
+  df = 1,
+  lower.tail = F
+)
+pchisq(
+  survdiff(
+    Surv(Time, Status) ~ Group,
+    data = fig6K,
+    subset = Group != 'Anti-VEGF'
+  )$chisq,
+  df = 1,
+  lower.tail = F
+)
+pchisq(
+  survdiff(
+    Surv(Time, Status) ~ Group,
+    data = fig6K,
+    subset = Group != 'TMD'
+  )$chisq,
+  df = 1,
+  lower.tail = F
+)
 
 
-stankovic <- dplyr::bind_rows(Fig6J=fig6J, Fig6K=fig6K, .id = 'Figure')
+stankovic <- dplyr::bind_rows(Fig6J = fig6J, Fig6K = fig6K, .id = 'Figure')
 # save as one dataframe, including column 'figure' to describe source
 #saveRDS(stankovic, file = 'stankovic_fig6JK_U87.rds')
 

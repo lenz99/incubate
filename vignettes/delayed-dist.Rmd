@@ -20,8 +20,6 @@ library("incubate")
 library("dplyr")
 library("ggplot2")
 library("patchwork")
-library("cowplot")
-theme_set(cowplot::theme_cowplot())
 ```
 
 
