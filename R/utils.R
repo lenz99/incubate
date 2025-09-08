@@ -419,12 +419,7 @@ w3FFint <- function(nObs) {
     is.data.frame(W3richCoef),
     all(c("nObs", approx_W3_names) %in% names(W3richCoef))
   )
-  approx_W3_ind <- which(
-    W3richCoef$nObs ==
-      {
-        nObs
-      }
-  )
+  approx_W3_ind <- which(W3richCoef$nObs == nObs)
 
   # check for match in W3_richards
   approx_W3_coefs <- if (length(approx_W3_ind) == 1L) {
