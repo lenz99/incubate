@@ -4,7 +4,7 @@
 
 # Apparently artificial example from
 # Howard Rockette, "Maximum Likelihood Estimation with the Weibull Model"  (1974)
-rockette <- c(3.1, 4.6, 5.6, 6.8)
+rockette74 <- c(3.1, 4.6, 5.6, 6.8)
 
 
 # maximum flood level (in millions of cubic feet per second)
@@ -127,7 +127,7 @@ graphite <- sort(
 
 
 usethis::use_data(
-  rockette,
+  rockette74,
   fatigue,
   susquehanna,
   pollution,
