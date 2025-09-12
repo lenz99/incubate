@@ -316,8 +316,8 @@ prepResponseVar <- function(x0, y0 = NULL, simplify = TRUE) {
 }
 
 
-#' Internal MLEw-weights W1 function
-#' W1 for given sample sizes (of one group).
+#' Internal MLEw-weight W1 function according to sampling distribution
+#' Weight W1 for given sample sizes (of one group).
 #' For small `nObs` we use direct results from Monte-Carlo simulation.
 #' For higher `nObs` we use an approximation (based on Wilson-Hilferty transformation).
 #'
@@ -351,9 +351,10 @@ w1Fint <- function(nObs) {
 } #fn w1Fint
 
 
-#' Internal MLEw weight W2
-#' For given sample size of one group
-#' @param nObs numeric. Sample size (vectorized)
+#' Internal MLEw weight function W2 according to sampling distribution
+#' W2 is either taken directly from the MCSS-results (if available) or 
+#' are taken from the smooth approximation function, otherwise.
+#' @param nObs numeric. Sample size (vectorized) of one group
 #' @returns W2 (same size as nObs)
 w2Fint <- function(nObs) {
   if (missing(nObs) || !is.numeric(nObs) || any(!is.finite(nObs))) {
@@ -383,7 +384,7 @@ w2Fint <- function(nObs) {
 } #fn w2Fint
 
 
-#' Internal factory method to get weight function for W3 for a given sample size
+#' Internal factory method for W3-function based on sampling distribution
 #'
 #' Generally, the weight W3 depends on the sample size and the shape parameter.
 #' The sample size of a group is fixed. Hence, we return a function that returns

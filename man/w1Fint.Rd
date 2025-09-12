@@ -2,8 +2,8 @@
 % Please edit documentation in R/utils.R
 \name{w1Fint}
 \alias{w1Fint}
-\title{Internal MLEw-weights W1 function
-W1 for given sample sizes (of one group).
+\title{Internal MLEw-weight W1 function according to sampling distribution
+Weight W1 for given sample sizes (of one group).
 For small \code{nObs} we use direct results from Monte-Carlo simulation.
 For higher \code{nObs} we use an approximation (based on Wilson-Hilferty transformation).}
 \usage{

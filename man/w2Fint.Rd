@@ -2,18 +2,20 @@
 % Please edit documentation in R/utils.R
 \name{w2Fint}
 \alias{w2Fint}
-\title{Internal MLEw weight W2
-For given sample size of one group}
+\title{Internal MLEw weight function W2 according to sampling distribution
+W2 is either taken directly from the MCSS-results (if available) or
+are taken from the smooth approximation function, otherwise.}
 \usage{
 w2Fint(nObs)
 }
 \arguments{
-\item{nObs}{numeric. Sample size (vectorized)}
+\item{nObs}{numeric. Sample size (vectorized) of one group}
 }
 \value{
 W2 (same size as nObs)
 }
 \description{
-Internal MLEw weight W2
-For given sample size of one group
+Internal MLEw weight function W2 according to sampling distribution
+W2 is either taken directly from the MCSS-results (if available) or
+are taken from the smooth approximation function, otherwise.
 }

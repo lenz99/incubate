@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{w3FFint}
 \alias{w3FFint}
-\title{Internal factory method to get weight function for W3 for a given sample size}
+\title{Internal factory method for W3-function based on sampling distribution}
 \usage{
 w3FFint(nObs)
 }
