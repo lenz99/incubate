@@ -71,11 +71,13 @@ summary.incubate_fit <- function(object, ...) {
 #'
 #' The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown
 #' together with the parametric model fit.
+#' Optionally, a fit of a second delay-model can be added. When given, we do
+#' some preliminary checks that the two models do match together.
 #'
 #' @details This function requires the `ggplot2`-package to be installed.
 #'
 #' @param x a fitted delay-model
-#' @param y not used
+#' @param y an optional second fitted delay-model
 #' @param title character. Optionally, provide a title to the plot.
 #' @param subtitle character. Optionally, provide a subtitle to the plot. By
 #'   default the coefficients are shown.
@@ -84,19 +86,29 @@ summary.incubate_fit <- function(object, ...) {
 #' @param ... further arguments. Not in use here (it is required for generic plot function)
 #' @export
 plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
-  # parameter y comes from the plot-generic but y is not used here.
   stopifnot(inherits(x, "incubate_fit"))
+  haveY <- !missing(y) && !x[["twoGroup"]] &&
+    inherits(y, "incubate_fit") && !y[["twoGroup"]] &&
+    # check for same (number of) data. Really necessary?!
+    NROW(x[["data"]]) == NROW(y[["data"]]) &&
+    # expect different methods (as we use it as colour labels)
+    # Really necessary? (difference could be elsewhere,
+    #+e.g. in optim_args$lower or optim_args$method)
+    x[["method"]] != y[["method"]]
 
   rlang::check_installed(
-    pkg = 'ggplot2',
-    reason = 'to draw plots',
-    version = '3.3'
+    pkg = "ggplot2",
+    reason = "to draw plots",
+    version = "3.3"
   )
 
   distO <- x$distO
   cumFun <- distO$cdf
 
-  # add time = 0 per group
+  cumFunY <- if (haveY) y$distO$cdf
+
+  # add time = 0 per group.
+  # ???survival 3.8-3: start.time= argument is ignored?!
   kmFit0 <- survival::survfit0(x[["kmFit"]], start.time = 0)
   kmFit0 <- tibble(
     group = if (is.null(kmFit0$strata)) {
@@ -137,12 +149,27 @@ plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
   } else {
     ggplot2::ggplot(
       data = kmFit0,
-      mapping = ggplot2::aes(x = .data$time, y = .data$evrate)
+      mapping = ggplot2::aes(
+        x = .data$time,
+        y = .data$evrate
+      )
     ) +
       ggplot2::geom_function(
+        mapping = if (haveY) ggplot2::aes(col = rep.int(x$method, NROW(kmFit0))),
         inherit.aes = FALSE,
         fun = cumFun,
         args = coef(x, group = "x"),
+        linetype = "dashed"
+      )
+  } #esle twoGroup
+
+  if (haveY) {
+    p <- p +
+      ggplot2::geom_function(
+        mapping = ggplot2::aes(col = rep.int(y$method, NROW(kmFit0))),
+        inherit.aes = FALSE,
+        fun = cumFunY,
+        args = coef(y, group = "x"),
         linetype = "dashed"
       )
   }
@@ -156,39 +183,83 @@ plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
   if (missing(title)) {
     title <- glue::glue_data(
       x,
-      "Fitted {distO$dist_name} {c('model ', 'models ')[[1L+twoGroup]]}",
+      "Fitted {distO$dist_name} {c('model ', 'models ')[[1L+(twoGroup || haveY)]]}",
       "{c('', 'with two delay phases')[[1L+twoPhase]]}"
     )
   } #fi
 
-  coefPrint <- function(gr) {
-    co <- coef.incubate_fit(x, group = gr)
-    paste(names(co), signif(co, 4), sep = ": ", collapse = ", ")
-  }
   if (missing(subtitle)) {
-    subtitle <- if (x[["twoGroup"]]) {
-      paste(coefPrint("x"), coefPrint("y"), sep = " - ")
-    } else {
-      coefPrint("x")
+
+    coefPrint <- function(mod = x, gr, n_signif = 4) {
+      co <- coef.incubate_fit(mod, group = gr)
+      paste(names(co), signif(co, digits = n_signif),
+            sep = ": ", collapse = ", ")
     }
-  }
+
+    subtitle <- if (x[["twoGroup"]]) {
+      paste(coefPrint(mod = x, "x", n_signif = 3),
+            coefPrint(mod = x, "y", n_signif = 3),
+            sep = " - ")
+    } else if (haveY) {
+      paste(coefPrint(mod = x, gr = "x", n_signif = 3),
+            coefPrint(mod = y, gr = "x", n_signif = 3),
+            sep = " - ")
+    } else {
+      coefPrint(mod = x, gr = "x")
+    }
+  } #fi subtitle
 
   if (missing(xlim) || is.null(xlim)) {
     xlim <- c(0L, NA)
   }
 
   p +
-    #ggplot2::xlim(0L, NA) +
     # transforms "after_stat" which matters for stat_ecdf
-    ggplot2::coord_trans(y = "reverse", xlim = xlim) +
+    ggplot2::coord_transform(y = "reverse", xlim = xlim) +
     ggplot2::labs(
       x = "Time",
       y = "Cumulative prop. of events",
-      col = if (x[["twoGroup"]]) "Group" else NULL,
+      col = if (x[["twoGroup"]]) "Group" else if (haveY) "Model" else NULL,
       title = title,
       subtitle = subtitle
     )
 }
+
+
+#' Add a line fit to a plot of (another) `incubate_fit` object
+#'
+#' Carries over the concept of base-plot `lines` to ggplot. This function returns a
+#' ggplot-layer to be added to an existing ggplot-object of an incubate fit. It allows to set
+#' aesthetics of the plot manually.
+#'
+#' @param x `incubate_fit` object whose model fit is to be added to a ggplot
+#' @param mapping a `ggplot2::mapping` object. Default to `NULL`.
+#' @param ... further arguments to passed to `geom_function`, outside of the mapping. E.g., `linetype = 'dashed'`
+#' @returns a `geom_function` ggplot-layer
+#' @exportS3Method graphics::lines
+lines.incubate_fit <- function(x, mapping = NULL, ...) {
+  stopifnot(inherits(x, "incubate_fit"))
+
+  rlang::check_installed(
+    pkg = "ggplot2",
+    reason = "to draw plots",
+    version = "3.3"
+  )
+
+  stopifnot(is.null(mapping) || inherits(mapping, "ggplot2::mapping"))
+
+  distO <- x$distO
+  cumFun <- distO$cdf
+
+
+  ggplot2::geom_function(
+    mapping = mapping,
+    fun = cumFun,
+    args = coef(x, group = "x"),
+    ...
+  )
+}
+
 
 
 #' Extract Log-Likelihood
@@ -281,3 +352,4 @@ transform.incubate_fit <- function(`_data`, ...) {
 
   tr
 }
+

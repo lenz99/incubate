@@ -9,7 +9,7 @@
 \arguments{
 \item{x}{a fitted delay-model}
 
-\item{y}{not used}
+\item{y}{an optional second fitted delay-model}
 
 \item{title}{character. Optionally, provide a title to the plot.}
 
@@ -24,6 +24,8 @@ starts from 0 to last observation.}
 \description{
 The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown
 together with the parametric model fit.
+Optionally, a fit of a second delay-model can be added. When given, we do
+some preliminary checks that the two models do match together.
 }
 \details{
 This function requires the \code{ggplot2}-package to be installed.
