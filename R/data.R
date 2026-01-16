@@ -22,7 +22,7 @@
 #' Serial interval times for measles during a long journey on a sailing vessel
 #'
 #' Measles broke out during a sailing ship passage from England to Australia
-#' involving six persons on the ship. Serial interval times, i.e., the time of
+#' involving six persons on the ship. Serial interval times, i.e. the time of
 #' clinical onset between successive cases in a chain of transmission, were
 #' recorded. The interval times for the first three cases was not observed
 #' completely as they brought measles on board.

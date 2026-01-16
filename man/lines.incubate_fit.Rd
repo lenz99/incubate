@@ -11,13 +11,13 @@
 
 \item{mapping}{a \code{ggplot2::mapping} object. Default to \code{NULL}.}
 
-\item{...}{further arguments to passed to \code{geom_function}, e.g., \code{linetype = 'dashed'}}
+\item{...}{further arguments to passed to \code{geom_function}, outside of the mapping. E.g., \code{linetype = 'dashed'}}
 }
 \value{
-a \code{geom_function} layer
+a \code{geom_function} ggplot-layer
 }
 \description{
 Carries over the concept of base-plot \code{lines} to ggplot. This function returns a
 ggplot-layer to be added to an existing ggplot-object of an incubate fit. It allows to set
-some aesthetics of the plot manually but legend will not be set.
+aesthetics of the plot manually.
 }

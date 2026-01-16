@@ -7,7 +7,7 @@
 w3FFint(nObs)
 }
 \arguments{
-\item{nObs}{sample size for which to return the W3-function}
+\item{nObs}{sample size for which to build the W3-function}
 }
 \value{
 W3-function for the given sample size. It is a function of shape.

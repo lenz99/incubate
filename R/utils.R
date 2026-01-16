@@ -397,7 +397,7 @@ w2Fint <- function(nObs) {
 #' that the spline function of the R-version of the current user is used and
 #' hopefully with good performance. Function `w3FFint` is run repeatedly by the
 #' [objFunFactory()], once per group.
-#' @param nObs sample size for which to return the W3-function
+#' @param nObs sample size for which to build the W3-function
 #' @returns W3-function for the given sample size. It is a function of shape.
 w3FFint <- function(nObs) {
   if (

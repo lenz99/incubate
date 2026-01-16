@@ -33,9 +33,9 @@ difference and for which to simulate the power. Default value is
 \code{'delay1'}.}
 
 \item{test}{character. Which test to use for this power estimation? E.g.,
-bootstrap, LRT or logrank_pp.}
+bootstrap, LRT or logrank_pp. See \code{test_diff}.}
 
-\item{method}{character. Which method in case of parametric test.}
+\item{method}{character. Which fitting method in case of parametric test.}
 
 \item{eff}{list of length 2. The two list elements are numeric vectors that
 contain the model parameters (as understood by the delay-distribution
@@ -45,7 +45,7 @@ functions provided by this package) for the two groups.}
 or \code{NULL} when n is to be estimated for a given power.}
 
 \item{r}{numeric. Ratio of both groups sizes, ny / nx. Default value is 1,
-i.e., balanced group sizes. Must be positive.}
+i.e. balanced group sizes. Must be positive.}
 
 \item{sig.level}{numeric. Significance level. Default is 0.05.}
 
@@ -55,13 +55,13 @@ size or a desired power is specified (and \code{n} is estimated).}
 \item{nPowerSim}{integer. Number of simulation rounds. Default value 1600
 yields a standard error of 0.01 for power if the true power is 80\%.}
 
-\item{R}{integer. Number of bootstrap samples for test of difference in
-parameter within each power simulation. It affects the resolution of the
+\item{R}{integer. Number of bootstrap samples for test of difference
+within each power simulation. It affects the resolution of the
 P-value for each simulation round. A value of around \code{R=200} gives a
 resolution of 0.5\% which might be enough for power analysis.}
 
 \item{nRange}{integer. Admissible range for sample size when power is
-pre-specified and sample size is requested. The routine might not find the
+specified and sample size is requested. The routine might not find the
 optimal sample size when this range is set too wide.}
 
 \item{verbose}{numeric. How many details are requested? Higher value means
@@ -73,24 +73,28 @@ List of results of power simulation. Or \code{NULL} in case of errors.
 \description{
 There are two ways of operation:
 \enumerate{
-\item \code{power=NULL} Given sample size \code{n} it simulates the power.
-\item \code{n=NULL} Given a power an iterative search is started to find a suitable
-\code{n} within a specified range.
+\item \code{power=NULL}: simulate power based on given sample size \code{n}
+\item \code{n=NULL}: search iteratively for a suitable sample size \code{n} for a given power
 }
 }
 \details{
 In both cases, the distribution, the parameters that are tested for, the type
-of test and the effect size (\verb{eff=}) need to be specified. The more power
-simulation rounds (parameter \verb{nPowerSim=}) the more densely the space of data
+of test and the effect size (\verb{eff=}) need to be specified. Specify the effect as a list with two elements,
+each element holds the parameter vector describing the distribution of the outcome per group.
+The fitting method (\verb{method=}) and the kind of significance test (\verb{test=}) are handed down to \code{\link[=test_diff]{test_diff()}}.
+The more power simulation rounds (parameter \verb{nPowerSim=}) the more densely the space of data
 according to the specified model is sampled.
 
-Note that this second modus (when \code{n} is estimated) is computationally quite
-heavy. The iterative search for \code{n} uses some heuristics and the estimated
-sample size might actually give a slightly different power level.
-Hence, it is important to check the stated power in the output. The search
-algorithm comes to better results when the admissible
+Note that estimating sample size \code{n} is computationally intensive.
+The iterative search uses heuristics to find a sample size \code{n} within the
+provided range (\verb{nRange=}), and the estimated sample size might yield a
+slightly different power level. Hence, check the reported power in the
+output. The search algorithm comes to better results when the admissible
 range for sample size (\verb{nRange=}) is chosen sensibly and not too wide.
 In case the estimated sample size and the achieved power is too high it might
 pay off to rerun the function with an adapted admissible range for the sample
 size by giving a narrower range in \verb{nRange=}.
+}
+\seealso{
+\code{\link[=test_diff]{test_diff()}}
 }
