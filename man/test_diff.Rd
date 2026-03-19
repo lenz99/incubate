@@ -46,7 +46,7 @@ test_diff(
 
 \item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 
-\item{chiSqApprox}{logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?}
+\item{chiSqApprox}{logical flag. In bootstrap, should we estimate the best degrees of freedom for chi-square to match the distribution of the test statistic under H0?}
 
 \item{verbose}{numeric. How many details are requested? Higher value means more details. 0=off, no details.}
 }

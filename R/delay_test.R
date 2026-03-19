@@ -791,7 +791,7 @@ test_GOF <- function(
 #' @param doLogrank logical. Do also non-parametric logrank tests?
 #' @param doGOF logical. Do also the GOF-tests?
 #' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
-#' @param chiSqApprox logical flag. In bootstrap, should we calculate the approximate degrees of freedom for the distribution of the test statistic under H0?
+#' @param chiSqApprox logical flag. In bootstrap, should we estimate the best degrees of freedom for chi-square to match the distribution of the test statistic under H0?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return list with the results of the test. Element P contains the different
 #'   P-values, for instance from parametric bootstrap
@@ -885,7 +885,7 @@ test_diff <- function(
     param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
     if (verbose > 0L) {
       cat(
-        "The unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n"
+        "The unnumbered parameter names in param= are taken to refer to the initial phase. They are translated to canonical parameter names.\n"
       )
     }
   }
@@ -912,7 +912,7 @@ test_diff <- function(
       testMask <- testMask | TRUE
       testMask[c("pearson", "moran")] <- method == "MPSE" && doGOF
     },
-    # bootstrap + log-rank-tests (for stankovic results) #use better flags? like doBootstrap=, doGOF=, doLRT=?!
+    # bootstrap #use better flags? like doBootstrap=, doGOF=, doLRT=?!
     bootstrap = {
       testMask["bootstrap"] <- TRUE
     },
@@ -1338,9 +1338,9 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 }
 
 
-#' Power simulation function for a two-group comparison of the delay parameter
+#' Power simulation function for a two-group comparison
 #'
-#' There are two ways of operation:
+#' There are two modes of operation:
 #' 1. `power=NULL`: simulate power based on given sample size `n`
 #' 2. `n=NULL`: search iteratively for a suitable sample size `n` for a given power
 #'
@@ -1362,18 +1362,17 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #' size by giving a narrower range in `nRange=`.
 #'
 #' @param distribution character. Which assumed distribution is used for the
-#'   power calculation.
+#'   power calculation. Default is `"exponential"`.
 #' @param twoPhase logical(1). Do we model two phases per group? Default is
 #'   `FALSE`, i.e. a single delay phase per group.
-#' @param eff list of length 2. The two list elements are numeric vectors that
+#' @param eff list of length 2. The two list elements must be numeric vectors that
 #'   contain the model parameters (as understood by the delay-distribution
 #'   functions provided by this package) for the two groups.
 #' @param param character. Parameter name(s) which are to be tested for
 #'   difference and for which to simulate the power. Default value is
 #'   `'delay1'`.
-#' @param test character. Which test to use for this power estimation? E.g.,
-#'   bootstrap, LRT or logrank_pp. See `test_diff`.
-#' @param method character. Which fitting method in case of parametric test.
+#' @param test character. Which test to use for this power estimation? Defaults to `"bootstrap"`. For possible options see `test_diff`.
+#' @param method character. Which fitting method to use in case of a parametric test.
 #' @param n integer. Number of observations per group for the power simulation
 #'   or `NULL` when n is to be estimated for a given power.
 #' @param power numeric. `NULL` when power is to be estimated for a given sample
@@ -1398,10 +1397,10 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 power_diff <- function(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
+  eff = stop("Provide parameters for both groups that reflect the effect!"),
   param = "delay1",
   test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LRT"),
   method = c("MPSE", "MLEw", "MLEc", "MLEn"),
-  eff = stop("Provide parameters for both groups that reflect the effect!"),
   n = NULL,
   r = 1,
   sig.level = 0.05,
@@ -1459,7 +1458,7 @@ power_diff <- function(
       call. = FALSE
     )
   }
-  param <- match.arg(param, choices = onames)
+  param <- match.arg(param, choices = onames, several.ok = TRUE)
 
   stopifnot(is.null(n) || (is.numeric(n) && length(n) == 1L && is.finite(n)))
   stopifnot(
@@ -1506,7 +1505,7 @@ power_diff <- function(
   parx <- rlang::set_names(parx, onames)
   pary <- rlang::set_names(pary, onames)
 
-  # internal helper function
+  # Simulate power for given sample sizes. An internal helper function.
   # @param B number of simulations to estimate power
   # @param R number of bootstrap samples for testing difference (only used for bootstrap test)
   # @returns power as prop of p-values smaller than alpha, or NA
@@ -1536,7 +1535,8 @@ power_diff <- function(
                 twoPhase = twoPhase,
                 param = param,
                 type = test_cat,
-                R = R
+                R = R,
+                doGOF = FALSE
               ),
               "P",
               test,
@@ -1653,8 +1653,8 @@ power_diff <- function(
     # first iteration
     if (i1 == 1L) {
       warning(
-        "Smallest n within nRange already exceeds requested power in first round!",
-        " Consider enlarging `nRange=` downwards.",
+        "Smallest n within nRange already exceeds requested power in first round! ",
+        "Consider enlarging `nRange=` downwards.",
         call. = FALSE
       )
       refine <- FALSE
@@ -1669,8 +1669,8 @@ power_diff <- function(
       warning(
         glue(
           "Failed to reach requested power in first round with maximally allowed n. ",
-          " Consider enlarging nRange= upwards. ",
-          " {nx_cand1[[nbr_nx_cand1]]} yields a power of {as_percent(pow_cand1[[nbr_nx_cand1]])}."
+          "Consider enlarging nRange= upwards. ",
+          "{nx_cand1[[nbr_nx_cand1]]} yields a power of {as_percent(pow_cand1[[nbr_nx_cand1]])}."
         ),
         call. = FALSE
       )
@@ -1705,7 +1705,7 @@ power_diff <- function(
       # examine close neighbourhood of predicted best n
       powerPredInd <- intersect(
         seq_len(NROW(powerPred)),
-        c(-1L, 0L, 1L) + which.max(powerPred$diffpower >= 0L)
+        c(-1L, 0L, 1L, 2L, 3L) + which.max(powerPred$diffpower >= 0L)
       )
 
       nx_cand2 <- powerPred$nx[powerPredInd]
@@ -1719,6 +1719,8 @@ power_diff <- function(
           B = nPowerSim,
           R = R
         )
+        # power already strong enough, stop searching for higher n
+        if (pow_cand2[[i2]] >= power + TOL_POW) break
       } #rof i2
 
       powerGrid2 <- tibble(
@@ -1730,14 +1732,23 @@ power_diff <- function(
         R = R
       )
 
+      # store 2nd round (refinement) power estimates
+      powerGrid <- rbind(powerGrid, powerGrid2)
+
       # pick sample size
-      stopifnot(any(powerGrid2$power >= power - TOL_POW))
+      if (!any(powerGrid2$power >= power - TOL_POW)) {
+        cat("Failed to reach requested power in second round of refinement!\n")
+        print(powerGrid)
+        #cat(paste(powerGrid2$power, collapse = " - "), "\n") ##debug
+        stop(
+          "Consider setting a better nRange= that more narrowly covers the region of promising sample sizes.",
+          call. = FALSE
+        )
+      }
+
       nx <- powerGrid2$nx[which.max(powerGrid2$power >= power - TOL_POW)]
       ny <- ceiling(nx * r)
       power <- powerGrid2$power[which(powerGrid2$nx == nx)]
-
-      # store 2nd round (refinement) power estimates
-      powerGrid <- rbind(powerGrid, powerGrid2)
     } #esle !refine
 
     stopifnot(nx > 0L, ny > 0L, power > 0L)

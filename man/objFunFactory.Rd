@@ -25,7 +25,7 @@ objFunFactory(
 
 \item{twoPhase}{logical flag. Do we allow for two delay phases where event rate may change? Default is \code{FALSE}, i.e., a single delay phase.}
 
-\item{bind}{character. parameter names that are bind together (i.e. equated) between both groups}
+\item{bind}{character. parameter names that are bound together (i.e. equated) between both groups}
 
 \item{control}{list. Fine-tune parameters for optimization. Needs to be set!}
 }

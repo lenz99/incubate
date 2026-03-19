@@ -25,7 +25,7 @@ Weibull. Can be given as character or as distribution list-object.}
 
 \item{twoPhase}{logical. Allow for two phases?}
 
-\item{bind}{character. parameter names that are bind together in 2-group
+\item{bind}{character. parameter names that are bound together in 2-group
 situation.}
 
 \item{method}{character. Which method to fit the model? 'MPSE' = maximum

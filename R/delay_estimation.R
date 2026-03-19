@@ -27,7 +27,7 @@ NULL
 #' @param distO distribution object
 #' @param method character(1). Specifies the method for which to build the objective function. Default value is `MPSE`. `MLEn` is the naive MLE-method, calculating the likelihood function as the product of density values. `MLEc` is the modified MLE.
 #' @param twoPhase logical flag. Do we allow for two delay phases where event rate may change? Default is `FALSE`, i.e., a single delay phase.
-#' @param bind character. parameter names that are bind together (i.e. equated) between both groups
+#' @param bind character. parameter names that are bound together (i.e. equated) between both groups
 #' @param control list. Fine-tune parameters for optimization. Needs to be set!
 #' @return the objective function (e.g., the negative MPSE criterion) for given choice of model parameters or `NULL` upon errors
 objFunFactory <- function(
@@ -2873,7 +2873,7 @@ buildControl <- function(
 #' @param distribution Which delayed distribution is assumed? Exponential or
 #'   Weibull. Can be given as character or as distribution list-object.
 #' @param twoPhase logical. Allow for two phases?
-#' @param bind character. parameter names that are bind together in 2-group
+#' @param bind character. parameter names that are bound together in 2-group
 #'   situation.
 #' @param method character. Which method to fit the model? 'MPSE' = maximum
 #'   product of spacings estimation *or* 'MLEn' = naive maximum likelihood

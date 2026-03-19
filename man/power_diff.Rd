@@ -2,15 +2,15 @@
 % Please edit documentation in R/delay_test.R
 \name{power_diff}
 \alias{power_diff}
-\title{Power simulation function for a two-group comparison of the delay parameter}
+\title{Power simulation function for a two-group comparison}
 \usage{
 power_diff(
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
+  eff = stop("Provide parameters for both groups that reflect the effect!"),
   param = "delay1",
   test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LRT"),
   method = c("MPSE", "MLEw", "MLEc", "MLEn"),
-  eff = stop("Provide parameters for both groups that reflect the effect!"),
   n = NULL,
   r = 1,
   sig.level = 0.05,
@@ -23,23 +23,22 @@ power_diff(
 }
 \arguments{
 \item{distribution}{character. Which assumed distribution is used for the
-power calculation.}
+power calculation. Default is \code{"exponential"}.}
 
 \item{twoPhase}{logical(1). Do we model two phases per group? Default is
 \code{FALSE}, i.e. a single delay phase per group.}
+
+\item{eff}{list of length 2. The two list elements must be numeric vectors that
+contain the model parameters (as understood by the delay-distribution
+functions provided by this package) for the two groups.}
 
 \item{param}{character. Parameter name(s) which are to be tested for
 difference and for which to simulate the power. Default value is
 \code{'delay1'}.}
 
-\item{test}{character. Which test to use for this power estimation? E.g.,
-bootstrap, LRT or logrank_pp. See \code{test_diff}.}
+\item{test}{character. Which test to use for this power estimation? Defaults to \code{"bootstrap"}. For possible options see \code{test_diff}.}
 
-\item{method}{character. Which fitting method in case of parametric test.}
-
-\item{eff}{list of length 2. The two list elements are numeric vectors that
-contain the model parameters (as understood by the delay-distribution
-functions provided by this package) for the two groups.}
+\item{method}{character. Which fitting method to use in case of a parametric test.}
 
 \item{n}{integer. Number of observations per group for the power simulation
 or \code{NULL} when n is to be estimated for a given power.}
@@ -71,7 +70,7 @@ more details. 0=off, no details.}
 List of results of power simulation. Or \code{NULL} in case of errors.
 }
 \description{
-There are two ways of operation:
+There are two modes of operation:
 \enumerate{
 \item \code{power=NULL}: simulate power based on given sample size \code{n}
 \item \code{n=NULL}: search iteratively for a suitable sample size \code{n} for a given power
