@@ -10,3 +10,6 @@
 
 inst/doc
 scratch/
+
+/.quarto/
+**/*.quarto_ipynb

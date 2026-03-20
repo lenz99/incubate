@@ -263,7 +263,7 @@ test_that("MLEw weight objects", {
   w3Fn6 <- w3FFint(nObs = 6)
   expect_type(w3Fn6, type = "closure")
   expect_named(formals(w3Fn6), "k")
-  expect_named(attributes(w3Fn6), expected = c("srcref", "gradient"))
+  expect_true("gradient" %in% names(attributes(w3Fn6)))
   w3Fn6_gr <- attr(w3Fn6, which = "gradient", exact = TRUE)
   expect_type(w3Fn6_gr, type = "closure")
   expect_named(formals(w3Fn6_gr), "k")

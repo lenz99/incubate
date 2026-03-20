@@ -1,5 +1,8 @@
-# incubate 1.3.0.9098
-* allow for random right-censoring
+# incubate 1.4.0.9000
+* current development version
+
+# incubate 1.4.0
+* allow for random right-censoring in the response variable
 * allow for delayed normal distribution as new statistical model
 * weighted MLE (MLEw)
     * bugfix in weight approximation (relevant for W3)
@@ -10,7 +13,7 @@
 * `delay_test`: use name LRT (instead of LR) for likelihood ratio tests
 * new data sets:
     * data set `long2017` from melanoma clinical trial
-    * data set `measles_sailer` with serial interval times of measles 
+    * historic data set `measles_sailer` with serial interval times of measles outbreak on the sailer HMS America from England to Australia in 1829
 
 # incubate 1.3.0
 * implement different maximum-likelihood based estimation methods (naive ML, weighed ML, corrected ML), with option to profile out Weibull's scale-parameter

@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
   out.width = "100%"
 )
 
-set.seed(123L)
+set.seed(123)
 ```
 
 
@@ -26,16 +26,16 @@ set.seed(123L)
 In survival analysis, events sometimes only start to occur after a certain delay since entry time and this delay period might vary for different treatments or groups.
 While parametric delay models, like the three-parameter Weibull distribution, might adequately describe this process the estimation of delay via standard maximum likelihood is severely biased in small samples.
 The R-package `incubate` employs an alternative estimation method called *maximum product of spacings estimation (MPSE)* to estimate and test delay and other parameters in a one or two group setting.
-Concretely, building on MPSE, `incubate` can
+Concretely, employing MPSE, `incubate` will
 
-1. fit parameter estimates where certain parameters can be constrained to be shared between both groups
-2. calculate bootstrap confidence intervals for these model parameters _and_
+1. fit parameter estimates for one or two groups. Certain parameters can be constrained to be shared between both groups.
+2. calculate bootstrap confidence intervals for these model parameters, _and_
 3. compare the survival experience of two groups within this statistical model with respect to model parameters.
 
 
 ## Example
 
-The `incubate`-package provides the delayed exponential distribution as special case of the delayed Weibull distribution.
+The `incubate`-package provides the delayed exponential distribution as a special case of the delayed Weibull distribution.
 We draw random samples corresponding to two groups with different model parameters.
 
 ```{r example_gen}
@@ -47,7 +47,7 @@ y <- rexp_delayed(n = 11, delay1 = 1.5, rate1 = 1.2)
 ```
 
 
-We use the model function `delay_model` to fit a exponential model with delay to both groups and show the model fit.
+We use the model function `delay_model` to fit an exponential model with delay to both groups and show the model fit.
 
 ```{r example_fit, out.width='60%'}
 fm <- delay_model(x, y)
@@ -69,7 +69,7 @@ plot(delay_test)
 
 
 ## Parallel computation
-To switch on parallel computation, e.g. for bootstrap parameter tests or power simulations, simply set up a suitable computation plan via the Future-API.
+To switch on parallel computation, e.g. for bootstrap parameter tests or power simulations, simply set up a suitable computation plan via the `future`-framework.
 For instance, do the following to activate four R-sessions in the background of your local computer for computer-intensive tasks in `incubate`:
 
 ```{r future_setup, echo=TRUE, eval=FALSE}
@@ -78,7 +78,7 @@ plan(multisession, workers = 4)
 ```
 
 That's it. You do *not* have to change any function calls as `incubate` is `future`-aware.
-Consult the documentation of the [`future`-package on CRAN](https://CRAN.R-project.org/package=future) for more information about this framework and its supported computation plans.
+Consult the documentation of the [futureverse website](https://www.futureverse.org/) for more information about this framework and its supported computation plans.
 
 When you are done with the heavy computing, it is best practice to release the parallel connections via `plan(sequential)`.
 
@@ -87,7 +87,7 @@ When you are done with the heavy computing, it is best practice to release the p
 The `incubate` package is found on [CRAN](https://CRAN.R-project.org/package=incubate)
 and development happens at [Gitlab](https://gitlab.com/imb-dev/incubate).
 
-Use R's standard `install.packages` to install `incubate` from CRAN as usual, i.e.,
+Use R's standard `install.packages` to install `incubate` from CRAN as usual, i.e.
 `install.packages("incubate")` should do.
 
 To install its **latest version** from the main branch on Gitlab use the following R-code:
@@ -96,10 +96,10 @@ To install its **latest version** from the main branch on Gitlab use the followi
 remotes::install_gitlab("imb-dev/incubate")
 ```
 
-To install a specific version, add the version tag after the name, separated by a `@`, e.g. to install `incubate` in version `v1.1.9` use
+To install a specific version, add the version tag after the name, separated by a `@`, e.g. to install `incubate` in version `v1.3.0` use
 
 ``` r
-remotes::install_gitlab("imb-dev/incubate@v1.1.9")
+remotes::install_gitlab("imb-dev/incubate@v1.3.0")
 ```
 
 The suffix `@develop` points to the latest **development version** on Gitlab.

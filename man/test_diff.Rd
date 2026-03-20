@@ -77,3 +77,20 @@ a parametric bootstrap test, i.e., we
 \item appraise the observed test statistic in light of the generated distribution under H0
 }
 }
+\examples{
+set.seed(123)
+# generate example data
+grA <- rweib_delayed(n = 70, delay1 = 5, shape1 = 2, scale1 = 8)
+grB <- rweib_delayed(n = 60, delay1 = 7, shape1 = 1.8, scale1 = 6)
+
+# difference in delay parameter is significant at 5\% level
+test_diff(x = grA, y = grB,
+  distribution = "weibull", param = "delay1",
+  type = "bootstrap", method = "MPSE", R = 150)
+
+# difference in shape parameter is not significant at 5\% level
+test_diff(x = grA, y = grB,
+ distribution = "weibull", param = "shape1",
+ type = "bootstrap", method = "MPSE", R = 150)
+
+}

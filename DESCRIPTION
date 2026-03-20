@@ -1,6 +1,6 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.3.0.9107
+Version: 1.4.0
 Date: 2026-03-20
 Authors@R:
     person(given = "Matthias", family = "Kuhn",

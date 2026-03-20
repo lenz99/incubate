@@ -97,6 +97,39 @@ In case the estimated sample size and the achieved power is too high it might
 pay off to rerun the function with an adapted admissible range for the sample
 size by giving a narrower range in \verb{nRange=}.
 }
+\examples{
+# simulate power for a given sample size ---------------------------
+# test for difference in delay in an exponential model,
+# the assumed effect is given in terms of model parameters for both groups
+# the power is estimated based on nPowersim = 30 simulated datasets
+# for real applications, use a higher nPowerSim (e.g. 1600) for more
+# precise power estimation and a higher R (e.g. 400) for more precise
+# P-value estimation in each simulation round
+set.seed(123) # for reproducibility
+power_diff(
+  eff = list(grA = c(delay1 = 5.2, rate1 = .1),
+             grB = c(delay1 = 7, rate1 = .12)),
+  param = "delay1",
+  test = "bootstrap", method = "MPSE",
+  n = 16, power = NULL,
+  nPowerSim = 30, R = 100)
+
+# simulate required sample size for a given power -----------------------
+# provide a range for the sample size search, e.g. nRange = c(12, 25)
+# this takes more time than the previous example, as the function
+# iteratively searches for a sample size that yields the requested power
+\dontrun{
+set.seed(123) # for reproducibility
+power_diff(
+  eff = list(grA = c(delay1 = 5.2, rate1 = .1),
+             grB = c(delay1 = 7, rate1 = .15)),
+  param = "delay1",
+  test = "bootstrap", method = "MPSE",
+  n = NULL, power = 0.8,
+  nPowerSim = 120, R = 100,
+  nRange = c(12, 25))
+}
+}
 \seealso{
 \code{\link[=test_diff]{test_diff()}}
 }

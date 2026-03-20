@@ -1,10 +1,15 @@
-#' Goodness-of-fit (GOF) test statistic.
+#' Goodness-of-fit (GOF) test statistic (experimental!)
 #'
-#' The GOF-test is performed for a fitted delay-model.
+#' The GOF-test is performed for a fitted delay-model that was
+#' fit using MPSE.
 #' There are different GOF-tests implemented:
 #' * __Moran GOF__ is based on spacings, like the MPSE-criterion itself.
 #' * __Pearson GOF__ uses categories and compares observed to expected frequencies.
 #'
+#' Note that the GOF-tests are currently only implemented for models
+#' fitted with maximum product of spacings estimation (MPSE).
+#' These tests (Moran & Pearson) are still experimental.
+#' So, use with caution. Experimental code!
 #' @param delayFit delay_model fit object
 #' @param method character(1). which method to use for GOF. Default is 'moran'.
 #' @param estimated flag. Moran test: was the parameter estimated?
@@ -796,6 +801,22 @@ test_GOF <- function(
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
 #' @return list with the results of the test. Element P contains the different
 #'   P-values, for instance from parametric bootstrap
+#' @examples
+#' set.seed(123)
+#' # generate example data
+#' grA <- rweib_delayed(n = 70, delay1 = 5, shape1 = 2, scale1 = 8)
+#' grB <- rweib_delayed(n = 60, delay1 = 7, shape1 = 1.8, scale1 = 6)
+#'
+#' # difference in delay parameter is significant at 5% level
+#' test_diff(x = grA, y = grB,
+#'   distribution = "weibull", param = "delay1",
+#'   type = "bootstrap", method = "MPSE", R = 150)
+#'
+#' # difference in shape parameter is not significant at 5% level
+#' test_diff(x = grA, y = grB,
+#'  distribution = "weibull", param = "shape1",
+#'  type = "bootstrap", method = "MPSE", R = 150)
+#'
 #' @export
 test_diff <- function(
   x,
@@ -1450,6 +1471,39 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #'   more details. 0=off, no details.
 #' @returns List of results of power simulation. Or `NULL` in case of errors.
 #' @seealso [test_diff()]
+#' @examples
+#' # simulate power for a given sample size ---------------------------
+#' # test for difference in delay in an exponential model,
+#' # the assumed effect is given in terms of model parameters for both groups
+#' # the power is estimated based on nPowersim = 30 simulated datasets
+#' # for real applications, use a higher nPowerSim (e.g. 1600) for more
+#' # precise power estimation and a higher R (e.g. 400) for more precise
+#' # P-value estimation in each simulation round
+#' set.seed(123) # for reproducibility
+#' power_diff(
+#'   eff = list(grA = c(delay1 = 5.2, rate1 = .1),
+#'              grB = c(delay1 = 7, rate1 = .12)),
+#'   param = "delay1",
+#'   test = "bootstrap", method = "MPSE",
+#'   n = 16, power = NULL,
+#'   nPowerSim = 30, R = 100)
+#'
+#' # simulate required sample size for a given power -----------------------
+#' # provide a range for the sample size search, e.g. nRange = c(12, 25)
+#' # this takes more time than the previous example, as the function
+#' # iteratively searches for a sample size that yields the requested power
+#' \dontrun{
+#' set.seed(123) # for reproducibility
+#' power_diff(
+#'   eff = list(grA = c(delay1 = 5.2, rate1 = .1),
+#'              grB = c(delay1 = 7, rate1 = .15)),
+#'   param = "delay1",
+#'   test = "bootstrap", method = "MPSE",
+#'   n = NULL, power = 0.8,
+#'   nPowerSim = 120, R = 100,
+#'   nRange = c(12, 25))
+#' }
+
 #' @export
 power_diff <- function(
   distribution = c("exponential", "weibull"),
@@ -1617,8 +1671,7 @@ power_diff <- function(
               twoPhase = twoPhase,
               param = param,
               type = test_cat,
-              R = R,
-              doGOF = FALSE
+              R = R
             ) |>
               purrr::pluck("P", test, .default = NA_real_)
           },
