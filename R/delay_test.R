@@ -783,13 +783,14 @@ test_GOF <- function(
 #' @param y data from the treatment group.
 #' @param distribution Name of the distribution to use or distribution object.
 #' @param twoPhase logical(1). Do we model two phases per group? Default is `FALSE`, i.e. a single delay phase per group.
+#' @param type character. Which type of tests to perform?
+#' @param param character. Names of parameters to test difference for. Default value is `'delay1'`. You can specify multiple parameters,
+#'   by providing multiple parameter names or by concatenating them with a `+`
+#'   in a single string. Ignored for non-parametric tests.
 #' @param method character. Which method to fit the models.
 #' @param profiled logical. Use the profiled likelihood?
-#' @param param character. Names of parameters to test difference for. Default value is `'delay1'`.
 #' @param ties character. How to handle ties in data vector of a group?
-#' @param type character. Which type of tests to perform?
 #' @param doLogrank logical. Do also non-parametric logrank tests?
-#' @param doGOF logical. Do also the GOF-tests?
 #' @param R numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.
 #' @param chiSqApprox logical flag. In bootstrap, should we estimate the best degrees of freedom for chi-square to match the distribution of the test statistic under H0?
 #' @param verbose numeric. How many details are requested? Higher value means more details. 0=off, no details.
@@ -801,36 +802,17 @@ test_diff <- function(
   y = stop("Provide data for group y!"),
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
+  type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LRT"),
+  param = "delay1",
   method = c("MPSE", "MLEw", "MLEc", "MLEn"),
   profiled = method != "MPSE",
   ties = c("density", "equispaced", "error"),
-  param = "delay1",
-  type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LRT"),
   doLogrank = TRUE,
-  doGOF = TRUE,
   R = 400,
   chiSqApprox = FALSE,
   verbose = 0
 ) {
   # setup ----
-  distO <- if (is.list(distribution)) {
-    distribution
-  } else {
-    buildDist(match.arg(arg = distribution))
-  }
-  type <- match.arg(arg = type)
-  onames <- distO$param(twoPhase = FALSE, twoGroup = FALSE, transformed = FALSE)
-  stopifnot(
-    is.numeric(x),
-    length(x) > length(onames),
-    is.numeric(y),
-    length(y) > length(onames)
-  )
-  stopifnot(is.numeric(R), length(R) == 1L, R >= 1L)
-  stopifnot(is.character(param))
-
-  doLogrank <- isTRUE(doLogrank[[1]])
-  doGOF <- isTRUE(doGOF[[1]])
 
   # verbose arg
   if (is.logical(verbose)) {
@@ -841,6 +823,15 @@ test_diff <- function(
   }
   verbose <- verbose[[1]]
 
+  distO <- if (is.list(distribution)) {
+    distribution
+  } else {
+    buildDist(match.arg(arg = distribution))
+  }
+  type <- match.arg(arg = type)
+  isNonParametric <- type == "logrank"
+
+  ties <- match.arg(arg = ties)
   method <- if (length(method) == 1 && toupper(method) == "MSE") {
     message(
       "The method name 'MPSE' is preferred over the previously used name 'MSE'!"
@@ -849,56 +840,17 @@ test_diff <- function(
   } else {
     method[1L]
   }
-  method <- match.arg(method)
-  ties <- match.arg(arg = ties)
+  stopifnot(is.logical(doLogrank), length(doLogrank) == 1L)
 
-  if (method != "MPSE" && doGOF && type %in% c("moran", "pearson", "GOF")) {
+  method <- match.arg(method)
+
+  if (type %in% c("moran", "pearson", "GOF") && method != "MPSE") {
     warning(
       "Goodness-of-fit (GOF) tests are only supported with MPSE currently!",
       call. = FALSE
     )
     return(invisible(NULL))
-  }
-
-  # what kind of data
-  respL <- prepResponseVar(x0 = x, y0 = y, simplify = TRUE)
-  stopifnot(is.list(respL), identical(names(respL), c("x", "y")))
-  x <- respL[["x"]]
-  y <- respL[["y"]]
-  rm(list = "respL")
-
-  # flag if we have Surv-data or not
-  #+a glimpse at x is enough as it is either-or for both groups
-  isSurv <- is.Surv(x)
-
-  # parameters to test differences
-  if (any(grepl(pattern = "_tr", param, fixed = TRUE))) {
-    stop(
-      "Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.",
-      call. = FALSE
-    )
-  }
-
-  # translate convenience names (for single phase) to canonical names
-  unNmbrdIdx <- !endsWith(param, suffix = "1") & !endsWith(param, suffix = "2")
-  if (any(unNmbrdIdx)) {
-    param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
-    if (verbose > 0L) {
-      cat(
-        "The unnumbered parameter names in param= are taken to refer to the initial phase. They are translated to canonical parameter names.\n"
-      )
-    }
-  }
-
-  # retain only valid names in canonical order
-  param <- intersect(onames, param)
-
-  if (!length(param)) {
-    stop(
-      "Provide valid parameter names from the distribution to test for differences in two groups.",
-      call. = FALSE
-    )
-  }
+  } #fi
 
   # bitmask for test types: start all FALSE
   testMask <- rlang::set_names(
@@ -910,20 +862,24 @@ test_diff <- function(
     EXPR = type,
     all = {
       testMask <- testMask | TRUE
-      testMask[c("pearson", "moran")] <- method == "MPSE" && doGOF
+      doLogrank <- TRUE
+      testMask[c("pearson", "moran")] <- method == "MPSE"
     },
-    # bootstrap #use better flags? like doBootstrap=, doGOF=, doLRT=?!
+    # bootstrap #use better flags? like doBootstrap=, doLRT=?!
     bootstrap = {
       testMask["bootstrap"] <- TRUE
     },
     GOF = {
-      testMask[c("pearson", "moran")] <- method == "MPSE" && doGOF
+      stopifnot(method == "MPSE")
+      testMask[c("pearson", "moran")] <- TRUE
     },
     pearson = {
-      testMask["pearson"] <- method == "MPSE" && doGOF
+      stopifnot(method == "MPSE")
+      testMask["pearson"] <- TRUE
     },
     moran = {
-      testMask["moran"] <- method == "MPSE" && doGOF
+      stopifnot(method == "MPSE")
+      testMask["moran"] <- TRUE
     },
     logrank = {
       doLogrank <- TRUE
@@ -943,271 +899,344 @@ test_diff <- function(
     return(invisible(NULL))
   }
 
-  # test statistic ----
+  stopifnot(is.numeric(R), length(R) == 1L, R >= 1L)
 
-  # Test statistic calculated from the given data, method and the model specification.
-  #
-  # The test statistic takes non-negative values.
-  # High values of the test statistic speak in favour of H1:
-  # @param strict logical. Accept models only if they converged flawlessly, i.e., if convergence=0?
-  # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
-  testStat <- function(x, y, strict = TRUE) {
-    fit0 <- delay_model(
-      x = x,
-      y = y,
-      distribution = distO$dist,
-      twoPhase = twoPhase,
-      method = method,
-      bind = param,
-      control = list(profiled = profiled, ties = ties)
-    )
-    fit1 <- delay_model(
-      x = x,
-      y = y,
-      distribution = distO$dist,
-      twoPhase = twoPhase,
-      method = method,
-      control = list(profiled = profiled, ties = ties)
-    )
+  # what kind of data
+  respL <- prepResponseVar(x0 = x, y0 = y, simplify = TRUE)
+  stopifnot(is.list(respL), identical(names(respL), c("x", "y")))
+  x <- respL[["x"]]
+  y <- respL[["y"]]
+  rm(list = "respL")
 
-    if (
-      is.null(fit0) ||
-        is.null(fit0$optimizer) ||
-        is.null(fit0$optimizer$valOpt) ||
-        is.null(fit1) ||
-        is.null(fit1$optimizer) ||
-        is.null(fit1$optimizer$valOpt)
-    ) {
-      return(invisible(NULL))
-    } #fi
+  # flag if we have Surv-data or not
+  #+a glimpse at x is enough as it is either-or for both groups
+  isSurv <- is.Surv(x)
 
-    # if the more restricted model (fit0) yields better fit (=lower value in optimization) than the more general model (fit1)
-    #+we are in trouble, possibly due to non-convergence, e.g., optim's convergence code 52
-    #+we re-fit the general fit1 again using parameter-values from fit0
-    if (
-      fit0[["optimizer"]][["valOpt"]] + TOL_NUM <
-        fit1[["optimizer"]][["valOpt"]] &&
-        !is.null(fit1oa <- purrr::pluck(fit1, "optimizer", "optim_args"))
-    ) {
-      if (verbose > 0) {
-        warning(
-          "Restricted model with better fit (=smaller criterion) than unrestricted model.",
-          call. = FALSE
-        )
-      } #fi
-
-      # re-run fit1 with start values based on fitted parameters of reduced model fit0
-      stopifnot(is.list(fit1oa), "par" %in% names(fit1oa))
-
-      coef0 <- coef.incubate_fit(fit0, transformed = TRUE)
-      pn1 <- names(fit1[["optimizer"]][["parOpt"]])
-      # take over optimization coefficients for start values of fit1
-      # QQQ Would match() or pmatch() help avoid the for-loop?
-      for (na0 in names(fit0[["optimizer"]][["parOpt"]])) {
-        fit1oa[["par"]][startsWith(pn1, prefix = na0)] <- coef0[[na0]]
-      } #rof
-
-      fit1oa[["control"]][["parscale"]] <- scalePars(parV = fit1oa[["par"]])
-      fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
-
-      if (
-        is.null(fit1) ||
-          is.null(fit1$optimizer) ||
-          is.null(fit1$optimizer$valOpt) ||
-          fit0[["optimizer"]][["valOpt"]] + TOL_NUM <
-            fit1[["optimizer"]][["valOpt"]]
-      ) {
-        warning(
-          "Restricted model with better fit (=smaller criterion in optimization) than unrestricted model even after refit of the unrestricted model!",
-          call. = FALSE
-        )
-        return(invisible(NULL))
-      } #fi
-    } #fi bad fit1
-
-    # check convergence of re-fits when in strict mode only:
-    if (
-      strict &&
-        (purrr::chuck(fit0, "optimizer", "convergence") != 0 ||
-          purrr::chuck(fit1, "optimizer", "convergence") != 0)
-    ) {
-      return(invisible(NULL))
-    } #fi
-
-    # mkuhn, 2024-08-28
-    SHAPE_TEST <- TRUE
-    # for the time being: add crude check for Weibull (tailored for MLEw) whether fit is completely unreasonable
-    #XXX replace with better local maximum check (motivated by fitting routine for MLEw)
-    if (strict && SHAPE_TEST && fit0$distO$dist == "weibull") {
-      coefs <- c(coef.incubate_fit(fit0), coef.incubate_fit(fit1))
-
-      if (any(coefs[startsWith(names(coefs), "shape")] > 7.1)) {
-        if (verbose > 0) {
-          warning(
-            "Weibull fit with very high shape parameter (>7.1) rejected",
-            call. = FALSE
-          )
-        }
-        return(invisible(NULL))
-      } #fi
-    } #fi
-
-    # higher values of T-val speak in favour of H1:
-    #   1. fit0 (bind model) has high value (=bad fit)
-    #   2. fit1 (free model) has low value (=good fit)
-    #
-    # we evaluate the fit with the criterion (e.g., MLE for all MLE-methods)
-    # could also think about the optimization criterion
-    # max(0L, fit0[["optimizer"]][["valOpt"]] - fit1[["optimizer"]][["valOpt"]]),
-    list(
-      val = 2 * max(0, fit0[["criterion"]][[1]] - fit1[["criterion"]][[1]]),
-      fit0 = fit0,
-      fit1 = fit1
-    )
-  } #fn testStat
-
-  # observed test statistic
-  ts_obs <- testStat(x, y, strict = TRUE)
-  if (
-    is.null(ts_obs) ||
-      !is.list(ts_obs) ||
-      !is.numeric(ts_obs[["val"]]) ||
-      ts_obs[["val"]] < -TOL_NUM
-  ) {
-    stop(
-      "Delay model failed for restricted null-model or free full model",
-      call. = FALSE
-    )
-  } #fi
-
-  fit0 <- ts_obs[["fit0"]] # restricted (bind=)
-  fit1 <- ts_obs[["fit1"]] # unrestricted
-
-  # P-values -----
-
-  # GOF-test results
-  #+ H0: simpler/restricted model 0 is sufficient
-  #+ the GOF-test solely builds on fit0
-  #+ take fitted parameters for both groups under null-model
-  #+ and transform the observed data for both groups via cumulative distribution functions
-
-  # spacings-based GOF-test
+  ts_obs <- t0_dist <- NULL
   GOF_mo0 <- GOF_mo1 <- NULL
-  if (testMask[["moran"]]) {
-    GOF_mo0 <- test_GOF(delayFit = fit0, method = "moran")
-    GOF_mo1 <- test_GOF(delayFit = fit1, method = "moran")
-    #if (verbose > 0L) cat("Moran test stat for fit0: ", GOF_mo0$statistic, "\n")
-  }
-
-  # Pearson GOF-test based on Chi-square distribution.
-  # under H0, expect counts according to uniform distribution
   GOF_pears0 <- GOF_pears1 <- NULL
-  if (testMask[["pearson"]]) {
-    GOF_pears0 <- test_GOF(delayFit = fit0, method = "pearson")
-    GOF_pears1 <- test_GOF(delayFit = fit1, method = "pearson")
-  }
-
   P_LRT <- NULL
-  if (testMask[["LRT"]]) {
-    # likelihood ratio test (LRT), based on the criterion that was requested (MPSE or ML-based)
-    P_LRT <- stats::pchisq(
-      q = ts_obs[["val"]],
-      df = length(param),
-      lower.tail = FALSE
-    )
-  }
+  P_boot <- chisq_df_hat <- NULL
+  P_logrank <- P_logrank_pp <- NULL
 
-  t0_dist <- P_boot <- chisq_df_hat <- NULL
-  if (testMask[["bootstrap"]]) {
-    # parametric bootstrap:
-    # generate R samples (x, y) by random sampling from the fitted H0-model (e.g. common delay through bind=),
-    #+where all nuisance parameters are at their fitted value
-    # calculate the test statistic on the simulated data
-    # estimate P as proportion of simulated test statistics that exceed the observed test statistic t_obs
+  if (!isNonParametric) {
+    # check if anything is required beyond logrank test,
+    # if not, we can skip the model fitting and go directly to logrank test
+    # there is something requested beyond logrank test
+    stopifnot(any(testMask[names(testMask) != "logrank"]))
 
-    # arguments to the random function generation
-    # XXX censoring: we actually expect/support only right-censoring (but here, we still count *any* censoring)
-    ranFunArgsX <- c(
-      list(n = length(x), cens = fit0$cens$n[["x"]]["any"] / length(x)),
-      coef.incubate_fit(fit0, group = "x", transformed = FALSE)
-    )
-    ranFunArgsY <- c(
-      list(n = length(y), cens = fit0$cens$n[["y"]]["any"] / length(y)),
-      coef.incubate_fit(fit0, group = "y", transformed = FALSE)
-    )
+    # parameters to test differences for
+    stopifnot(`param= should be character` = is.character(param))
+    param <- param[!is.na(param) & nzchar(param)]
+    param <- unique(param)
+    # eventually split multiple parameter names separated by "+"
+    param <- strsplit(param, split = "+", fixed = TRUE) |> unlist()
+    # trim leading and trailing whitespace from parameter names
+    param <- trimws(param)
 
-    retL <- 1L + (verbose > 0L)
-    t0_dist <- future.apply::future_vapply(
-      X = seq_len(R),
-      FUN.VALUE = double(retL),
-      FUN = function(dummy) {
-        # generate new data according to given fitted null-model
-        # sort is not needed here, as it goes through the whole pipeline (factory method)
-        ts_boot <- testStat(
-          x = rlang::exec(distO$random, !!!ranFunArgsX),
-          y = rlang::exec(distO$random, !!!ranFunArgsY),
-          strict = FALSE
-        )
-        if (is.null(ts_boot)) {
-          rep.int(NA_real_, times = retL)
-        } else {
-          c(
-            ts_boot[["val"]],
-            # verbose-mode: include convergence code
-            purrr::chuck(ts_boot, "fit0", "optimizer", "convergence")
-          )[seq_len(retL)]
-        }
-      },
-      future.packages = c("incubate", "purrr", "rlang"),
-      future.seed = TRUE,
-      future.globals = TRUE #c("retL", "distO", "ranFunArgsX", "ranFunArgsY", "testStat", "delay_model", "MLEw_approx"),
-    )
-
-    if (verbose > 0L) {
-      stopifnot(NROW(t0_dist) == 2L)
-      fit0_conv <- t0_dist[2L, ]
-      cat(
-        glue(
-          "Proportion of model failures: {as_percent(length(which(is.na(fit0_conv)))/length(fit0_conv))}",
-          "Proportion of conv =  0: {as_percent(length(which(fit0_conv == 0))/ length(fit0_conv))}",
-          "Proportion of conv = 52: {as_percent(length(which(fit0_conv == 52))/length(fit0_conv))}",
-          .sep = "\n"
-        ),
-        "\n"
-      )
-      t0_dist <- t0_dist[1L, , drop = TRUE] #retain only ts_boot[['val']]
-    } #fi
-    t0_dist <- t0_dist[is.finite(t0_dist)]
-
-    if (chiSqApprox && length(t0_dist) > 7L) {
-      try(
-        expr = {
-          chisq_df_hat <- coef(MASS::fitdistr(
-            x = t0_dist,
-            densfun = "chi-squared",
-            start = list(df = length(param)),
-            method = "Brent",
-            lower = .001,
-            upper = 1001
-          ))
-        },
-        silent = TRUE
-      )
-    } #fi
-
-    # keep P-value from bootstrap only when at least half the nominal simulation runs have succeeded
-    if (length(t0_dist) >= (R + 1) / 2 + 1) {
-      P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) / (length(t0_dist) + 1L)
-    } else {
-      warning(
-        "Bootstrap failed as less than half of the simulations succeeded!",
+    if (any(grepl(pattern = "_tr", param, fixed = TRUE))) {
+      stop(
+        "Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.",
         call. = FALSE
       )
     }
-  } #fi bootstrap
+
+    # translate convenience names (for single phase) to canonical names
+    unNmbrdIdx <- !endsWith(param, suffix = "1") &
+      !endsWith(param, suffix = "2")
+    if (any(unNmbrdIdx)) {
+      param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1") #interpret un-numbered parameters as referring to phase 1
+      if (verbose > 0L) {
+        cat(
+          "The unnumbered parameter names in param= are taken to refer to the initial phase. They are translated to canonical parameter names.\n"
+        )
+      }
+    }
+
+    onames <- distO$param(
+      twoPhase = FALSE,
+      twoGroup = FALSE,
+      transformed = FALSE
+    )
+    stopifnot(
+      is.numeric(x),
+      length(x) > length(onames),
+      is.numeric(y),
+      length(y) > length(onames)
+    )
+
+    # retain only valid names in canonical order
+    param <- intersect(onames, param)
+
+    if (!length(param)) {
+      stop(
+        "Provide valid parameter names from the distribution to test for differences in two groups.",
+        call. = FALSE
+      )
+    }
+
+    # test statistic ----
+
+    # Test statistic calculated from the given data, method and the model specification.
+    #
+    # The test statistic takes non-negative values.
+    # High values of the test statistic speak in favour of H1:
+    # @param strict logical. Accept models only if they converged flawlessly, i.e., if convergence=0?
+    # @return list containing value of test statistic and null model fit. Or `NULL` in case of trouble.
+    testStat <- function(x, y, strict = TRUE) {
+      fit0 <- delay_model(
+        x = x,
+        y = y,
+        distribution = distO$dist,
+        twoPhase = twoPhase,
+        method = method,
+        bind = param,
+        control = list(profiled = profiled, ties = ties)
+      )
+      fit1 <- delay_model(
+        x = x,
+        y = y,
+        distribution = distO$dist,
+        twoPhase = twoPhase,
+        method = method,
+        control = list(profiled = profiled, ties = ties)
+      )
+
+      if (
+        is.null(fit0) ||
+          is.null(fit0$optimizer) ||
+          is.null(fit0$optimizer$valOpt) ||
+          is.null(fit1) ||
+          is.null(fit1$optimizer) ||
+          is.null(fit1$optimizer$valOpt)
+      ) {
+        return(invisible(NULL))
+      } #fi
+
+      # if the more restricted model (fit0) yields better fit (=lower value in optimization) than the more general model (fit1)
+      #+we are in trouble, possibly due to non-convergence, e.g., optim's convergence code 52
+      #+we re-fit the general fit1 again using parameter-values from fit0
+      if (
+        fit0[["optimizer"]][["valOpt"]] + TOL_NUM <
+          fit1[["optimizer"]][["valOpt"]] &&
+          !is.null(fit1oa <- purrr::pluck(fit1, "optimizer", "optim_args"))
+      ) {
+        if (verbose > 0) {
+          warning(
+            "Restricted model with better fit (=smaller criterion) than unrestricted model.",
+            call. = FALSE
+          )
+        } #fi
+
+        # re-run fit1 with start values based on fitted parameters of reduced model fit0
+        stopifnot(is.list(fit1oa), "par" %in% names(fit1oa))
+
+        coef0 <- coef.incubate_fit(fit0, transformed = TRUE)
+        pn1 <- names(fit1[["optimizer"]][["parOpt"]])
+        # take over optimization coefficients for start values of fit1
+        # QQQ Would match() or pmatch() help avoid the for-loop?
+        for (na0 in names(fit0[["optimizer"]][["parOpt"]])) {
+          fit1oa[["par"]][startsWith(pn1, prefix = na0)] <- coef0[[na0]]
+        } #rof
+
+        fit1oa[["control"]][["parscale"]] <- scalePars(parV = fit1oa[["par"]])
+        fit1 <- update.incubate_fit(fit1, optim_args = fit1oa)
+
+        if (
+          is.null(fit1) ||
+            is.null(fit1$optimizer) ||
+            is.null(fit1$optimizer$valOpt) ||
+            fit0[["optimizer"]][["valOpt"]] + TOL_NUM <
+              fit1[["optimizer"]][["valOpt"]]
+        ) {
+          warning(
+            "Restricted model with better fit (=smaller criterion in optimization) than unrestricted model even after refit of the unrestricted model!",
+            call. = FALSE
+          )
+          return(invisible(NULL))
+        } #fi
+      } #fi bad fit1
+
+      # check convergence of re-fits when in strict mode only:
+      if (
+        strict &&
+          (purrr::chuck(fit0, "optimizer", "convergence") != 0 ||
+            purrr::chuck(fit1, "optimizer", "convergence") != 0)
+      ) {
+        return(invisible(NULL))
+      } #fi
+
+      # mkuhn, 2024-08-28
+      SHAPE_TEST <- TRUE
+      # for the time being: add crude check for Weibull (tailored for MLEw) whether fit is completely unreasonable
+      #XXX replace with better local maximum check (motivated by fitting routine for MLEw)
+      if (strict && SHAPE_TEST && fit0$distO$dist == "weibull") {
+        coefs <- c(coef.incubate_fit(fit0), coef.incubate_fit(fit1))
+
+        if (any(coefs[startsWith(names(coefs), "shape")] > 7.1)) {
+          if (verbose > 0) {
+            warning(
+              "Weibull fit with very high shape parameter (>7.1) rejected",
+              call. = FALSE
+            )
+          }
+          return(invisible(NULL))
+        } #fi
+      } #fi
+
+      # higher values of T-val speak in favour of H1:
+      #   1. fit0 (bind model) has high value (=bad fit)
+      #   2. fit1 (free model) has low value (=good fit)
+      #
+      # we evaluate the fit with the criterion (e.g., MLE for all MLE-methods)
+      # could also think about the optimization criterion
+      # max(0L, fit0[["optimizer"]][["valOpt"]] - fit1[["optimizer"]][["valOpt"]]),
+      list(
+        val = 2 * max(0, fit0[["criterion"]][[1]] - fit1[["criterion"]][[1]]),
+        fit0 = fit0,
+        fit1 = fit1
+      )
+    } #fn testStat
+
+    # observed test statistic
+    ts_obs <- testStat(x, y, strict = TRUE)
+    if (
+      is.null(ts_obs) ||
+        !is.list(ts_obs) ||
+        !is.numeric(ts_obs[["val"]]) ||
+        ts_obs[["val"]] < -TOL_NUM
+    ) {
+      stop(
+        "Delay model failed for restricted null-model or free full model",
+        call. = FALSE
+      )
+    } #fi
+
+    fit0 <- ts_obs[["fit0"]] # restricted (bind=)
+    fit1 <- ts_obs[["fit1"]] # unrestricted
+
+    # P-values on parameters -----
+
+    # GOF-test results
+    #+ H0: simpler/restricted model 0 is sufficient
+    #+ the GOF-test solely builds on fit0
+    #+ take fitted parameters for both groups under null-model
+    #+ and transform the observed data for both groups via cumulative distribution functions
+
+    # spacings-based GOF-test
+    if (testMask[["moran"]]) {
+      GOF_mo0 <- test_GOF(delayFit = fit0, method = "moran")
+      GOF_mo1 <- test_GOF(delayFit = fit1, method = "moran")
+      #if (verbose > 0L) cat("Moran test stat for fit0: ", GOF_mo0$statistic, "\n")
+    }
+
+    # Pearson GOF-test based on Chi-square distribution.
+    # under H0, expect counts according to uniform distribution
+    if (testMask[["pearson"]]) {
+      GOF_pears0 <- test_GOF(delayFit = fit0, method = "pearson")
+      GOF_pears1 <- test_GOF(delayFit = fit1, method = "pearson")
+    }
+
+    if (testMask[["LRT"]]) {
+      # likelihood ratio test (LRT), based on the criterion that was requested (MPSE or ML-based)
+      P_LRT <- stats::pchisq(
+        q = ts_obs[["val"]],
+        df = length(param),
+        lower.tail = FALSE
+      )
+    }
+
+    if (testMask[["bootstrap"]]) {
+      # parametric bootstrap:
+      # generate R samples (x, y) by random sampling from the fitted H0-model (e.g. common delay through bind=),
+      #+where all nuisance parameters are at their fitted value
+      # calculate the test statistic on the simulated data
+      # estimate P as proportion of simulated test statistics that exceed the observed test statistic t_obs
+
+      # arguments to the random function generation
+      # XXX censoring: we actually expect/support only right-censoring (but here, we still count *any* censoring)
+      ranFunArgsX <- c(
+        list(n = length(x), cens = fit0$cens$n[["x"]]["any"] / length(x)),
+        coef.incubate_fit(fit0, group = "x", transformed = FALSE)
+      )
+      ranFunArgsY <- c(
+        list(n = length(y), cens = fit0$cens$n[["y"]]["any"] / length(y)),
+        coef.incubate_fit(fit0, group = "y", transformed = FALSE)
+      )
+
+      retL <- 1L + (verbose > 0L)
+      t0_dist <- future.apply::future_vapply(
+        X = seq_len(R),
+        FUN.VALUE = double(retL),
+        FUN = function(dummy) {
+          # generate new data according to given fitted null-model
+          # sort is not needed here, as it goes through the whole pipeline (factory method)
+          ts_boot <- testStat(
+            x = rlang::exec(distO$random, !!!ranFunArgsX),
+            y = rlang::exec(distO$random, !!!ranFunArgsY),
+            strict = FALSE
+          )
+          if (is.null(ts_boot)) {
+            rep.int(NA_real_, times = retL)
+          } else {
+            c(
+              ts_boot[["val"]],
+              # verbose-mode: include convergence code
+              purrr::chuck(ts_boot, "fit0", "optimizer", "convergence")
+            )[seq_len(retL)]
+          }
+        },
+        future.packages = c("incubate", "purrr", "rlang"),
+        future.seed = TRUE,
+        future.globals = TRUE #c("retL", "distO", "ranFunArgsX", "ranFunArgsY", "testStat", "delay_model", "MLEw_approx"),
+      )
+
+      if (verbose > 0L) {
+        stopifnot(NROW(t0_dist) == 2L)
+        fit0_conv <- t0_dist[2L, ]
+        cat(
+          glue(
+            "Proportion of model failures: {as_percent(length(which(is.na(fit0_conv)))/length(fit0_conv))}",
+            "Proportion of conv =  0: {as_percent(length(which(fit0_conv == 0))/ length(fit0_conv))}",
+            "Proportion of conv = 52: {as_percent(length(which(fit0_conv == 52))/length(fit0_conv))}",
+            .sep = "\n"
+          ),
+          "\n"
+        )
+        t0_dist <- t0_dist[1L, , drop = TRUE] #retain only ts_boot[['val']]
+      } #fi
+      t0_dist <- t0_dist[is.finite(t0_dist)]
+
+      if (chiSqApprox && length(t0_dist) > 7L) {
+        try(
+          expr = {
+            chisq_df_hat <- coef(MASS::fitdistr(
+              x = t0_dist,
+              densfun = "chi-squared",
+              start = list(df = length(param)),
+              method = "Brent",
+              lower = .001,
+              upper = 1001
+            ))
+          },
+          silent = TRUE
+        )
+      } #fi
+
+      # keep P-value from bootstrap only when at least half the nominal simulation runs have succeeded
+      if (length(t0_dist) >= (R + 1) / 2 + 1) {
+        P_boot <- (1L + sum(t0_dist >= ts_obs[["val"]])) /
+          (length(t0_dist) + 1L)
+      } else {
+        warning(
+          "Bootstrap failed as less than half of the simulations succeeded!",
+          call. = FALSE
+        )
+      }
+    } #fi bootstrap
+  } #fi !isNonParametric
 
   # Log-rank tests
-  P_logrank <- P_logrank_pp <- NULL
   if (testMask[["logrank"]]) {
     # data in long format
     dat_2gr <- tibble::tibble(
@@ -1227,55 +1256,79 @@ test_diff <- function(
     )
   } #fi logrank
 
-  structure(
-    # compact cleanses NULL entries
-    purrr::compact(list(
-      # two initial model fits
-      #fit0 = fit0, fit1 = fit1, # debug only?!
-      t_obs = ts_obs[["val"]],
-      testDist = t0_dist,
-      R = if (testMask[["bootstrap"]]) length(t0_dist),
-      chisq_df_hat = chisq_df_hat,
-      param = param,
-      # save only non-NULL p-values
-      P = purrr::compact(list(
-        bootstrap = P_boot,
-        LRT = P_LRT,
-        moran = as.vector(GOF_mo0$p.value),
-        moran1 = as.vector(GOF_mo1$p.value),
-        pearson = as.vector(GOF_pears0$p.value),
-        pearson1 = as.vector(GOF_pears1$p.value),
-        logrank = P_logrank,
-        logrank_pp = P_logrank_pp
-      ))
-    )),
-    class = "incubate_test"
-  )
+  # compact cleanses NULL entries
+  list(
+    # two initial model fits
+    #fit0 = fit0, fit1 = fit1, # debug only?!
+
+    distribution = distribution,
+    t_obs = ts_obs[["val"]],
+    testDist = t0_dist,
+    R = if (testMask[["bootstrap"]]) length(t0_dist),
+    chisq_df_hat = chisq_df_hat,
+    # param will be dropped if NULL (due to compact)
+    param = if (!isNonParametric) param,
+    # save only non-NULL p-values
+    P = purrr::compact(list(
+      bootstrap = P_boot,
+      LRT = P_LRT,
+      moran = as.vector(GOF_mo0$p.value),
+      moran1 = as.vector(GOF_mo1$p.value),
+      pearson = as.vector(GOF_pears0$p.value),
+      pearson1 = as.vector(GOF_pears1$p.value),
+      logrank = P_logrank,
+      logrank_pp = P_logrank_pp
+    ))
+  ) |>
+    purrr::compact() |>
+    structure(
+      class = "incubate_test"
+    )
 }
 
 #' @export
 print.incubate_test <- function(x, ...) {
-  params <- paste(x$param, collapse = ' & ')
-  P_boot_str <- if (is.numeric(x$P$bootstrap)) {
-    format.pval(x$P$bootstrap)
+  if (is.null(x$param)) {
+    cat(
+      glue(
+        "Test for difference in distribution between two groups.",
+        "Alternative hypothesis: the distribution is different between the two groups.",
+        "Log-rank P-value: {if (is.numeric(x$P$logrank)) format.pval(x$P$logrank) else '-'}",
+        "Peto & Peto modified Gehan-Wilcoxon P-value: {if (is.numeric(x$P$logrank_pp)) format.pval(x$P$logrank_pp) else '-'}",
+        .sep = "\n"
+      ),
+      '\n'
+    )
   } else {
-    '-'
+    params <- paste(x$param, collapse = ' & ')
+    P_boot_str <- if (is.numeric(x$P$bootstrap)) {
+      format.pval(x$P$bootstrap)
+    } else {
+      '-'
+    }
+    cat(
+      glue(
+        "Test for difference in {x$distribution} {if (length(x$param) > 1) 'parameters' else 'parameter'} {params} between two groups.",
+        "Alternative hypothesis: {params} {c('is', 'are')[[1L + (length(x$param) > 1)]]} different between the two groups.",
+        "Parametric Bootstrap P-value: {P_boot_str}",
+        .sep = "\n"
+      ),
+      '\n'
+    )
   }
-  cat(
-    glue(
-      "Test for difference in {if (length(x$param) > 1) 'parameters' else 'parameter'} {params} between two groups.",
-      "Alternative hypothesis: {params} {c('is', 'are')[[1L + (length(x$param) > 1)]]} different between the two groups.",
-      "Parametric Bootstrap P-value: {P_boot_str}",
-      .sep = "\n"
-    ),
-    '\n'
-  )
 }
 
 
 #' @export
 plot.incubate_test <- function(x, y, title, subtitle, ...) {
   stopifnot(inherits(x, "incubate_test"))
+
+  if (is.null(x$param)) {
+    message(
+      'No parameter specified for the test, cannot plot distribution of test statistic under H0.'
+    )
+    return(invisible(NULL))
+  }
 
   rlang::check_installed(
     pkg = 'ggplot2',
@@ -1292,6 +1345,7 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 
   # set R = "-" when entry R is NULL or absent
   R <- purrr::pluck(x, "R", .default = "-")
+  distrib <- purrr::pluck(x, "distribution", .default = "unknown distribution")
 
   if (missing(title)) {
     title <- glue(
@@ -1300,7 +1354,7 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
   }
   if (missing(subtitle) && !is.null(x$P$bootstrap)) {
     subtitle <- glue(
-      'Sampling distribution, based on {R} parametric bootstrap draws. ',
+      'Sampling distribution, based on {R} parametric bootstrap draws, using the {distrib} model',
       'Bootstrap P-value = {format.pval(x$P$bootstrap, eps = 1e-3)}'
     )
     #"Approximated by a chi-square distribution with df={signif(x[['chisq_df_hat']], 2)}.")
@@ -1370,8 +1424,11 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #'   functions provided by this package) for the two groups.
 #' @param param character. Parameter name(s) which are to be tested for
 #'   difference and for which to simulate the power. Default value is
-#'   `'delay1'`.
-#' @param test character. Which test to use for this power estimation? Defaults to `"bootstrap"`. For possible options see `test_diff`.
+#'   `'delay1'`. You can specify multiple parameters, by giving a vector or
+#'   by concatenating them with a `+` in a single string.
+#' @param test character. Which test to use for this power estimation? Defaults
+#'   to `"bootstrap"`. Non-parametric logrank test is also possible (either
+#'   `"logrank"` or `"logrank_pp"`). See also [test_diff()].
 #' @param method character. Which fitting method to use in case of a parametric test.
 #' @param n integer. Number of observations per group for the power simulation
 #'   or `NULL` when n is to be estimated for a given power.
@@ -1399,7 +1456,7 @@ power_diff <- function(
   twoPhase = FALSE,
   eff = stop("Provide parameters for both groups that reflect the effect!"),
   param = "delay1",
-  test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LRT"),
+  test = c("bootstrap", "logrank", "logrank_pp", "LRT"), #"pearson", "moran",
   method = c("MPSE", "MLEw", "MLEc", "MLEn"),
   n = NULL,
   r = 1,
@@ -1415,13 +1472,14 @@ power_diff <- function(
   distO <- buildDist(distribution)
   #if (!missing(test)) test <- tolower(test)
   test <- match.arg(arg = test)
-  method <- match.arg(arg = method)
   stopifnot(length(test) == 1, nzchar(test))
   # category: e.g. test name w/o _pp suffix
   test_cat <- sub(pattern = "[_].+$", replacement = "", x = test, fixed = FALSE)
   if (test_cat != test) {
     stopifnot(startsWith(test, prefix = "logrank"))
   } #fi
+  isNonParametric <- test_cat == "logrank"
+  method <- match.arg(arg = method)
   ranFun <- distO$random
   onames <- distO$param(
     twoPhase = twoPhase,
@@ -1429,36 +1487,58 @@ power_diff <- function(
     transformed = FALSE
   )
 
-  # parameters for which to test difference and for which power is requested
-  if (any(grepl(pattern = "_tr", param, fixed = TRUE))) {
-    stop(
-      "Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.",
-      call. = FALSE
-    )
-  }
-
-  # translate convenience names (for single phase) to canonical names
-  #+interpret un-numbered parameters as referring to phase 1
-  unNmbrdIdx <- !grepl(pattern = "[12]$", param, fixed = FALSE)
-  if (any(unNmbrdIdx)) {
-    param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1")
-    if (verbose > 0L) {
-      message(
-        "Unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n"
+  # handle param argument:
+  # for logrank tests, we ignore the parameter names and set param to NULL, as logrank tests do not rely on distribution parameters.
+  # For other tests, we check and preprocess the parameter names.
+  param <- if (isNonParametric) {
+    if (!missing(param) && !is.null(param)) {
+      warning(
+        "Parameter names in param= are ignored for logrank tests.",
+        call. = FALSE
       )
     }
-  }
+    NULL
+  } else {
+    stopifnot(`param= arg must be character` = is.character(param))
+    param <- param[!is.na(param) & nzchar(param)]
+    param <- unique(param)
+    # eventually split multiple parameter names separated by "+"
+    param <- strsplit(param, split = "+", fixed = TRUE) |> unlist()
+    # trim leading and trailing whitespace from parameter names
+    param <- trimws(param)
 
-  # only valid names in canonical order
-  param <- intersect(onames, param)
+    # preprocess parameter names
+    # parameters for which to test difference and for which power is requested
+    if (any(grepl(pattern = "_tr", param, fixed = TRUE))) {
+      stop(
+        "Parameter names in param= refer to the distribution parameters and not to the transformed parameters of the objective function.",
+        call. = FALSE
+      )
+    }
 
-  if (!length(param)) {
-    stop(
-      "Provide valid parameter names from the distribution to test for differences in two groups.",
-      call. = FALSE
-    )
-  }
-  param <- match.arg(param, choices = onames, several.ok = TRUE)
+    # translate convenience names (for single phase) to canonical names
+    #+interpret un-numbered parameters as referring to phase 1
+    unNmbrdIdx <- !grepl(pattern = "[12]$", param, fixed = FALSE)
+    if (any(unNmbrdIdx)) {
+      param[unNmbrdIdx] <- paste0(param[unNmbrdIdx], "1")
+      if (verbose > 0L) {
+        message(
+          "Unnumbered parameter names in param= are taken to refer to initial phase and are translated to canonical parameter names.\n"
+        )
+      }
+    }
+
+    # only valid names in canonical order
+    param <- intersect(onames, param)
+
+    if (!length(param)) {
+      stop(
+        "Provide valid parameter names from the distribution to test for differences in two groups.",
+        call. = FALSE
+      )
+    }
+    match.arg(param, choices = onames, several.ok = TRUE)
+  } #else param
 
   stopifnot(is.null(n) || (is.numeric(n) && length(n) == 1L && is.finite(n)))
   stopifnot(
@@ -1491,7 +1571,10 @@ power_diff <- function(
   if (R > 5000) {
     R <- 5000
     message(
-      "Capping R at 5000. Higher values are normally not necessary for power simulations."
+      "Capping R at 5000. ",
+      "Higher values are not necessary for power simulations ",
+      "as R affects only the resolution of the P-value for each simulation round. ",
+      "The number of simulation rounds is controlled by parameter `nPowerSim=`."
     )
   }
   R <- ceiling(R)
@@ -1526,22 +1609,18 @@ power_diff <- function(
         P_val <- NA_real_
         try(
           expr = {
-            P_val <- purrr::pluck(
-              test_diff(
-                x = datx,
-                y = daty,
-                method = method,
-                distribution = distO,
-                twoPhase = twoPhase,
-                param = param,
-                type = test_cat,
-                R = R,
-                doGOF = FALSE
-              ),
-              "P",
-              test,
-              .default = NA_real_
-            )
+            P_val <- test_diff(
+              x = datx,
+              y = daty,
+              method = method,
+              distribution = distO,
+              twoPhase = twoPhase,
+              param = param,
+              type = test_cat,
+              R = R,
+              doGOF = FALSE
+            ) |>
+              purrr::pluck("P", test, .default = NA_real_)
           },
           silent = TRUE
         )
@@ -1604,18 +1683,19 @@ power_diff <- function(
     if (nbr_nx_cand1 == 1L) {
       # recursive call: but easy case now
       return(power_diff(
-        distribution,
+        distribution = distribution,
         twoPhase = twoPhase,
-        param,
+        eff = eff,
+        param = param,
         test = test,
         method = method,
-        eff,
         n = nx_cand1[[1L]],
-        power = NULL,
         r = r,
         sig.level = sig.level,
+        power = NULL,
         nPowerSim = nPowerSim,
-        R = R
+        R = R,
+        verbose = verbose
       ))
     } #fi
 
@@ -1670,7 +1750,7 @@ power_diff <- function(
         glue(
           "Failed to reach requested power in first round with maximally allowed n. ",
           "Consider enlarging nRange= upwards. ",
-          "{nx_cand1[[nbr_nx_cand1]]} yields a power of {as_percent(pow_cand1[[nbr_nx_cand1]])}."
+          "n={nx_cand1[[nbr_nx_cand1]]} yields a power of only {as_percent(pow_cand1[[nbr_nx_cand1]])}."
         ),
         call. = FALSE
       )

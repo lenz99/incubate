@@ -9,13 +9,12 @@ test_diff(
   y = stop("Provide data for group y!"),
   distribution = c("exponential", "weibull"),
   twoPhase = FALSE,
+  type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LRT"),
+  param = "delay1",
   method = c("MPSE", "MLEw", "MLEc", "MLEn"),
   profiled = method != "MPSE",
   ties = c("density", "equispaced", "error"),
-  param = "delay1",
-  type = c("all", "bootstrap", "GOF", "moran", "pearson", "logrank", "LRT"),
   doLogrank = TRUE,
-  doGOF = TRUE,
   R = 400,
   chiSqApprox = FALSE,
   verbose = 0
@@ -30,19 +29,19 @@ test_diff(
 
 \item{twoPhase}{logical(1). Do we model two phases per group? Default is \code{FALSE}, i.e. a single delay phase per group.}
 
+\item{type}{character. Which type of tests to perform?}
+
+\item{param}{character. Names of parameters to test difference for. Default value is \code{'delay1'}. You can specify multiple parameters,
+by providing multiple parameter names or by concatenating them with a \code{+}
+in a single string. Ignored for non-parametric tests.}
+
 \item{method}{character. Which method to fit the models.}
 
 \item{profiled}{logical. Use the profiled likelihood?}
 
 \item{ties}{character. How to handle ties in data vector of a group?}
 
-\item{param}{character. Names of parameters to test difference for. Default value is \code{'delay1'}.}
-
-\item{type}{character. Which type of tests to perform?}
-
 \item{doLogrank}{logical. Do also non-parametric logrank tests?}
-
-\item{doGOF}{logical. Do also the GOF-tests?}
 
 \item{R}{numeric(1). Number of bootstrap samples to evaluate the distribution of the test statistic.}
 

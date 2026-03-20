@@ -9,7 +9,7 @@ power_diff(
   twoPhase = FALSE,
   eff = stop("Provide parameters for both groups that reflect the effect!"),
   param = "delay1",
-  test = c("bootstrap", "pearson", "moran", "logrank", "logrank_pp", "LRT"),
+  test = c("bootstrap", "logrank", "logrank_pp", "LRT"),
   method = c("MPSE", "MLEw", "MLEc", "MLEn"),
   n = NULL,
   r = 1,
@@ -34,9 +34,12 @@ functions provided by this package) for the two groups.}
 
 \item{param}{character. Parameter name(s) which are to be tested for
 difference and for which to simulate the power. Default value is
-\code{'delay1'}.}
+\code{'delay1'}. You can specify multiple parameters, by giving a vector or
+by concatenating them with a \code{+} in a single string.}
 
-\item{test}{character. Which test to use for this power estimation? Defaults to \code{"bootstrap"}. For possible options see \code{test_diff}.}
+\item{test}{character. Which test to use for this power estimation? Defaults
+to \code{"bootstrap"}. Non-parametric logrank test is also possible (either
+\code{"logrank"} or \code{"logrank_pp"}). See also \code{\link[=test_diff]{test_diff()}}.}
 
 \item{method}{character. Which fitting method to use in case of a parametric test.}
 

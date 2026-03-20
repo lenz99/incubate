@@ -10,7 +10,7 @@ test_that('Structure of test objects.', code = {
   x <- rexp_delayed(n = 131L, delay1 = 5, rate1 = .1)
   y <- rexp_delayed(n = 111L, delay1 = 5, rate1 = .3)
 
-  ted_d <- test_diff(
+  tediff_d_bs <- test_diff(
     x = x,
     y = y,
     distribution = 'expon',
@@ -20,14 +20,80 @@ test_that('Structure of test objects.', code = {
     chiSqApprox = TRUE
   )
 
-  expect_s3_class(ted_d, class = 'incubate_test')
-  expect_identical(
-    names(ted_d),
-    c('t_obs', 'testDist', 'R', 'chisq_df_hat', 'param', 'P')
+  expect_s3_class(tediff_d_bs, class = 'incubate_test')
+  expect_named(
+    tediff_d_bs,
+    expected = c(
+      'distribution',
+      't_obs',
+      'testDist',
+      'R',
+      'chisq_df_hat',
+      'param',
+      'P'
+    )
   )
-  expect_type(ted_d$P$bootstrap, type = 'double')
-  expect_lte(ted_d$P$bootstrap, expected = 1L)
-  expect_gte(ted_d$P$bootstrap, expected = 0L)
+  expect_named(
+    tediff_d_bs$P,
+    expected = c('bootstrap', 'logrank', 'logrank_pp')
+  )
+  expect_type(tediff_d_bs$P$bootstrap, type = 'double')
+  expect_lte(tediff_d_bs$P$bootstrap, expected = 1L)
+  expect_gte(tediff_d_bs$P$bootstrap, expected = 0L)
+
+  tediff_d_logrank <- test_diff(
+    x = x,
+    y = y,
+    distribution = 'expon',
+    param = 'delay1',
+    type = 'logrank',
+    chiSqApprox = TRUE
+  )
+
+  expect_s3_class(tediff_d_logrank, class = 'incubate_test')
+  expect_named(
+    tediff_d_logrank,
+    expected = c(
+      'distribution',
+      'P'
+    )
+  )
+  expect_named(tediff_d_logrank$P, expected = c('logrank', 'logrank_pp'))
+  expect_type(tediff_d_logrank$P$logrank, type = 'double')
+  expect_lte(tediff_d_logrank$P$logrank, expected = 1L)
+  expect_gte(tediff_d_logrank$P$logrank, expected = 0L)
+
+  expect_type(tediff_d_logrank$P$logrank_pp, type = 'double')
+  expect_lte(tediff_d_logrank$P$logrank_pp, expected = 1L)
+  expect_gte(tediff_d_logrank$P$logrank_pp, expected = 0L)
+
+  # provide multiple parameters
+  tediff_ds_LRT1 <- test_diff(
+    x = x,
+    y = y,
+    distribution = 'weibull',
+    param = c('delay1', "scale1"),
+    type = 'LRT'
+  )
+
+  tediff_ds_LRT2 <- test_diff(
+    x = x,
+    y = y,
+    distribution = 'weibull',
+    param = 'delay1 + scale1',
+    type = 'LRT'
+  )
+
+  expect_named(
+    tediff_ds_LRT1,
+    expected = c(
+      'distribution',
+      't_obs',
+      'param',
+      'P'
+    )
+  )
+  expect_identical(tediff_ds_LRT1, tediff_ds_LRT2)
 })
 
 
