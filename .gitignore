@@ -2,6 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+.Rapp*
 
 # mkuhn, 2021-09-30: avoid RStudio stuff
 *.Rproj

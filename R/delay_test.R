@@ -810,13 +810,12 @@ test_GOF <- function(
 #' # difference in delay parameter is significant at 5% level
 #' test_diff(x = grA, y = grB,
 #'   distribution = "weibull", param = "delay1",
-#'   type = "bootstrap", method = "MPSE", R = 150)
+#'   type = "bootstrap", method = "MPSE", R = 50)
 #'
-#' # difference in shape parameter is not significant at 5% level
+#' # but the non-parametric logrank test is not significant
+#' # no need to specify parameters
 #' test_diff(x = grA, y = grB,
-#'  distribution = "weibull", param = "shape1",
-#'  type = "bootstrap", method = "MPSE", R = 150)
-#'
+#'   type = "logrank")
 #' @export
 test_diff <- function(
   x,
@@ -951,7 +950,7 @@ test_diff <- function(
     param <- param[!is.na(param) & nzchar(param)]
     param <- unique(param)
     # eventually split multiple parameter names separated by "+"
-    param <- strsplit(param, split = "+", fixed = TRUE) |> unlist()
+    param <- unlist(strsplit(param, split = "+", fixed = TRUE))
     # trim leading and trailing whitespace from parameter names
     param <- trimws(param)
 
@@ -1278,33 +1277,34 @@ test_diff <- function(
   } #fi logrank
 
   # compact cleanses NULL entries
-  list(
-    # two initial model fits
-    #fit0 = fit0, fit1 = fit1, # debug only?!
+  structure(
+    purrr::compact(
+      list(
+        # two initial model fits
+        #fit0 = fit0, fit1 = fit1, # debug only?!
 
-    distribution = distribution,
-    t_obs = ts_obs[["val"]],
-    testDist = t0_dist,
-    R = if (testMask[["bootstrap"]]) length(t0_dist),
-    chisq_df_hat = chisq_df_hat,
-    # param will be dropped if NULL (due to compact)
-    param = if (!isNonParametric) param,
-    # save only non-NULL p-values
-    P = purrr::compact(list(
-      bootstrap = P_boot,
-      LRT = P_LRT,
-      moran = as.vector(GOF_mo0$p.value),
-      moran1 = as.vector(GOF_mo1$p.value),
-      pearson = as.vector(GOF_pears0$p.value),
-      pearson1 = as.vector(GOF_pears1$p.value),
-      logrank = P_logrank,
-      logrank_pp = P_logrank_pp
-    ))
-  ) |>
-    purrr::compact() |>
-    structure(
-      class = "incubate_test"
-    )
+        distribution = distribution,
+        t_obs = ts_obs[["val"]],
+        testDist = t0_dist,
+        R = if (testMask[["bootstrap"]]) length(t0_dist),
+        chisq_df_hat = chisq_df_hat,
+        # param will be dropped if NULL (due to compact)
+        param = if (!isNonParametric) param,
+        # save only non-NULL p-values
+        P = purrr::compact(list(
+          bootstrap = P_boot,
+          LRT = P_LRT,
+          moran = as.vector(GOF_mo0$p.value),
+          moran1 = as.vector(GOF_mo1$p.value),
+          pearson = as.vector(GOF_pears0$p.value),
+          pearson1 = as.vector(GOF_pears1$p.value),
+          logrank = P_logrank,
+          logrank_pp = P_logrank_pp
+        ))
+      )
+    ),
+    class = "incubate_test"
+  )
 }
 
 #' @export
@@ -1472,7 +1472,7 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #' @returns List of results of power simulation. Or `NULL` in case of errors.
 #' @seealso [test_diff()]
 #' @examples
-#' # simulate power for a given sample size ---------------------------
+#' # Simulate power for a given sample size:
 #' # test for difference in delay in an exponential model,
 #' # the assumed effect is given in terms of model parameters for both groups
 #' # the power is estimated based on nPowersim = 30 simulated datasets
@@ -1486,9 +1486,9 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #'   param = "delay1",
 #'   test = "bootstrap", method = "MPSE",
 #'   n = 16, power = NULL,
-#'   nPowerSim = 30, R = 100)
+#'   nPowerSim = 10, R = 21)
 #'
-#' # simulate required sample size for a given power -----------------------
+#' # Simulate required sample size for a given power:
 #' # provide a range for the sample size search, e.g. nRange = c(12, 25)
 #' # this takes more time than the previous example, as the function
 #' # iteratively searches for a sample size that yields the requested power
@@ -1557,7 +1557,7 @@ power_diff <- function(
     param <- param[!is.na(param) & nzchar(param)]
     param <- unique(param)
     # eventually split multiple parameter names separated by "+"
-    param <- strsplit(param, split = "+", fixed = TRUE) |> unlist()
+    param <- unlist(strsplit(param, split = "+", fixed = TRUE))
     # trim leading and trailing whitespace from parameter names
     param <- trimws(param)
 
@@ -1663,17 +1663,21 @@ power_diff <- function(
         P_val <- NA_real_
         try(
           expr = {
-            P_val <- test_diff(
-              x = datx,
-              y = daty,
-              method = method,
-              distribution = distO,
-              twoPhase = twoPhase,
-              param = param,
-              type = test_cat,
-              R = R
-            ) |>
-              purrr::pluck("P", test, .default = NA_real_)
+            P_val <- purrr::pluck(
+              test_diff(
+                x = datx,
+                y = daty,
+                method = method,
+                distribution = distO,
+                twoPhase = twoPhase,
+                param = param,
+                type = test_cat,
+                R = R
+              ),
+              "P",
+              test,
+              .default = NA_real_
+            )
           },
           silent = TRUE
         )

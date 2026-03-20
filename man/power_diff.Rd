@@ -98,7 +98,7 @@ pay off to rerun the function with an adapted admissible range for the sample
 size by giving a narrower range in \verb{nRange=}.
 }
 \examples{
-# simulate power for a given sample size ---------------------------
+# Simulate power for a given sample size:
 # test for difference in delay in an exponential model,
 # the assumed effect is given in terms of model parameters for both groups
 # the power is estimated based on nPowersim = 30 simulated datasets
@@ -112,9 +112,9 @@ power_diff(
   param = "delay1",
   test = "bootstrap", method = "MPSE",
   n = 16, power = NULL,
-  nPowerSim = 30, R = 100)
+  nPowerSim = 10, R = 21)
 
-# simulate required sample size for a given power -----------------------
+# Simulate required sample size for a given power:
 # provide a range for the sample size search, e.g. nRange = c(12, 25)
 # this takes more time than the previous example, as the function
 # iteratively searches for a sample size that yields the requested power

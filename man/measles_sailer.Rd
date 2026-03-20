@@ -18,7 +18,7 @@ vs 1 for observed}
 \source{
 Records of the Admiralty, Naval Forces, Royal Marines, Coastguard,
 and related bodies, ADM 101/2/3,
-\url{https://discovery.nationalarchives.gov.uk/details/r/C4106406}
+\verb{https://discovery.nationalarchives.gov.uk/details/r/C4106406}
 }
 \usage{
 measles_sailer
@@ -48,9 +48,9 @@ fever-to-fever and for rash-to-rash).
 \references{
 Paterson BJ, Kirk MD, Cameron AS, et al. Historical data and
 modern methods reveal insights in measles epidemiology, BMJ Open
-2013;3:e002033. doi:10.1136/bmjopen-2012-002033
+2013;3:e002033. \doi{10.1136/bmjopen-2012-002033}
 
 Fine PE. The interval between successive cases of an infectious
-disease. Am J Epidemiol. 2003;158(11):1039-1047. doi:10.1093/aje/kwg251
+disease. Am J Epidemiol. 2003;158(11):1039-1047. \doi{10.1093/aje/kwg251}
 }
 \keyword{datasets}

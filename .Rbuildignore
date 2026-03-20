@@ -1,5 +1,9 @@
 ^incubate\.Rproj$
 ^\.Rproj\.user$
+^\.Rhistory$
+^\.Rapp.history$
+^\.RData$
+^\.Ruserdata$
 ^LICENSE\.md$
 ^README\.Rmd$
 ^scratch$
