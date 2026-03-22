@@ -26,7 +26,7 @@
 #' @param rate2 numeric. The second event rate, must be non-negative.
 #' @param log logical. Return value on log-scale?
 #' @param lower.tail logical. Give cumulative probability of lower tail?
-#' @param log.p logical. P-value on log-sclae?
+#' @param log.p logical. P-value on log-scale?
 #' @param cens numeric. Expected proportion of random right-censored observations.
 #' @return Functions pertaining to the delayed exponential distribution:
 #' * `dexp_delayed` gives the density

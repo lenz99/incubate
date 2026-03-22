@@ -87,7 +87,7 @@ mexp_delayed(
 
 \item{lower.tail}{logical. Give cumulative probability of lower tail?}
 
-\item{log.p}{logical. P-value on log-sclae?}
+\item{log.p}{logical. P-value on log-scale?}
 
 \item{grad}{logical. Should the gradient be calculated at the given quantile values (and not the cumulative probabilities)?}
 

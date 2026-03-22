@@ -11,8 +11,8 @@ Description: Fit parametric models for time-to-event data that show an initial
     'incubation period', i.e., a variable delay phase where no events occur.
     The delayed Weibull distribution serves as the foundational data model.
     For parameter estimation, different flavours of maximum likelihood
-    estimation (MLE) and the method of maximum product of spacings estimation
-    (MPSE) are implemented. Bootstrap confidence intervals for parameters and
+    estimation ('MLE') and the method of maximum product of spacings estimation
+    ('MPSE') are implemented. Bootstrap confidence intervals for parameters and
     significance tests in a two group setting are provided.
 License: LGPL (>= 3)
 Encoding: UTF-8
@@ -37,14 +37,17 @@ Suggests:
     numDeriv,
     patchwork,
     rmarkdown,
+    spelling,
     testthat (>= 3.0.0),
     tidyr,
     withr
 URL: https://gitlab.com/imb-dev/incubate/
 BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
+Language: en-GB
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
+Config/Needs/check: spelling
 Depends:
     R (>= 3.5.0)
 Collate: 

@@ -1473,9 +1473,17 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #' @seealso [test_diff()]
 #' @examples
 #' # Simulate power for a given sample size:
-#' # test for difference in delay in an exponential model,
+#' # test for any difference in a delay-exponential model using logrank test
 #' # the assumed effect is given in terms of model parameters for both groups
-#' # the power is estimated based on nPowersim = 30 simulated datasets
+#' power_diff(
+#'   eff = list(grA = c(delay1 = 5, rate1 = .09),
+#'              grB = c(delay1 = 7, rate1 = .12)),
+#'   test = "logrank",
+#'   n = 16, power = NULL, nPowerSim = 300)
+#'
+#' \dontrun{
+#' # test for difference in delay in a delay-exponential model via a bootstrap test:
+#' # the power is estimated based on nPowersim = 420 simulated datasets
 #' # for real applications, use a higher nPowerSim (e.g. 1600) for more
 #' # precise power estimation and a higher R (e.g. 400) for more precise
 #' # P-value estimation in each simulation round
@@ -1486,24 +1494,25 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #'   param = "delay1",
 #'   test = "bootstrap", method = "MPSE",
 #'   n = 16, power = NULL,
-#'   nPowerSim = 10, R = 21)
+#'   nPowerSim = 420, R = 160)
+#' }
 #'
-#' # Simulate required sample size for a given power:
-#' # provide a range for the sample size search, e.g. nRange = c(12, 25)
+#' \dontrun{
+#' # test for difference in rate in a delay-exponential model via a bootstrap test:
+#' # required sample size is estimated for a given power.
+#' # provide a range for the sample size search, e.g. nRange = c(10, 30)
 #' # this takes more time than the previous example, as the function
 #' # iteratively searches for a sample size that yields the requested power
-#' \dontrun{
-#' set.seed(123) # for reproducibility
+#' set.seed(1234) # for reproducibility
 #' power_diff(
-#'   eff = list(grA = c(delay1 = 5.2, rate1 = .1),
-#'              grB = c(delay1 = 7, rate1 = .15)),
-#'   param = "delay1",
+#'   eff = list(grA = c(delay1 = 5, rate1 = .07),
+#'              grB = c(delay1 = 7, rate1 = .18)),
+#'   param = "rate1",
 #'   test = "bootstrap", method = "MPSE",
 #'   n = NULL, power = 0.8,
-#'   nPowerSim = 120, R = 100,
-#'   nRange = c(12, 25))
+#'   nPowerSim = 480, R = 150,
+#'   nRange = c(18, 48))
 #' }
-
 #' @export
 power_diff <- function(
   distribution = c("exponential", "weibull"),
