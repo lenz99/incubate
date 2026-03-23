@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{confint.incubate_fit}
 \alias{confint.incubate_fit}
-\title{Confidence intervals for parameters of incubate-model fits.}
+\title{Confidence intervals for parameters of incubate-model fits}
 \usage{
 \method{confint}{incubate_fit}(
   object,

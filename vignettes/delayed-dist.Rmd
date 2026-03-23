@@ -261,7 +261,7 @@ implement random right censoring under a **uniform censoring scheme**, starting
 after the initial delay phase.^[Question is if we allow $C$ to occur during the
 incubation period. If yes and there is a long delay then we will see many
 censored observations during the incubation period which might be odd.
-Therefore, we decided to model the censoring process as $C \sim U(α, Z)$.] The
+Therefore, we model the censoring process as $C \sim U(α, Z)$.] The
 censoring process $C$ is independent of the event process $X$. The observed time
 is $\min(X,C)$ and it is an event if and only if $X≤C$, i.e., when the event
 "makes it" before the censoring happens.

@@ -3164,9 +3164,9 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...) {
 } #fn simulate
 
 
-#' Generate bootstrap distribution of model parameters to fitted incubate model.
+#' Generate bootstrap distribution of model parameters to fitted incubate model
 #'
-#' Bootstrap data are here estimated coefficients from models fitted to bootstrap samples.
+#' Bootstrap data are estimated coefficients from models fitted to bootstrap samples.
 #' The bootstrap data is used to make bootstrap inference in the second step.
 #' It is an internal function, the main entry point is [confint.incubate_fit()].
 #' @param object an `incubate_fit`-object
@@ -3174,7 +3174,7 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #' @param R integer. Number of bootstrapped model coefficient estimates
 #' @param useBoot flag. Do you want to use the boot-package? Default value is `FALSE`.
 #' @param smd_factor numeric. smooth-delay factor: influence the amount of smoothing. 0 means no smoothing at all. Default is 0.25 (as was optimal in simulation for log-quantile together with log-delay-shift = 5)
-#' @return bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
+#' @returns bootstrap data, either as matrix or of class `boot` (depending on the `useBoot`-flag)
 bsDataStep <- function(
   object,
   bs_data = c('parametric', 'ordinary'),
@@ -3208,7 +3208,7 @@ bsDataStep <- function(
       'Smoothing of delay is only implemented for parametric bootstrap!',
       call. = FALSE
     )
-  }
+  } #fi
 
   # smooth first delay: sample delay values according to objective function (where delay is varied and other parameters are kept fixed) in the vicinity of the estimated first delay
   # This reflects the certainty we have in the delay estimation.
@@ -3313,7 +3313,7 @@ bsDataStep <- function(
       vec = delayCandDF$cumSum,
       rightmost.closed = TRUE
     )]
-  }
+  } #fn getSMDCandidates
 
   delayCandX <- if (smoothDelay) getSMDCandidates(group = 'x')
   delayCandY <- if (smoothDelay && twoGroup) getSMDCandidates(group = 'y')
@@ -3450,7 +3450,7 @@ bsDataStep <- function(
   }
 }
 
-#' Confidence intervals for parameters of incubate-model fits.
+#' Confidence intervals for parameters of incubate-model fits
 #'
 #' Bias-corrected bootstrap confidence limits (either quantile-based or normal-approximation based) are generated.
 #' Optionally, there are also variants that use a log-transformation first.
@@ -3561,13 +3561,13 @@ confint.incubate_fit <- function(
       useBoot = useBoot
     )
   }
-  stopifnot(!is.vector(bs_data) && !is.character(bs_data))
+  stopifnot(!is.vector(bs_data), !is.character(bs_data))
   # set R according to the provided bs_data (in particular important when both R & bs_data object are given)
   R <- if (useBoot) bs_data[['R']] else NCOL(bs_data)
   if (R < 999) {
     warning(
       glue(
-        'Be cautious with the confidence interval(s) because the number of effective bootstrap samples R = {R} is rather low (R<999).'
+        'Be cautious with the confidence interval(s) because the number of effective bootstrap samples R = {R} < 999 is rather low.'
       ),
       call. = FALSE
     )

@@ -2,7 +2,7 @@
 % Please edit documentation in R/delay_estimation.R
 \name{bsDataStep}
 \alias{bsDataStep}
-\title{Generate bootstrap distribution of model parameters to fitted incubate model.}
+\title{Generate bootstrap distribution of model parameters to fitted incubate model}
 \usage{
 bsDataStep(
   object,
@@ -27,7 +27,7 @@ bsDataStep(
 bootstrap data, either as matrix or of class \code{boot} (depending on the \code{useBoot}-flag)
 }
 \description{
-Bootstrap data are here estimated coefficients from models fitted to bootstrap samples.
+Bootstrap data are estimated coefficients from models fitted to bootstrap samples.
 The bootstrap data is used to make bootstrap inference in the second step.
 It is an internal function, the main entry point is \code{\link[=confint.incubate_fit]{confint.incubate_fit()}}.
 }
