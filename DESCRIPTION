@@ -1,14 +1,14 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.4.0
-Date: 2026-03-20
+Version: 1.4.0.9000
+Date: 2026-03-23
 Authors@R:
     person(given = "Matthias", family = "Kuhn",
            role = c("aut", "cre", "cph"),
            email = "matthias.kuhn@tu-dresden.de",
            comment = c(ORCID = "0000-0003-2868-5155"))
 Description: Fit parametric models for time-to-event data that show an initial
-    'incubation period', i.e., a variable delay phase where no events occur.
+    'incubation period', i.e. a variable delay phase where no events occur.
     The delayed Weibull distribution serves as the foundational data model.
     For parameter estimation, different flavours of maximum likelihood
     estimation ('MLE') and the method of maximum product of spacings estimation
