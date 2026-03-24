@@ -1415,15 +1415,18 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 
 #' Power simulation function for a two-group comparison
 #'
+#' Simulate power for a test of difference between two groups for a given distribution with delay.
+#' The effect is specified in terms of the model parameters for both groups.
 #' There are two modes of operation:
-#' 1. `power=NULL`: simulate power based on given sample size `n`
+#' 1. `power=NULL`: simulate power based on given sample size `n` (post-hoc power estimation)
 #' 2. `n=NULL`: search iteratively for a suitable sample size `n` for a given power
 #'
-#' In both cases, the distribution, the parameters that are tested for, the type
-#' of test and the effect size (`eff=`) need to be specified. Specify the effect as a list with two elements,
-#' each element holds the parameter vector describing the distribution of the outcome per group.
+#' The power is estimated by simulating data according to the specified model and testing for differences in the simulated data.
+#' The proportion of simulated datasets where the test rejects the null hypothesis at the given significance level is the estimated power.
+#' The test can be a parametric bootstrap test or a non-parametric logrank test. For logrank tests, the `param=` argument should not be specified.
+#' Specify the effect size (`eff=`) as a list with two elements, each element holds the parameter vector of the distribution of the response variable of one group.
 #' The fitting method (`method=`) and the kind of significance test (`test=`) are handed down to [test_diff()].
-#' The more power simulation rounds (parameter `nPowerSim=`) the more densely the space of data
+#' The more power simulation rounds (parameter `nPowerSim=`) the more densely the space of possible data
 #' according to the specified model is sampled.
 #'
 #' Note that estimating sample size `n` is computationally intensive.
@@ -1446,7 +1449,7 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #' @param param character. Parameter name(s) which are to be tested for
 #'   difference and for which to simulate the power. Default value is
 #'   `'delay1'`. You can specify multiple parameters, by giving a vector or
-#'   by concatenating them with a `+` in a single string.
+#'   by concatenating them with a `+` in a single string. For logrank tests, this argument is ignored.
 #' @param test character. Which test to use for this power estimation? Defaults
 #'   to `"bootstrap"`. Non-parametric logrank test is also possible (either
 #'   `"logrank"` or `"logrank_pp"`). See also [test_diff()].
@@ -1476,14 +1479,14 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #' # test for any difference in a delay-exponential model using logrank test
 #' # the assumed effect is given in terms of model parameters for both groups
 #' power_diff(
-#'   eff = list(grA = c(delay1 = 5, rate1 = .09),
-#'              grB = c(delay1 = 7, rate1 = .12)),
+#'   eff = list(ctrl = c(delay1 = 5, rate1 = .09),
+#'              trtm = c(delay1 = 7, rate1 = .12)),
 #'   test = "logrank",
 #'   n = 16, power = NULL, nPowerSim = 300)
 #'
 #' \dontrun{
 #' # test for difference in delay in a delay-exponential model via a bootstrap test:
-#' # the power is estimated based on nPowersim = 420 simulated datasets
+#' # the power is estimated based on nPowersim = 520 simulated datasets
 #' # for real applications, use a higher nPowerSim (e.g. 1600) for more
 #' # precise power estimation and a higher R (e.g. 400) for more precise
 #' # P-value estimation in each simulation round
@@ -1494,15 +1497,13 @@ plot.incubate_test <- function(x, y, title, subtitle, ...) {
 #'   param = "delay1",
 #'   test = "bootstrap", method = "MPSE",
 #'   n = 16, power = NULL,
-#'   nPowerSim = 420, R = 160)
-#' }
+#'   nPowerSim = 520, R = 160)
 #'
-#' \dontrun{
 #' # test for difference in rate in a delay-exponential model via a bootstrap test:
 #' # required sample size is estimated for a given power.
-#' # provide a range for the sample size search, e.g. nRange = c(10, 30)
-#' # this takes more time than the previous example, as the function
-#' # iteratively searches for a sample size that yields the requested power
+#' # provide a suitable range for the sample size search via nRange=.
+#' # The search for n takes more time than the previous example, as the function
+#' # iteratively evaluates different sample sizes in order to find the right one.
 #' set.seed(1234) # for reproducibility
 #' power_diff(
 #'   eff = list(grA = c(delay1 = 5, rate1 = .07),

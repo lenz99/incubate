@@ -9,7 +9,7 @@
 \arguments{
 \item{x}{a fitted delay-model}
 
-\item{y}{an optional second fitted delay-model}
+\item{y}{optionally, a second fitted delay-model}
 
 \item{title}{character. Optionally, provide a title to the plot.}
 
@@ -22,11 +22,16 @@ starts from 0 to last observation.}
 \item{...}{further arguments. Not in use here (it is required for generic plot function)}
 }
 \description{
-The fitted delay-model is plotted: a Kaplan-Meier survival curve is shown
-together with the parametric model fit.
+The fitted delay-model is plotted together with a Kaplan-Meier survival curve.
 Optionally, a fit of a second delay-model can be added. When given, we do
-some preliminary checks that the two models do match together.
+some preliminary checks that the two models do fit together.
 }
 \details{
 This function requires the \code{ggplot2}-package to be installed.
+}
+\examples{
+# fit a delay-weibull model to serial interval times from historic measles outbreak data:
+fm <- delay_model(survival::Surv(measles_sailer$serialInterval, measles_sailer$status), distribution = "weibull", method = "MLEw")
+plot(fm, title = "Serial interval times of measles", subtitle = "Delay-Weibull model fit using weighted MLE (MLEw)")
+
 }
