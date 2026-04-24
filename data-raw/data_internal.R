@@ -1,11 +1,11 @@
 # mkuhn, 2023-04-11
-# adds MLE-weights table as internal data to package as list 'MLEw_approx'
+# adds MLE weights approximation information as list object `MLEw_approx` as internal data to package
 #
-# the MLE-weights are established through a Monte-Carlo simulation (MCS),
+# the MLE weights are established through a Monte Carlo simulation (MCS),
 # see inst/scripts/simul_MLEweights.R which produces 'MLEw_mcs.rds'
 # Here, we build approximating function based on this MCS.
-# Code to explore which are good/best approximations W1, W2 and W3 are in scratch/MLEw_weights2.R.
-# The package incubate makes use of these functions in MLEw_approx[["fun"]]
+# Exploration which are good/best approximations for W1, W2 and W3 can be found in scratch/MLEw_weights2.R.
+# The package `incubate` makes use of the functions in MLEw_approx[["fun"]]
 ####
 
 # init --------------------------------------------------------------------
@@ -19,17 +19,15 @@ library("patchwork")
 library("gslnls")
 library("splines")
 library("numDeriv")
-#library("matrixStats", warn.conflicts = FALSE)
 
 # read in results of MCSS on MLEw-weights
 # start from directory "data-raw/"
 FNAME <- "MLEw_mcs.rds"
-stopifnot(file.exists(FNAME))
-#(load(FNAME))
+stopifnot(`MCS results file not found!` = file.exists(FNAME))
 MLEw_mcs <- readRDS(FNAME)
 
 
-stopifnot(is.list(MLEw_mcs))
+stopifnot(`MCS result files not a list!` = is.list(MLEw_mcs))
 stopifnot(
   identical(names(MLEw_mcs), c("W12", "W3", "settings")),
   is.data.frame(MLEw_mcs$W12),
@@ -65,7 +63,7 @@ stopifnot(identical(
 
 
 # read in weights from publication of Cousineau (2009):
-# Cousineau did a relatively small MC-simulation study
+# Cousineau did a relatively small Monte Carlo simulation study
 W_cousineau2009 <- local({
   # from Cousineau Table 2
   W1_mcss_str <- "1 1.000 0.561 0.693 2 1.000 0.763 0.839 3 1.000 0.839 0.891 4 1.000 0.878 0.918 5 1.000 0.902 0.934 6 1.000 0.918 0.945 7 1.000 0.929 0.953 8 1.000 0.938 0.959 9 1.000 0.945 0.963 10 1.000 0.950 0.967 11 1.000 0.955 0.970 12 1.000 0.959 0.972 13 1.000 0.962 0.974 14 1.000 0.965 0.976 15 1.000 0.967 0.978 16 1.000 0.969 0.979"
@@ -219,6 +217,7 @@ MLEw_approx <- list(
   MCsim = MLEw_mcs$W12 |>
     dplyr::slice_head(n = N_DIRECT) |>
     dplyr::mutate(
+      # median of gamma distribution (shape=n, scale=1/n)
       W1gamma = stats::qgamma(p = 0.5, shape = nObs, rate = nObs),
       .after = W1
     ) |>
@@ -231,9 +230,9 @@ MLEw_approx <- list(
 # approximation W2 --------------------------------------------------------
 
 # asymptotic regression model: cf. SSasymp model on log(nObs)
-#+starting at nObs = 2 (as nObs = 1 is off).
-#+using log-rate lr instead of rate r ensures that we have a positive rate
-#+by means of exp(lr)
+# starting at nObs = 2 (as nObs = 1 is off).
+# using log-rate lr instead of rate r ensures that we have a positive rate
+# by means of exp(lr)
 fm_W2 <- gslnls::gsl_nls(
   W2 ~ 1 + (R0 - 1) * nObs**-exp(lr),
   start = list(R0 = -.25, lr = -.01),
@@ -407,7 +406,7 @@ MLEw_approx[["coef"]][["W3_richards"]] <- local({
               n_
             }
         )
-      stopifnot(NROW(W3i) > 5)
+      stopifnot(`not enough data for W3-approximation` = NROW(W3i) > 5)
 
       gsl_nls(
         fn = MLEw_approx$fun$genLogisticF,
@@ -587,10 +586,11 @@ if (rlang::is_interactive()) {
 
 # save as internal data ---------------------------------------------------
 
-message("Save MLEw-weights approximation functions as internal data")
+message(
+  "Save MLEw-weights approximation functions as internal data (MLEw_approx) to package!"
+)
 
 usethis::use_data(MLEw_approx, internal = TRUE, overwrite = TRUE)
-
 
 message("~~ Fine ~~")
 
