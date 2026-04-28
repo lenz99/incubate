@@ -1727,3 +1727,86 @@ getDist <- function(
     stop(glue("Unknown distribution {distribution}."), call. = FALSE)
   )
 }
+
+
+#' Get the standard deviation of the fitted delay model fit
+#'
+#' It's similar in notion to `variance` from package `distribution3`.
+#'
+#' For two group models you need to specify the group.
+#' @param object a fitted `incubate_fit` object
+#' @param group the group, "x" or "y"
+#' @param type what variance to calculate? Variance of the distribution or variance of the minimum
+#' @returns predicted variance of distribution or of minimum for the specified group
+getVariance <- function(
+  object,
+  group = "x",
+  type = c("distribution", "minimum")
+) {
+  stopifnot(`expect an incubate fit!` = inherits(object, "incubate_fit"))
+  stopifnot(`only single phase fits currently supported!` = !object$twoPhase)
+  stopifnot(`provide group x or y!` = group %in% c("x", "y"))
+  type <- match.arg(type)
+  stopifnot(is.character(type), length(type) == 1L)
+
+  twoGroup <- isTRUE(object$twoGroup)
+  coefGr <- coef.incubate_fit(object, group = group, transformed = FALSE)
+
+  varV <- switch(
+    type,
+    distribution = {
+      # variance of the underlying estimated distribution
+      switch(
+        object$distO$dist,
+        weibull = {
+          # calculate var from the parameters
+          shape1 <- coefGr[["shape1"]]
+
+          coefGr[["scale1"]]^2 *
+            (gamma(1 + 2 / shape1) - gamma(1 + 1 / shape1)^2)
+        },
+        exponential = {
+          # for exponential distribution, the scale parameter is the SD
+          1 / coefGr[["rate1"]]^2
+        },
+        normal = {
+          # for normal distribution, the scale parameter is the SD
+          coefGr[["sd"]]^2
+        },
+        stop(
+          "getVariance: this distribution is not supported currently!",
+          call. = FALSE
+        )
+      )
+    },
+    minimum = {
+      # estimate variance for min-observation
+      # F_{X_{(r)}}(x)=\sum _{j=r}^{n}{\binom {n}{j}}\left[F_{X}(x)\right]^{j}\left[1-F_{X}(x)\right]^{n-j}
+      # For a non-negative random variable, there's an elegant formula (Tonelli)
+      # E[X] = ∫₀^∞ [1 − F(x)] dx
+      # For the second moment:
+      # E[X^2] = 2 ∫₀^∞ x·[1 − F(x)] dx
+      groupIdx <- 1L + (twoGroup && group == 'y')
+      survF <- purrr::partial(
+        .f = getDist(
+          object$distO$dist,
+          type = "cdf",
+          twoPhase = object$twoPhase
+        ),
+        !!!c(coef(object), list(lower.tail = FALSE))
+      )
+      survFMin <- function(.x) survF(q = .x)^object$nobs[[groupIdx]]
+      2 *
+        stats::integrate(
+          f = function(.x) .x * survFMin(.x),
+          lower = 0,
+          upper = +Inf
+        )$value -
+        stats::integrate(f = survFMin, lower = 0, upper = +Inf)$value^2
+    },
+    stop("Unknown type of variance requested!", call. = FALSE)
+  )
+
+  stopifnot(is.finite(varV), varV >= 0)
+  varV
+} #fn getVariance

@@ -1,11 +1,11 @@
 #!/usr/bin/env Rscript
 # mkuhn, 2023-04-05
-# Monte Carlo simulation to estimate the median weights W1, W2 and W3 for the weighed MLE approach (Cousineau, 2009)
+# Monte Carlo simulation to estimate the median weights W1, W2 and W3 for the weighted MLE approach (Cousineau, 2009)
 #
 # the weight estimates (from the Monte Carlo simulation) are stored as list in file `MLEw_mcs.rds`.
 # These weight estimates are the basis for weight approximation functions,
 # which are stored as internal data of incubate package (see `data-raw/data_internal.R`).
-# The results file `MLEw_mcs.rds` is expected to be also in directory `data-raw/`.
+# For this to work, the results file `MLEw_mcs.rds` is expected to be also in directory `data-raw/`.
 ##
 
 # init -----
