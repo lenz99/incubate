@@ -7,3 +7,7 @@ logspace_sub_cpp <- function(lx, ly) {
 logspace_sub2_cpp <- function(lxy) {
   .Call(`_incubate_logspace_sub2_cpp`, lxy)
 }
+
+lambertW0_cpp <- function(x) {
+  .Call(`_incubate_lambertW0_cpp`, x)
+}
