@@ -44,13 +44,12 @@ Suggests:
 URL: https://gitlab.com/imb-dev/incubate/
 BugReports: https://gitlab.com/imb-dev/incubate/-/issues/
 Language: en-GB
-Roxygen: list(markdown = TRUE)
 Config/roxygen2/version: 8.0.0
 Config/roxygen2/markdown: TRUE
 Config/testthat/edition: 3
 Config/Needs/check: spelling
 Depends:
-    R (>= 3.5.0)
+    R (>= 3.6.0)
 Collate: 
     'aaa.R'
     'cpp11.R'

@@ -254,7 +254,7 @@ ggplot() + xlim(0, 7) +
 
 
 
-## Implementing random right censoring
+## Random right censoring
 The functions for random generation of data `rexp_delayed()` and
 `rweib_delayed()` have an option to produce right censored data. Currently, we
 implement random right censoring under a **uniform censoring scheme**, starting
@@ -262,9 +262,9 @@ after the initial delay phase.^[Question is if we allow $C$ to occur during the
 incubation period. If yes and there is a long delay then we will see many
 censored observations during the incubation period which might be odd.
 Therefore, we model the censoring process as $C \sim U(α, Z)$.] The
-censoring process $C$ is independent of the event process $X$. The observed time
-is $\min(X,C)$ and it is an event if and only if $X≤C$, i.e., when the event
-"makes it" before the censoring happens.
+censoring process $C$ is independent of the event process $X$.
+The observed time is $\min(X,C)$ and it is an event if and only if $X≤C$,
+i.e. when the event happens before the censoring does.
 
 You provide the desired expected proportion of right censoring π via parameter
 `cens=`. This information determines the upper limit `Z` for the censoring
@@ -283,32 +283,42 @@ $$
 $$
 
 For a uniform censoring process with lower bound α and upper bound $Z$
-we have $F_C(x) = \frac{x-α}{Z-α}$.
-<!-- \frac{x}{Z}$. -->
-We make sure to never exceed the specified proportion of right censorings.
+we have $F_C(x) = \frac{x-α}{Z-α}$ for $x ∈ [α,Z]$
+and $F_C(x) = 0$ for $x < α$ and $F_C(x) = 1$ for $x > Z$.
+
 
 
 ### Exponential
 Substituting the density $f_X(x) = 𝟙_{x≥α} · λ \exp(-λ·(x-α))$ and using
-integration by parts:
+integration by parts, we aim to solve for the upper bound $Z$ of the censoring process.
+
 $$
 \begin{equation*}
 \begin{split}
 π = P(C<X) &= ∫_α^∞ f_X(x) · F_C(x) dx\\
-  &= ∫_α^∞ λ \exp(-λ·(x-α)) \frac{x-α}{Z-α} dx\\
-  &= ∫_0^∞ λ \exp(-λ·t) \frac{t}{Z-α} dt\\
-  &= \frac{1}{Z-α} · \Big\{ [-\exp(-λ·t) t]_{t=0}^{t=\infty} - ∫_0^∞ -\exp(-λ·t) dt  \Big\}\\
-  &= \frac{1}{Z-α} · \Big\{ [0-0] + ∫_0^∞ \exp(-λ·t) dt  \Big\}\\
-  &= \frac{1}{Z-α} · \Big[ -\frac{1}{λ} \exp(-λ·t) \Big]_{t=0}^{t=\infty}\\
-  &= \frac{1}{λ (Z-α)}
+  &= ∫_α^Z λ \exp(-λ·(x-α)) \frac{x-α}{Z-α} dx + ∫_Z^∞ λ \exp(-λ·(x-α)) dx\\
+  &= ∫_0^{Z-α} λ \exp(-λ·t) \frac{t}{Z-α} dt   + ∫_{Z-α}^∞ λ \exp(-λ·t) dt\\
+  &= \frac{1}{Z-α} · \Big\{ [-\exp(-λ·t) t]_{t=0}^{t=Z-α} - ∫_0^{Z-α} -\exp(-λ·t) dt  \Big\} + [-\exp(-λ·t)]_{t=Z-α}^{t=∞} \\
+  &= \frac{1}{Z-α} · \Big\{ [-\exp(-λ·(Z-α)) (Z-α) - 0] + ∫_0^{Z-α} \exp(-λ·t) dt  \Big\} - [0 - \exp(-λ·(Z-α))]\\
+  &= -\exp(-λ·(Z-α)) + \frac{1}{Z-α} · \Big[ -\frac{1}{λ} \exp(-λ·t) \Big]_{t=0}^{t=Z-α} + \exp(-λ·(Z-α))\\
+  &= - \frac{1}{λ(Z-α)} · \Big[ \exp(-λ·(Z-α)) - 1 \Big]\\
+  &= \frac{1}{λ(Z-α)} + \frac{\exp(-λ·(Z-α))}{-λ(Z-α)}\\
 \end{split}
 \end{equation*}
 $$
 
-We can solve for $Z$:
+We aim to solve for $Z$ given the desired expected proportion of right censoring π.
+When writing $t := λ·(Z-α)$ we need to solve $1 - π t = \exp(-t)$ for $t > 0$ (as we set $Z > α$).
+We rearrange terms and get
 $$
-π λ (Z-α) = 1 \qquad ⇔ \qquad Z-α = \frac{1}{π λ} \qquad ⇔ \qquad Z = α + \frac{1}{πλ}
+x := - \frac{1}{π} · \exp(-\frac{1}{π}) = -\frac{1-πt}{π} · \exp(-\frac{1-πt}{π})
 $$
+The principal branch $W_0$ of Lambert W function gives a solution $t_0$ which happens to be greater 0 here (when π < 1).^[The other solution through branch $W_{-1}$ might be negative and we don't investigate it further here.]
+$$
+-\frac{1-π t_0}{π} = W_0(x) \qquad ⇔ \qquad
+t_0 = \frac{1}{π} + W_0(x)
+$$
+Substituting the original expression for $t$, we get $Z = α + \frac{1}{λ} · (\frac{1}{π} + W_0(x))$.
 
 As an example, to draw a random sample from a delayed exponential that (on
 average) has 30% right censorings, we can use the following call:
@@ -373,6 +383,14 @@ survival::survfit(c(x1, x2) ~ rep(c("x1","x2"), each = 24)) |>
   
 ```
 
+### Implementation note
+Generating data depends on the pseudo-random number generator (PRNG) and the seed.
+Therefore, the actual proportion of right censorings in a generated sample will fluctuate around the expected proportion π.
+
+‼️ For Weibull distributions, there is still a **bug** with the CDF of the censoring process, as we do not account that the CDF is limited upwards by 1.
+
+
+
 ## MLEc
 Corrected MLE (MLEc) was proposed by Cheng and Iles (1987). It uses the normal likelihood except for the first observation that is instrumental for the delay estimation. For the first observation MLEc uses the difference in cumulative distribution function between the first two observations.
 The log-likelihood function becomes, using $z_i := x_i - α$,
@@ -390,3 +408,6 @@ l_\mathbf{x}(α, γ, β) ≈ -(\frac{z_1}{β})^γ - \exp(-\frac{z_2^γ - z_1^γ}
 $$
 
 We could use partial derivatives to find local maxima of this approximate log-likelihood.
+
+
+

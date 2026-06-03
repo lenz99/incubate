@@ -13,6 +13,8 @@
 #' With two phases, the arguments are **not** recycled. Only the first element of delays and rates are used as it otherwise becomes ambiguous which delay and rate parameter apply for observations in different phases.
 #' Generally, only the first elements of the logical arguments are used.
 #'
+#' When `cens=` is specified greater than 0, the actual number of censored observations is random. On average, it equals the expected number of censored observations as given by `cens`.
+#'
 #' @param x A numeric vector of values for which to get the density.
 #' @param q A numeric vector of quantile values.
 #' @param t A numeric vector of times that restrict the mean survival. Default is `+Inf`, i.e., the unrestricted mean survival time.
@@ -27,8 +29,8 @@
 #' @param log logical. Return value on log-scale?
 #' @param lower.tail logical. Give cumulative probability of lower tail?
 #' @param log.p logical. P-value on log-scale?
-#' @param cens numeric. Expected proportion of random right-censored observations.
-#' @return Functions pertaining to the delayed exponential distribution:
+#' @param cens numeric. In [0, 1). Expected proportion of random right-censored observations.
+#' @returns Functions pertaining to the delayed exponential distribution:
 #' * `dexp_delayed` gives the density
 #' * `pexp_delayed` gives the vector of cumulative probabilities or the gradient matrix (nbr parameters x quantile times)
 #' * `qexp_delayed` gives the quantile function
@@ -438,11 +440,11 @@ rexp_delayed <- function(
     } else {
       # independent uniform censoring process U(delay1, Z) where Z is chosen
       #+as to give expected proportion of right-censoring
-      censTime <- stats::runif(
-        n = n,
-        min = delay1,
-        max = delay1 + 1 / (rate1 * cens)
-      )
+      censTime <- delay1 +
+        stats::runif(
+          n = n,
+          max = (1 / cens + lambertW0_cpp(-exp(-1 / cens) / cens)) / rate1
+        )
       censIdx <- which(censTime < evTime)
 
       # result: element-wise minimum of both processes
@@ -451,16 +453,17 @@ rexp_delayed <- function(
 
       # avoid having too many censorings by chance
       if (length(censIdx) > 0) {
-        maxNbrCens <- if (cens == 1) {
-          n
-        } else {
-          min(n - 1, round(n * cens, digits = 0))
-        }
-        maxNbrCens <- max(1, maxNbrCens)
-        maxNbrCens <- min(maxNbrCens, length(censIdx))
-        censIdx <- censIdx[seq_len(maxNbrCens)]
+        # cap number of censorings at expected number of censorings (rounding to integer)
+        #+but I don't like it because I want to trust the process
+        # maxNbrCens <- if (cens == 1) {
+        #   n
+        # } else {
+        #   min(n - 1, round(n * cens, digits = 0))
+        # }
+        # maxNbrCens <- max(1, maxNbrCens)
+        # maxNbrCens <- min(maxNbrCens, length(censIdx))
+        # censIdx <- censIdx[seq_len(maxNbrCens)]
 
-        #res <- pmin.int(evTime, censTime)
         res[censIdx] <- censTime[censIdx]
         evStatus[censIdx] <- 0
       } #fi
@@ -654,7 +657,7 @@ mexp_delayed <- function(
 #' @param lower.tail logical. Give cumulative probability of lower tail?
 #' @param log.p logical. P-value on log-scale?
 #' @param cens numeric. Proportion of random right-censored observations. For
-#'   small values of shape1, on average fewer censorings are achieved.
+#'   small values of shape1, on average fewer censorings are achieved. There is still a bug in the CDF for uniform censoring ansatz!
 #' @return Functions pertaining to the delayed Weibull distribution:
 #' * `dweib_delayed` gives the density
 #' * `pweib_delayed` gives the vector of cumulative probabilities or the gradient matrix (nbr parameters x quantile times)
