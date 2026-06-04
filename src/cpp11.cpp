@@ -26,12 +26,20 @@ extern "C" SEXP _incubate_lambertW0_cpp(SEXP x) {
     return cpp11::as_sexp(lambertW0_cpp(cpp11::as_cpp<cpp11::decay_t<double>>(x)));
   END_CPP11
 }
+// utils.cpp
+double rootF_cens_unif_weib_cpp(double x, double shape, double cens_prob);
+extern "C" SEXP _incubate_rootF_cens_unif_weib_cpp(SEXP x, SEXP shape, SEXP cens_prob) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rootF_cens_unif_weib_cpp(cpp11::as_cpp<cpp11::decay_t<double>>(x), cpp11::as_cpp<cpp11::decay_t<double>>(shape), cpp11::as_cpp<cpp11::decay_t<double>>(cens_prob)));
+  END_CPP11
+}
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
-    {"_incubate_lambertW0_cpp",     (DL_FUNC) &_incubate_lambertW0_cpp,     1},
-    {"_incubate_logspace_sub2_cpp", (DL_FUNC) &_incubate_logspace_sub2_cpp, 1},
-    {"_incubate_logspace_sub_cpp",  (DL_FUNC) &_incubate_logspace_sub_cpp,  2},
+    {"_incubate_lambertW0_cpp",            (DL_FUNC) &_incubate_lambertW0_cpp,            1},
+    {"_incubate_logspace_sub2_cpp",        (DL_FUNC) &_incubate_logspace_sub2_cpp,        1},
+    {"_incubate_logspace_sub_cpp",         (DL_FUNC) &_incubate_logspace_sub_cpp,         2},
+    {"_incubate_rootF_cens_unif_weib_cpp", (DL_FUNC) &_incubate_rootF_cens_unif_weib_cpp, 3},
     {NULL, NULL, 0}
 };
 }

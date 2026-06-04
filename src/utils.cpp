@@ -50,15 +50,15 @@ double lambertW0_cpp(double x) {
 
   
   // special cases
-  if (abs(x) < DBL_EPSILON) {
+  if (std::fabs(x) < DBL_EPSILON) {
     return 0.0;
   }
   
-  if (abs(x - M_E) < DBL_EPSILON) {
+  if (std::fabs(x - M_E) < DBL_EPSILON) {
     return 1.0;
   }
 
-  if (abs(x + M_1_E) < DBL_EPSILON) {
+  if (std::fabs(x + M_1_E) < DBL_EPSILON) {
     return -1.0;
   }
 
@@ -93,5 +93,22 @@ double lambertW0_cpp(double x) {
     b_next = b_next / (1.0 + b_next) * (1.0 + log(x / b_next));
   }
   return b_next;
+}
+
+//' Objective function in order to find the upper limit of the uniform censoring distribution for the delayed Weibull distribution
+//'
+//' The function variable x stands for ((Z-delay) / scale)^shape, where Z is the upper limit of the uniform censoring distribution 
+//' A root gives a solution for x, which can be used to solve for Z. 
+//' For more details of the derivation, check the in vignette "delayed-dist.Rmd". We give the objective function on log-scale for greater numerically robustness.
+//' @param x variable in the root function, defined as ((Z-delay) / scale)^shape, where Z is the upper limit of the uniform censoring distribution
+//' @param shape shape parameter of the Weibull distribution
+//' @param cens_prob censoring probability
+//' @returns value of the root function at x
+[[cpp11::register]]
+double rootF_cens_unif_weib_cpp(double x, double shape, double cens_prob) {
+  
+  const double shapeInv = 1.0 / shape;
+  return log(shapeInv) - shapeInv * log(x) + pgamma(x, shapeInv, 1.0, 1, 1) + lgammafn(shapeInv) - log(cens_prob);
+  //lower_inc_gamma(k,x) on original scale in R's C-fn: pgamma(x, k, 1.0, 1, 0) * exp(lgammafn(k));
 }
 

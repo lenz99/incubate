@@ -1176,11 +1176,19 @@ rweib_delayed <- function(
       # with shape1 minute the upper bound of the uniform support explodes and hence few censorings
       #+correct upward for small shape1 parameter helps to prop up censoring level in these cases
       censTime <- local({
-        shape1B <- max(0.25, if (shape1 < 1) sqrt(shape1) else shape1)
+        # find root to get the upper bound of the uniform support
+        # r is defined as ((Z - delay1) / scale1)^shape1
+        r <- stats::uniroot(
+          f = function(.x) rootF_cens_unif_weib_cpp(.x, shape1, cens),
+          lower = 1e-7,
+          upper = 13,
+          extendInt = "downX",
+          tol = .00015 #set a fixed tolerance (platform independent)
+        )$root
         stats::runif(
           n = n,
           min = delay1,
-          max = delay1 + scale1 / (cens * shape1B) * gamma(1 / shape1B)
+          max = delay1 + scale1 * r^(1 / shape1)
         )
       })
       censIdx <- which(censTime < evTime)
@@ -1191,14 +1199,16 @@ rweib_delayed <- function(
 
       # avoid having too many censorings by chance
       if (length(censIdx) > 0) {
-        maxNbrCens <- if (cens == 1) {
-          n
-        } else {
-          min(n - 1, round(n * cens, digits = 0))
-        }
-        maxNbrCens <- max(1, maxNbrCens)
-        maxNbrCens <- min(maxNbrCens, length(censIdx))
-        censIdx <- censIdx[seq_len(maxNbrCens)]
+        # cap number of censorings at expected number of censorings (rounding to integer)
+        #+but I don't like it because I want to trust the process
+        # maxNbrCens <- if (cens == 1) {
+        #   n
+        # } else {
+        #   min(n - 1, round(n * cens, digits = 0))
+        # }
+        # maxNbrCens <- max(1, maxNbrCens)
+        # maxNbrCens <- min(maxNbrCens, length(censIdx))
+        # censIdx <- censIdx[seq_len(maxNbrCens)]
 
         #res <- pmin.int(evTime, censTime)
         res[censIdx] <- censTime[censIdx]

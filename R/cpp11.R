@@ -11,3 +11,7 @@ logspace_sub2_cpp <- function(lxy) {
 lambertW0_cpp <- function(x) {
   .Call(`_incubate_lambertW0_cpp`, x)
 }
+
+rootF_cens_unif_weib_cpp <- function(x, shape, cens_prob) {
+  .Call(`_incubate_rootF_cens_unif_weib_cpp`, x, shape, cens_prob)
+}
