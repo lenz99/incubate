@@ -311,14 +311,14 @@ We aim to solve for $Z$ given the desired expected proportion of right censoring
 When writing $t := λ·(Z-α)$ we need to solve $1 - π t = \exp(-t)$ for $t > 0$ (as we set $Z > α$).
 We rearrange terms and get
 $$
-x := - \frac{1}{π} · \exp(-\frac{1}{π}) = -\frac{1-πt}{π} · \exp(-\frac{1-πt}{π})
+\underbrace{- \frac{1}{π} · \exp(-\frac{1}{π})}_{=: x} = -\frac{1-πt}{π} · \exp(-\frac{1-πt}{π})
 $$
 The principal branch $W_0$ of Lambert W function gives a solution $t_0$ which happens to be greater 0 here (when π < 1).^[The other solution through branch $W_{-1}$ might be negative and we don't investigate it further here.]
 $$
 -\frac{1-π t_0}{π} = W_0(x) \qquad ⇔ \qquad
 t_0 = \frac{1}{π} + W_0(x)
 $$
-Substituting the original expression for $t$, we get $Z = α + \frac{1}{λ} · (\frac{1}{π} + W_0(x))$.
+Substituting the original expression for $t$, we get $\hat Z = α + \frac{1}{λ} · (\frac{1}{π} + W_0(x))$.
 
 As an example, to draw a random sample from a delayed exponential that (on
 average) has 30% right censorings, we can use the following call:
@@ -352,7 +352,7 @@ $$
 We apply integration by parts in the first integral (with $u=t$ and $v=-\frac{σ}{γ} \exp(-(\frac{t}{σ})^γ)$).
 At the end, we use
 $∫_0^s \exp(-x^b) dx = \frac{1}{b} · γ(\frac{1}{b}, s^b)$,
-where γ(,) is the incomplete gamma function (not regularized).
+where γ(,) is the incomplete (not regularized) gamma function.
 $$
 \begin{equation*}
 \begin{split}
@@ -389,12 +389,14 @@ $$
 \end{split}
 \end{equation*}
 $$
-We can solve for $r$ by means of root finding. We consider the function on log-scale, namely
+We take log and gather terms on one side and consider the objective function
 $$
 f_k(r) = \log(k) - k \log(r) + \log(\gamma(k, r)) - \log(π)
 $$
-For given $k$, it is a monotonically decreasing function in $r$. A root $r_0$ of $f_k$ gives us the solution for $Z$,
-namely $Z = α + σ r_0^{\frac{1}{γ}}$.
+For given $k$, it is a monotonically decreasing function in $r$.
+We can solve for $r$ by means of root finding. 
+A root $r_0$ of $f_k$ gives us the estimation for $Z$,
+namely $\hat Z = α + σ r_0^{\frac{1}{γ}}$.
 
 
 

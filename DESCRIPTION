@@ -1,6 +1,6 @@
 Package: incubate
 Title: Parametric Time-to-Event Analysis with Variable Incubation Phases
-Version: 1.4.0.9006
+Version: 1.4.1
 Date: 2026-06-04
 Authors@R:
     person(given = "Matthias", family = "Kuhn",
@@ -51,6 +51,7 @@ Config/Needs/check: spelling
 Depends:
     R (>= 3.6.0)
 Collate: 
+    'S3_integration.R'
     'aaa.R'
     'cpp11.R'
     'data.R'
@@ -59,7 +60,6 @@ Collate:
     'delay.R'
     'delay_test.R'
     'incubate-package.R'
-    'integration.R'
     'zzz.R'
 VignetteBuilder: knitr
 LinkingTo: cpp11

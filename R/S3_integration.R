@@ -85,8 +85,11 @@ summary.incubate_fit <- function(object, ...) {
 #' @param ... further arguments. Not in use here (it is required for generic plot function)
 #' @examples
 #' # fit a delay-weibull model to serial interval times from historic measles outbreak data:
-#' fm <- delay_model(survival::Surv(measles_sailer$serialInterval, measles_sailer$status), distribution = "weibull", method = "MLEw")
-#' plot(fm, title = "Serial interval times of measles", subtitle = "Delay-Weibull model fit using weighted MLE (MLEw)")
+#' fm <- delay_model(survival::Surv(measles_sailer$serialInterval, measles_sailer$status),
+#'                   distribution = "weibull", method = "MLEw")
+#' plot(fm,
+#'      title = "Serial interval times of measles",
+#'      subtitle = "Delay-Weibull model fit using weighted MLE (MLEw)")
 #'
 #' @export
 plot.incubate_fit <- function(x, y, title, subtitle, xlim, ...) {
