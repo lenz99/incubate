@@ -766,7 +766,7 @@ objFunFactory <- function(
       z_y <- if (twoGroup) zF(group = "y", propagateTies = TRUE)
 
       # How to calculate the weights W1-W3?
-      #we use now always 'sdist_median' (also for isSurv-data, cf test-delay_estimation.R, line 802)
+      #we use now always 'sdist_median' (also for isSurv-data, cf. test-delay_estimation.R, line 802)
       #method_w <- if (isSurv) "sample" else "sdist_median"
 
       # Calculates W1-weight (as function of n)
@@ -3180,7 +3180,7 @@ simulate.incubate_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #' For the initial delay parameter we allow to smooth the delay estimate in parametric bootstrap. The initial delay parameter is special because this parameter determines when observations can start to occur.
 #' Bootstrapping from a delay model will only produce data that starts never before the given delay. Smoothing adds variability here.
 #' The default value for smoothing is `smd_factor=1` which means to add normal noise of 1xstd.dev of the first observation to the first observation.
-#' Alternatively, when using the objective function to find a region for delay1 (this branch is turned off in the code, cf USE_OBJFUN hardcoded), the default 1 was an optimal value in a simulation for log-quantile together with log delay-shift = 5.
+#' Alternatively, when using the objective function to find a region for delay1 (this branch is turned off in the code, cf. USE_OBJFUN hard-coded), the default 1 was an optimal value in a simulation for log-quantile together with log delay-shift = 5.
 #'
 #' @param object an `incubate_fit`-object
 #' @param bs_data character. Which type of bootstrap method to generate data?
@@ -3468,7 +3468,7 @@ bsDataStep <- function(
             if (twoGroup) ranFunArgsY[['delay1']] <- delayCandY[ind]
           }
 
-          # cf simulate (but inlined here for performance reasons)
+          # cf. simulate (but inlined here for performance reasons)
           x <- rlang::exec(ranFun, !!!ranFunArgsX)
           y <- if (twoGroup) rlang::exec(ranFun, !!!ranFunArgsY)
 

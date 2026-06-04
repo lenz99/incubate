@@ -12,7 +12,7 @@ Estimation and statistical tests on parameters in parametric time-to-event analy
 Useful links:
 \itemize{
   \item \url{https://gitlab.com/imb-dev/incubate/}
-  \item Report bugs at \url{https://gitlab.com/imb-dev/incubate/-/issues/}
+  \item Report bugs at \url{https://gitlab.com/imb-dev/incubate/-/work_items}
 }
 
 }
